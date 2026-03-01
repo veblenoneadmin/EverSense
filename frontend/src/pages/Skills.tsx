@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import {
   Plus, Trash2, Star, Users, Layers, ChevronDown, ChevronUp,
-Search, X, Check
+  Search, X, Check, Sparkles,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -81,6 +81,15 @@ export function Skills() {
   // Team expand
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
+  // AI generate skills
+  const [showAiGenerate, setShowAiGenerate] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSuggested, setAiSuggested] = useState<{ name: string; category: string }[]>([]);
+  const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiError, setAiError] = useState('');
+
   // ── Fetch org ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -149,6 +158,65 @@ export function Skills() {
     } catch (err) { console.error(err); }
   };
 
+  // ── AI generate skills ────────────────────────────────────────────────────
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiGenerating(true);
+    setAiError('');
+    setAiSuggested([]);
+    setAiSelected(new Set());
+    try {
+      const res = await apiFetch('/api/skills/ai-generate', {
+        method: 'POST',
+        body: JSON.stringify({ prompt: aiPrompt }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setAiError(d.error || `Error ${res.status}`); return; }
+      const suggested = d.skills || [];
+      setAiSuggested(suggested);
+      setAiSelected(new Set(suggested.map((_: unknown, i: number) => i)));
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : 'Failed to generate skills');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleAiSave = async () => {
+    const toSave = aiSuggested.filter((_, i) => aiSelected.has(i));
+    if (toSave.length === 0) return;
+    setAiSaving(true);
+    setAiError('');
+    try {
+      const res = await apiFetch('/api/skills/library/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ skills: toSave }),
+      });
+      if (res.ok) {
+        await fetchAll();
+        setShowAiGenerate(false);
+        setAiPrompt('');
+        setAiSuggested([]);
+        setAiSelected(new Set());
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setAiError(d.error || `Error ${res.status}`);
+      }
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : 'Failed to save skills');
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
+  const toggleAiSkill = (i: number) => {
+    setAiSelected(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
   // ── Add skill to library ──────────────────────────────────────────────────
   const handleAddToLibrary = async () => {
     if (!newSkillName.trim()) return;
@@ -206,11 +274,16 @@ export function Skills() {
           <h1 className="text-3xl font-bold gradient-text">Skills</h1>
           <p className="text-muted-foreground mt-1">Manage your skillset and team capabilities</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {isPrivileged && (
-            <Button variant="outline" className="glass-surface" onClick={() => setShowAddLibrary(true)}>
-              <Plus className="h-4 w-4 mr-2" />Add to Library
-            </Button>
+            <>
+              <Button variant="outline" className="glass-surface" onClick={() => setShowAiGenerate(true)}>
+                <Sparkles className="h-4 w-4 mr-2 text-yellow-400" />Generate with AI
+              </Button>
+              <Button variant="outline" className="glass-surface" onClick={() => setShowAddLibrary(true)}>
+                <Plus className="h-4 w-4 mr-2" />Add to Library
+              </Button>
+            </>
           )}
           <Button className="bg-gradient-primary hover:bg-gradient-primary/90 text-white shadow-glow"
             onClick={() => setShowAddSkill(true)}>
@@ -461,6 +534,105 @@ export function Skills() {
                   {saving ? 'Saving...' : 'Add Skill'}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── AI GENERATE SKILLS MODAL ── */}
+      {showAiGenerate && isPrivileged && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="glass w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] flex flex-col">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-yellow-400" />
+                  <h2 className="text-xl font-semibold">Generate Skills with AI</h2>
+                </div>
+                <button onClick={() => { setShowAiGenerate(false); setAiSuggested([]); setAiError(''); setAiPrompt(''); }}
+                  className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+              </div>
+              <p className="text-sm text-muted-foreground">Describe your team, industry, or role and AI will suggest relevant skills for your library.</p>
+            </CardHeader>
+            <CardContent className="space-y-4 overflow-y-auto flex-1">
+
+              {/* Prompt input */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Describe your team or context</label>
+                <textarea
+                  value={aiPrompt}
+                  onChange={e => setAiPrompt(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. We're a digital agency specialising in React, Node.js, and mobile apps. We also have project managers and designers."
+                  className="w-full px-4 py-2 glass-surface border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                />
+              </div>
+
+              <Button
+                className="w-full bg-gradient-primary text-white"
+                disabled={!aiPrompt.trim() || aiGenerating}
+                onClick={handleAiGenerate}>
+                {aiGenerating
+                  ? <><span className="animate-spin mr-2">⟳</span>Generating…</>
+                  : <><Sparkles className="h-4 w-4 mr-2" />Generate Skills</>}
+              </Button>
+
+              {aiError && <p className="text-sm text-red-400">{aiError}</p>}
+
+              {/* Suggested skills */}
+              {aiSuggested.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{aiSuggested.length} skills suggested — click to deselect</p>
+                    <div className="flex gap-2 text-xs">
+                      <button className="text-primary hover:underline"
+                        onClick={() => setAiSelected(new Set(aiSuggested.map((_, i) => i)))}>
+                        Select all
+                      </button>
+                      <span className="text-muted-foreground">·</span>
+                      <button className="text-muted-foreground hover:underline"
+                        onClick={() => setAiSelected(new Set())}>
+                        Deselect all
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Group by category */}
+                  {Array.from(new Set(aiSuggested.map(s => s.category))).map(cat => (
+                    <div key={cat}>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{cat}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {aiSuggested.map((s, i) => s.category !== cat ? null : (
+                          <button key={i} onClick={() => toggleAiSkill(i)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all',
+                              aiSelected.has(i)
+                                ? 'bg-primary/20 border-primary/40 text-foreground'
+                                : 'glass-surface border-border text-muted-foreground line-through opacity-50'
+                            )}>
+                            {aiSelected.has(i) && <Check className="h-3 w-3 text-primary" />}
+                            {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {aiSuggested.length > 0 && (
+                <div className="flex gap-3 pt-2">
+                  <Button variant="outline" className="flex-1 glass-surface"
+                    onClick={() => { setShowAiGenerate(false); setAiSuggested([]); setAiError(''); setAiPrompt(''); }}>
+                    Cancel
+                  </Button>
+                  <Button className="flex-1 bg-gradient-primary text-white"
+                    disabled={aiSelected.size === 0 || aiSaving}
+                    onClick={handleAiSave}>
+                    {aiSaving ? 'Saving…' : `Add ${aiSelected.size} Skill${aiSelected.size !== 1 ? 's' : ''} to Library`}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

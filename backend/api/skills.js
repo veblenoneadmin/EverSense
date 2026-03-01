@@ -197,6 +197,110 @@ router.delete('/staff/:skillId', requireAuth, withOrgScope, async (req, res) => 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AI SKILL GENERATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/skills/ai-generate — given a team/role description, AI suggests skills
+router.post('/ai-generate', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt || !prompt.trim()) return res.status(400).json({ error: 'prompt is required' });
+
+    const VALID_CATEGORIES = ['Technical', 'Design', 'Management', 'Communication', 'Sales', 'Operations', 'Finance', 'Other'];
+
+    const systemPrompt = `You are a skills taxonomy expert. Given a description of a team, company, or role, generate a comprehensive list of relevant professional skills.
+
+Output ONLY a JSON array (no markdown, no extra text) with 10-20 skills in this format:
+[
+  { "name": "Skill Name", "category": "Category" },
+  ...
+]
+
+Valid categories: ${VALID_CATEGORIES.join(', ')}
+
+Rules:
+- Each skill name should be concise (1-4 words), specific, and professional
+- Cover a diverse mix of categories relevant to the description
+- No duplicates
+- Skills should be practical and industry-standard`;
+
+    const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-4o-mini',
+        max_tokens: 1500,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt.trim() },
+        ],
+      }),
+    });
+
+    if (!aiRes.ok) {
+      const err = await aiRes.text();
+      console.error('[Skills] AI generate error:', err);
+      return res.status(500).json({ error: 'AI service unavailable' });
+    }
+
+    const aiData = await aiRes.json();
+    const rawText = aiData.choices?.[0]?.message?.content || '';
+
+    let skills;
+    try {
+      const clean = rawText.replace(/```json|```/g, '').trim();
+      skills = JSON.parse(clean);
+      if (!Array.isArray(skills)) throw new Error('Not an array');
+      // Validate and sanitize
+      skills = skills
+        .filter(s => s.name && typeof s.name === 'string')
+        .map(s => ({
+          name: s.name.trim().slice(0, 100),
+          category: VALID_CATEGORIES.includes(s.category) ? s.category : 'Other',
+        }));
+    } catch (e) {
+      console.error('[Skills] AI parse error:', rawText);
+      return res.status(500).json({ error: 'Failed to parse AI response', raw: rawText });
+    }
+
+    res.json({ skills });
+  } catch (err) {
+    console.error('[Skills] ai-generate error:', err);
+    res.status(500).json({ error: 'AI generation failed', details: err.message });
+  }
+});
+
+// POST /api/skills/library/bulk — add multiple skills at once
+router.post('/library/bulk', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureSkillsTables();
+    const { skills } = req.body;
+    if (!Array.isArray(skills) || skills.length === 0) return res.status(400).json({ error: 'skills array required' });
+
+    let added = 0;
+    let skipped = 0;
+    for (const s of skills) {
+      if (!s.name || !s.category) continue;
+      try {
+        await prisma.skill.upsert({
+          where: { name_orgId: { name: s.name.trim(), orgId: req.orgId } },
+          update: {},
+          create: { name: s.name.trim(), category: s.category, orgId: req.orgId },
+        });
+        added++;
+      } catch { skipped++; }
+    }
+    res.json({ added, skipped });
+  } catch (err) {
+    console.error('[Skills] bulk create error:', err);
+    res.status(500).json({ error: 'Failed to bulk add skills' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AI TASK AUTO-ASSIGN
 // ─────────────────────────────────────────────────────────────────────────────
 
