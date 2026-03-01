@@ -129,6 +129,7 @@ export function TimeLogs() {
   const [loading, setLoading]       = useState(true);
   const [isPrivileged, setIsPrivileged] = useState(false);
   const [userRole, setUserRole]     = useState('STAFF');
+  const [isClient, setIsClient]     = useState(false);
 
   // Clock state
   const [clockedIn, setClockedIn]   = useState(false);
@@ -210,6 +211,18 @@ export function TimeLogs() {
       console.error('Failed to fetch clock status:', err);
     }
   }, [orgId]);
+
+  // Reliably detect CLIENT role via /api/organizations (same as Sidebar)
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetch('/api/organizations')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const role = data?.organizations?.[0]?.role || '';
+        setIsClient(role === 'CLIENT');
+      })
+      .catch(() => {});
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (session?.user?.id) { fetchLogs(); fetchStatus(); }
@@ -364,8 +377,8 @@ export function TimeLogs() {
         </button>
       </div>
 
-      {/* ── Clock card (matches Dashboard style) ── */}
-      <div
+      {/* ── Clock card — hidden for CLIENT accounts ── */}
+      {!isClient && <div
         className="rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap"
         style={{
           background: VS.bg1,
@@ -497,7 +510,7 @@ export function TimeLogs() {
             }
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -806,7 +819,7 @@ export function TimeLogs() {
                 ? 'Try adjusting your filters'
                 : 'Clock in to start recording your attendance'}
             </p>
-            {!clockedIn && (
+            {!clockedIn && !isClient && (
               <button
                 onClick={handleClockIn}
                 disabled={clockLoading}
