@@ -121,6 +121,7 @@ router.get('/my', requireAuth, withOrgScope, async (req, res) => {
         name:   true,
         color:  true,
         status: true,
+        budget: true,
         tasks: {
           where:   { orgId },
           orderBy: { createdAt: 'desc' },
@@ -137,21 +138,68 @@ router.get('/my', requireAuth, withOrgScope, async (req, res) => {
       },
     });
 
+    // Fetch time logs for all tasks in this client's projects
+    const allTaskIds = projects.flatMap(p => p.tasks.map(t => t.id));
+    let billing = { totalHours: 0, billableHours: 0, billableAmount: 0, totalEarnings: 0 };
+    if (allTaskIds.length > 0) {
+      try {
+        const placeholders = allTaskIds.map(() => '?').join(',');
+        const logs = await prisma.$queryRawUnsafe(
+          `SELECT duration, is_billable, hourly_rate, earnings FROM time_logs WHERE task_id IN (${placeholders}) AND orgId = ?`,
+          ...allTaskIds, orgId
+        );
+        for (const log of logs) {
+          const hrs = (Number(log.duration) || 0) / 3600;
+          billing.totalHours += hrs;
+          if (log.is_billable) {
+            billing.billableHours   += hrs;
+            billing.billableAmount  += log.earnings ? Number(log.earnings) : hrs * (Number(log.hourly_rate) || Number(raw.hourly_rate) || 0);
+          }
+          billing.totalEarnings += log.earnings ? Number(log.earnings) : 0;
+        }
+      } catch (_e) {
+        // time_logs may use camelCase columns — try alternate column names
+        try {
+          const placeholders = allTaskIds.map(() => '?').join(',');
+          const logs = await prisma.$queryRawUnsafe(
+            `SELECT duration, isBillable, hourlyRate, earnings FROM time_logs WHERE taskId IN (${placeholders}) AND orgId = ?`,
+            ...allTaskIds, orgId
+          );
+          for (const log of logs) {
+            const hrs = (Number(log.duration) || 0) / 3600;
+            billing.totalHours += hrs;
+            if (log.isBillable) {
+              billing.billableHours  += hrs;
+              billing.billableAmount += log.earnings ? Number(log.earnings) : hrs * (Number(log.hourlyRate) || Number(raw.hourly_rate) || 0);
+            }
+            billing.totalEarnings += log.earnings ? Number(log.earnings) : 0;
+          }
+        } catch (_e2) { /* no time logs available */ }
+      }
+    }
+
+    // Round to 2 decimal places
+    billing.totalHours    = Math.round(billing.totalHours    * 100) / 100;
+    billing.billableHours = Math.round(billing.billableHours * 100) / 100;
+    billing.billableAmount = Math.round(billing.billableAmount * 100) / 100;
+
     res.json({
       success: true,
       client: {
-        id:       raw.id,
-        name:     raw.name,
-        email:    raw.email    || null,
-        company:  raw.company  || null,
-        phone:    raw.phone    || null,
-        address:  raw.address  || null,
-        status:   raw.status   || 'active',
-        priority: raw.priority || 'medium',
-        notes:    raw.notes    || null,
-        industry: raw.industry || null,
-        orgId:    raw.orgId,
+        id:         raw.id,
+        name:       raw.name,
+        email:      raw.email      || null,
+        company:    raw.company    || null,
+        phone:      raw.phone      || null,
+        address:    raw.address    || null,
+        status:     raw.status     || 'active',
+        priority:   raw.priority   || 'medium',
+        notes:      raw.notes      || null,
+        industry:   raw.industry   || null,
+        hourlyRate: raw.hourly_rate ? Number(raw.hourly_rate) : 0,
+        orgId:      raw.orgId,
       },
+      billing,
       projects,
     });
   } catch (error) {

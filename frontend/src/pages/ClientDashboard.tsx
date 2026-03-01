@@ -5,7 +5,7 @@ import { useApiClient } from '../lib/api-client';
 import {
   CheckCircle2, AlertTriangle, FolderOpen, TrendingUp,
   CheckSquare, BarChart3, ArrowRight, Circle,
-  Target, Zap, Clock, Activity,
+  Target, Zap, Clock, Activity, DollarSign, Timer,
 } from 'lucide-react';
 
 // ── VS Code Dark+ tokens ────────────────────────────────────────────────────
@@ -111,7 +111,14 @@ interface ClientInfo {
   name: string;
   email?: string;
   company?: string;
+  hourlyRate?: number;
   orgId: string;
+}
+
+interface Billing {
+  totalHours: number;
+  billableHours: number;
+  billableAmount: number;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -122,6 +129,7 @@ export function ClientDashboard() {
 
   const [client, setClient]     = useState<ClientInfo | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [billing, setBilling]   = useState<Billing>({ totalHours: 0, billableHours: 0, billableAmount: 0 });
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
@@ -133,6 +141,7 @@ export function ClientDashboard() {
       if (data.success) {
         setClient(data.client);
         setProjects(data.projects ?? []);
+        if (data.billing) setBilling(data.billing);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load data');
@@ -441,6 +450,64 @@ export function ClientDashboard() {
                   <div className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>{item.label}</div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Billing Summary */}
+          <div
+            className="rounded-xl p-5"
+            style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <DollarSign className="h-4 w-4" style={{ color: VS.teal }} />
+              <h2 className="text-[13px] font-bold" style={{ color: VS.text0 }}>Billing Summary</h2>
+            </div>
+            <div className="space-y-3">
+              {/* Total Hours */}
+              <div
+                className="flex items-center justify-between px-3 py-2.5 rounded-lg"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}
+              >
+                <div className="flex items-center gap-2">
+                  <Timer className="h-3.5 w-3.5" style={{ color: VS.blue }} />
+                  <span className="text-[12px]" style={{ color: VS.text1 }}>Total Hours</span>
+                </div>
+                <span className="text-[14px] font-bold tabular-nums" style={{ color: VS.text0 }}>
+                  {billing.totalHours.toFixed(1)}h
+                </span>
+              </div>
+              {/* Billable Hours */}
+              <div
+                className="flex items-center justify-between px-3 py-2.5 rounded-lg"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}
+              >
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5" style={{ color: VS.yellow }} />
+                  <span className="text-[12px]" style={{ color: VS.text1 }}>Billable Hours</span>
+                </div>
+                <span className="text-[14px] font-bold tabular-nums" style={{ color: VS.yellow }}>
+                  {billing.billableHours.toFixed(1)}h
+                </span>
+              </div>
+              {/* Billable Amount */}
+              <div
+                className="flex items-center justify-between px-3 py-2.5 rounded-lg"
+                style={{ background: `${VS.teal}10`, border: `1px solid ${VS.teal}30` }}
+              >
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-3.5 w-3.5" style={{ color: VS.teal }} />
+                  <span className="text-[12px] font-medium" style={{ color: VS.teal }}>Billable Amount</span>
+                </div>
+                <span className="text-[15px] font-bold tabular-nums" style={{ color: VS.teal }}>
+                  ${billing.billableAmount.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {/* Hourly Rate badge */}
+              {(client?.hourlyRate ?? 0) > 0 && (
+                <div className="text-[11px] text-center pt-1" style={{ color: VS.text2 }}>
+                  Rate: ${client!.hourlyRate}/hr
+                </div>
+              )}
             </div>
           </div>
 
