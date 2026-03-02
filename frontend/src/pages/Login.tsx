@@ -104,7 +104,7 @@ export function Login() {
 
             {/* Logo + Heading */}
             <div className="flex flex-col items-center gap-2 mb-2">
-              <EverSenseLogo width={320} height={76} />
+              <EverSenseLogo width={336} height={80} />
               <div className="text-sm font-medium" style={{ color: '#858585' }}>Welcome back</div>
             </div>
 

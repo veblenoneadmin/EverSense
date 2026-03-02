@@ -1,6 +1,6 @@
 export function EverSenseLogo({ width = 460, height = 110 }: { width?: number; height?: number }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 110" width={width} height={height}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 110" width={width} height={height} style={{ display: 'block' }}>
       <defs>
         <linearGradient id="wgrad" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" style={{ stopColor: '#007acc' }} />
