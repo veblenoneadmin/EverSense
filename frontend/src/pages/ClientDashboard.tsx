@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { useApiClient } from '../lib/api-client';
+import { EverSenseLogo } from '../components/EverSenseLogo';
 import {
   CheckCircle2, AlertTriangle, FolderOpen, TrendingUp,
   CheckSquare, BarChart3, ArrowRight, Circle,
