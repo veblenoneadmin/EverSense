@@ -142,7 +142,7 @@ function ScoreRing({ score }: { score: number }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function KPIReport() {
-  useSession();
+  const { data: session } = useSession();
   const { currentOrg } = useOrganization();
   const apiClient = useApiClient();
 
@@ -156,6 +156,18 @@ export function KPIReport() {
   const [searchQuery, setSearchQuery] = useState('');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [userRole, setUserRole] = useState<string>('STAFF');
+
+  // Fetch current user's role in this org
+  useEffect(() => {
+    if (!session?.user?.id || !currentOrg?.id) return;
+    apiClient.fetch('/api/organizations')
+      .then((d: any) => {
+        const org = d.organizations?.find((o: any) => o.id === currentOrg.id);
+        if (org?.role) setUserRole(org.role);
+      })
+      .catch(() => {});
+  }, [session?.user?.id, currentOrg?.id]);
 
   const fetchData = useCallback(async () => {
     if (!currentOrg?.id) return;
@@ -181,8 +193,12 @@ export function KPIReport() {
 
   const kpi = data?.orgKPIs;
 
+  const isStaff = userRole === 'STAFF';
+
   const filteredUsers = (data?.users ?? [])
     .filter(u => u.classification !== 'client')
+    // Staff can only see their own KPI
+    .filter(u => !isStaff || u.user.id === session?.user?.id)
     .filter(u => !filterClass || u.classification === filterClass)
     .filter(u => {
       if (!searchQuery) return true;
@@ -247,9 +263,11 @@ export function KPIReport() {
       {/* ── Page header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: VS.text0 }}>KPI Intelligence Report</h1>
+          <h1 className="text-2xl font-bold" style={{ color: VS.text0 }}>
+            {isStaff ? 'My KPI Report' : 'KPI Intelligence Report'}
+          </h1>
           <p className="text-[13px] mt-1" style={{ color: VS.text2 }}>
-            {data?.label} · {currentOrg?.name} · Auto-classifying team performance
+            {data?.label} · {currentOrg?.name} · {isStaff ? 'Your personal performance' : 'Auto-classifying team performance'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -272,11 +290,13 @@ export function KPIReport() {
             style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text2 }}>
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
-          <button onClick={handleExport}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
-            style={{ background: `${VS.accent}18`, color: VS.accent, border: `1px solid ${VS.accent}33` }}>
-            <Download className="h-3.5 w-3.5" /> Export CSV
-          </button>
+          {!isStaff && (
+            <button onClick={handleExport}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
+              style={{ background: `${VS.accent}18`, color: VS.accent, border: `1px solid ${VS.accent}33` }}>
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </button>
+          )}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px]"
             style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text2 }}>
             <Activity className="h-3.5 w-3.5" style={{ color: VS.teal }} />
@@ -285,8 +305,8 @@ export function KPIReport() {
         </div>
       </div>
 
-      {/* ── KPI strip ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* ── KPI strip (org-wide — hidden for staff) ── */}
+      {!isStaff && <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {([
           { label: 'Total Hours',     value: `${kpi?.totalHours ?? 0}h`,        icon: Clock,         color: VS.blue,   trend: kpi?.hoursTrend ?? null },
           { label: 'Tasks Completed', value: `${kpi?.totalCompleted ?? 0}`,      icon: CheckSquare,   color: VS.teal,   trend: null },
@@ -312,7 +332,7 @@ export function KPIReport() {
             )}
           </div>
         ))}
-      </div>
+      </div>}
 
       {/* ── Main grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -320,8 +340,8 @@ export function KPIReport() {
         {/* ── LEFT: User cards ── */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Filters panel */}
-          <div className="rounded-xl p-4 space-y-3" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+          {/* Filters panel — hidden for staff */}
+          {!isStaff && <div className="rounded-xl p-4 space-y-3" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" style={{ color: VS.accent }} />
               <h2 className="text-[13px] font-bold" style={{ color: VS.text0 }}>Filters</h2>
@@ -411,14 +431,14 @@ export function KPIReport() {
                 );
               })}
             </div>
-          </div>
+          </div>}
 
           {/* Sort + count */}
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: VS.text2 }}>
-              Team Members ({filteredUsers.length})
+              {isStaff ? 'My Performance' : `Team Members (${filteredUsers.length})`}
             </span>
-            <div className="flex items-center gap-1">
+            {!isStaff && <div className="flex items-center gap-1">
               <span className="text-[11px] mr-1" style={{ color: VS.text2 }}>Sort:</span>
               {(['score', 'hours', 'completion'] as const).map(s => (
                 <button key={s} onClick={() => setSortBy(s)}
@@ -431,7 +451,7 @@ export function KPIReport() {
                   {s.charAt(0).toUpperCase() + s.slice(1)}
                 </button>
               ))}
-            </div>
+            </div>}
           </div>
 
           {/* User list */}

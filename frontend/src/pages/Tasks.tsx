@@ -1137,6 +1137,7 @@ export function Tasks() {
                 />
               </div>
 
+              {userRole !== 'STAFF' && (
               <div>
                 <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>
                   Assignees
@@ -1184,6 +1185,7 @@ export function Tasks() {
                   })}
                 </div>
               </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1341,6 +1343,7 @@ export function Tasks() {
                 />
               </div>
 
+              {userRole !== 'STAFF' && (
               <div>
                 <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>
                   Assignees
@@ -1388,6 +1391,7 @@ export function Tasks() {
                   })}
                 </div>
               </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
