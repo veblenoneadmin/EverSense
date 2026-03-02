@@ -120,7 +120,7 @@ export function Register() {
             <EverSenseLogo height={56} width={328} />
           </div>
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold gradient-text">VebTask</h1>
+            <h1 className="text-3xl font-bold gradient-text">EverSense Ai</h1>
             <p className="text-sm text-muted-foreground flex items-center justify-center gap-2">
               <Sparkles className="h-4 w-4" />
               AI-Powered Task Management
@@ -372,7 +372,7 @@ export function Register() {
                       <strong>What's next?</strong>
                     </p>
                     <ol className="text-xs text-muted-foreground space-y-1 text-left bg-muted/30 p-4 rounded-lg">
-                      <li>1. Open the email from VebTask</li>
+                      <li>1. Open the email from EverSense Ai</li>
                       <li>2. Click the "Verify Email Address" button</li>
                       <li>3. Return here and sign in with your credentials</li>
                     </ol>
@@ -397,7 +397,7 @@ export function Register() {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-xs text-muted-foreground">
-            © 2024 VebTask. Secure authentication powered by better-auth.
+            © 2024 EverSense Ai. Secure authentication powered by better-auth.
           </p>
         </div>
       </div>

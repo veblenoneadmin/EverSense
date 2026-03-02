@@ -70,7 +70,7 @@ function AppContent() {
           </div>
           <div className="flex flex-col items-center space-y-2">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-            <div className="text-lg font-medium text-muted-foreground">Loading VebTask...</div>
+            <div className="text-lg font-medium text-muted-foreground">Loading EverSense Ai...</div>
           </div>
         </div>
       </div>

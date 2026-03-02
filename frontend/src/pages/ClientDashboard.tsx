@@ -157,7 +157,7 @@ export function ClientDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: VS.bg0 }}>
         <div className="flex flex-col items-center gap-4">
-          <img src="/veblen-logo.svg" alt="Veblen" className="w-[560px] h-auto object-contain opacity-90" />
+          <EverSenseLogo width={560} height={110} />
           <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
             style={{ borderColor: VS.accent }} />
         </div>

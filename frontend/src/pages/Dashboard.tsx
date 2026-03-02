@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { ClientDashboard } from './ClientDashboard';
+import { EverSenseLogo } from '../components/EverSenseLogo';
 import {
   Clock, LogIn, LogOut, CheckCircle2, Timer, AlertTriangle,
   FolderOpen, Users, TrendingUp, TrendingDown, Minus,
@@ -286,7 +287,7 @@ export function Dashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: VS.bg0 }}>
         <div className="flex flex-col items-center gap-4">
-          <img src="/veblen-logo.svg" alt="Veblen" className="w-[560px] h-auto object-contain opacity-90" />
+          <EverSenseLogo width={560} height={110} />
           <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: VS.accent }} />
         </div>
       </div>

@@ -188,7 +188,7 @@ const MainLayout: React.FC = () => {
   const getInitials = (email: string) =>
     email.split('@')[0].split('.').map(n => n[0]?.toUpperCase()).join('').slice(0, 2);
 
-  const pageTitle = pageTitles[location.pathname] ?? 'VebTask';
+  const pageTitle = pageTitles[location.pathname] ?? 'EverSense Ai';
   const email = session?.user?.email ?? '';
   const displayName = email.split('@')[0] || 'User';
 

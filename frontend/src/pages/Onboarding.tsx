@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Progress } from '../components/ui/progress';
 import { Building2, Users, UserCheck, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { EverSenseLogo } from '../components/EverSenseLogo';
 
 interface OnboardingStep {
   id: string;
@@ -46,7 +47,7 @@ export function Onboarding() {
   const steps: OnboardingStep[] = [
     {
       id: 'welcome',
-      title: 'Welcome to VebTask',
+      title: 'Welcome to EverSense Ai',
       description: 'Let\'s get you set up with your workspace',
       icon: <CheckCircle className="w-6 h-6" />,
       completed: false
@@ -225,7 +226,7 @@ export function Onboarding() {
                   email: email.trim(),
                   role: 'STAFF',
                   organizationId: organizationId,
-                  message: 'Join our team on VebTask!'
+                  message: 'Join our team on EverSense Ai!'
                 }),
               });
               
@@ -275,14 +276,14 @@ export function Onboarding() {
               <CheckCircle className="w-10 h-10 text-primary" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold gradient-text">Welcome to VebTask!</h2>
+              <h2 className="text-2xl font-bold gradient-text">Welcome to EverSense Ai!</h2>
               <p className="text-muted-foreground mt-2">
                 Hi {session?.user?.name || 'there'}! Let's set up your workspace to get you started with task management and team collaboration.
               </p>
             </div>
             <div className="glass-surface p-4 rounded-lg border border-border">
               <p className="text-sm text-foreground">
-                This quick setup will take about 2-3 minutes and will help you get the most out of VebTask.
+                This quick setup will take about 2-3 minutes and will help you get the most out of EverSense Ai.
               </p>
             </div>
             <Button onClick={nextStep} className="w-full bg-gradient-primary hover:bg-gradient-primary/90 text-white shadow-glow transition-all duration-300">
@@ -501,7 +502,7 @@ export function Onboarding() {
             <div>
               <h2 className="text-2xl font-bold gradient-text">You're All Set!</h2>
               <p className="text-muted-foreground mt-2">
-                Welcome to VebTask! Your workspace is ready and you can start managing tasks and collaborating with your team.
+                Welcome to EverSense Ai! Your workspace is ready and you can start managing tasks and collaborating with your team.
               </p>
             </div>
             <Button onClick={handleCompleteOnboarding} className="w-full glass-surface" disabled={loading}>
@@ -525,10 +526,10 @@ export function Onboarding() {
         {/* Logo & Brand */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-6">
-            <img src="/veblen-logo.svg" alt="VebTask" className="h-14 w-auto object-contain rounded-xl animate-pulse-glow" />
+            <EverSenseLogo width={280} height={55} />
           </div>
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold gradient-text">VebTask</h1>
+            <h1 className="text-3xl font-bold gradient-text">EverSense Ai</h1>
             <p className="text-sm text-muted-foreground flex items-center justify-center gap-2">
               <Building2 className="h-4 w-4" />
               AI-Powered Task Management

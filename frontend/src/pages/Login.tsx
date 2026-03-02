@@ -80,7 +80,7 @@ export function Login() {
             <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#28c840' }} />
           </div>
           <span className="text-xs" style={{ color: '#858585', fontFamily: 'monospace' }}>
-            VebTask — sign-in.ts
+            EverSense Ai — sign-in.ts
           </span>
           <div className="w-12" />
         </div>
@@ -260,7 +260,7 @@ export function Login() {
           style={{ backgroundColor: '#007acc', color: '#ffffff', height: '22px', borderRadius: '0 0 8px 8px', fontFamily: 'monospace' }}
         >
           <span>⎇ main</span>
-          <span>VebTask v1.0</span>
+          <span>EverSense Ai v1.0</span>
         </div>
       </div>
     </div>

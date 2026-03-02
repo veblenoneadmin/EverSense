@@ -127,7 +127,7 @@ export function ClientNotificationsWidget({ config = {}, onConfigure }: ClientNo
           generatedNotifications.push({
             id: 'welcome',
             type: 'milestone',
-            title: 'Welcome to VebTask!',
+            title: 'Welcome to EverSense Ai!',
             message: 'Your project workspace is ready. Start tracking your progress here.',
             timestamp: new Date().toISOString(),
             isRead: false,

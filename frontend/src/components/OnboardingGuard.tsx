@@ -1,4 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
+import { EverSenseLogo } from './EverSenseLogo';
 import { useOnboardingStatus } from '../hooks/useOnboardingStatus';
 import { useSession } from '../lib/auth-client';
 
@@ -23,11 +24,7 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-surface to-surface-elevated">
         <div className="flex flex-col items-center space-y-6 animate-fade-in">
           <div className="relative">
-            <img 
-              src="/veblen-logo.svg"
-              alt="Veblen"
-              className="h-20 w-auto object-contain animate-pulse-glow"
-            />
+            <EverSenseLogo width={280} height={55} />
           </div>
           <div className="flex flex-col items-center space-y-2">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
