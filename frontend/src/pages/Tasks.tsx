@@ -49,6 +49,12 @@ interface Project {
   color: string;
 }
 
+interface OrgMember {
+  id: string;
+  name: string;
+  email: string;
+}
+
 // ── VS Code Dark+ theme tokens ────────────────────────────────────────────────
 const VS = {
   bg0:     '#1e1e1e', // editor background
@@ -134,12 +140,15 @@ export function Tasks() {
   const [userRole, setUserRole] = useState<string>('CLIENT');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Org members for assignee picker
+  const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+
   // New task form
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [newTaskColumnStatus, setNewTaskColumnStatus] = useState<Task['status']>('not_started');
   const [newTaskForm, setNewTaskForm] = useState({
     title: '', description: '', priority: 'Medium' as Task['priority'],
-    projectId: '', estimatedHours: 0, dueDate: '', tags: '',
+    projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeId: '',
   });
   const [taskFormLoading, setTaskFormLoading] = useState(false);
 
@@ -243,6 +252,14 @@ export function Tasks() {
   useEffect(() => {
     if (showNewTaskForm || editingTask) fetchProjects();
   }, [showNewTaskForm, editingTask]);
+
+  // ── fetch org members for assignee dropdown ────────────────────────────────
+  useEffect(() => {
+    if (!showNewTaskForm) return;
+    apiClient.fetch('/api/calendar/members')
+      .then(d => { if (d.members) setOrgMembers(d.members); })
+      .catch(() => {});
+  }, [showNewTaskForm]);
 
   // ── timer: resume interval on mount if a timer was running ─────────────────
   useEffect(() => {
@@ -388,7 +405,7 @@ export function Tasks() {
         body: JSON.stringify({
           title,
           description: newTaskForm.description,
-          userId: session.user.id,
+          userId: newTaskForm.assigneeId || session.user.id,
           orgId: currentOrg.id,
           priority: newTaskForm.priority,
           status: newTaskColumnStatus,
@@ -400,7 +417,7 @@ export function Tasks() {
       });
       if (data.task) {
         await fetchTasks();
-        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '' });
+        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeId: '' });
         setShowNewTaskForm(false);
       }
     } catch { alert('Failed to create task.'); }
@@ -1096,6 +1113,21 @@ export function Tasks() {
                   className={inputCls + ' resize-none'}
                   style={inputStyle}
                 />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Assignee</label>
+                <select
+                  value={newTaskForm.assigneeId}
+                  onChange={e => setNewTaskForm(p => ({ ...p, assigneeId: e.target.value }))}
+                  className={inputCls}
+                  style={{ ...inputStyle, color: VS.text1 }}
+                >
+                  <option value="">Assign to myself</option>
+                  {orgMembers.map(m => (
+                    <option key={m.id} value={m.id}>{m.name || m.email}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
