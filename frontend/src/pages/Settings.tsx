@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSession } from '../lib/auth-client';
+import { useSession, authClient } from '../lib/auth-client';
 import {
   User,
   Bell,
@@ -38,7 +38,6 @@ const VS = {
 export function Settings() {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState('profile');
-  const [showPassword, setShowPassword] = useState(false);
 
   // Extract real user data from session
   const userName = session?.user?.name || '';
@@ -65,6 +64,14 @@ export function Settings() {
     weeklyReports: true,
     marketingEmails: false
   });
+
+  // Password change state
+  const [passwordForm, setPasswordForm] = useState({ current: '', newPass: '', confirm: '' });
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Update profile data when session changes
   useEffect(() => {
@@ -95,7 +102,27 @@ export function Settings() {
 
   const handleSave = (section: string) => {
     console.log(`Saving ${section}...`);
-    // Here you would normally save to your backend
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordMsg(null);
+    if (!passwordForm.current) { setPasswordMsg({ type: 'error', text: 'Current password is required.' }); return; }
+    if (passwordForm.newPass.length < 8) { setPasswordMsg({ type: 'error', text: 'New password must be at least 8 characters.' }); return; }
+    if (passwordForm.newPass !== passwordForm.confirm) { setPasswordMsg({ type: 'error', text: 'Passwords do not match.' }); return; }
+    setPasswordSaving(true);
+    try {
+      const res = await authClient.changePassword({ currentPassword: passwordForm.current, newPassword: passwordForm.newPass, revokeOtherSessions: false });
+      if (res.error) {
+        setPasswordMsg({ type: 'error', text: res.error.message || 'Failed to change password.' });
+      } else {
+        setPasswordMsg({ type: 'success', text: 'Password changed successfully.' });
+        setPasswordForm({ current: '', newPass: '', confirm: '' });
+      }
+    } catch (err: unknown) {
+      setPasswordMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to change password.' });
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const labelStyle: React.CSSProperties = {
@@ -503,42 +530,73 @@ export function Settings() {
       case 'security':
         return (
           <div style={cardStyle}>
-            <p style={sectionTitleStyle}>Security Settings</p>
+            <p style={sectionTitleStyle}>Change Password</p>
+
+            {/* Current Password */}
             <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Change Password</label>
+              <label style={labelStyle}>Current Password</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter new password"
+                  type={showCurrent ? 'text' : 'password'}
+                  value={passwordForm.current}
+                  onChange={e => setPasswordForm(p => ({ ...p, current: e.target.value }))}
+                  placeholder="Enter current password"
                   style={{ ...inputStyle, paddingRight: 40 }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: 10,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: VS.text2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: 0,
-                  }}
-                >
-                  {showPassword
-                    ? <EyeOff style={{ width: 14, height: 14 }} />
-                    : <Eye style={{ width: 14, height: 14 }} />
-                  }
+                <button type="button" onClick={() => setShowCurrent(v => !v)}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: VS.text2, padding: 0, display: 'flex' }}>
+                  {showCurrent ? <EyeOff style={{ width: 14, height: 14 }} /> : <Eye style={{ width: 14, height: 14 }} />}
                 </button>
               </div>
             </div>
-            <p style={{ textAlign: 'center', color: VS.text2, fontSize: 13, margin: 0 }}>
-              More security options coming soon...
-            </p>
+
+            {/* New Password */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>New Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showNew ? 'text' : 'password'}
+                  value={passwordForm.newPass}
+                  onChange={e => setPasswordForm(p => ({ ...p, newPass: e.target.value }))}
+                  placeholder="At least 8 characters"
+                  style={{ ...inputStyle, paddingRight: 40 }}
+                />
+                <button type="button" onClick={() => setShowNew(v => !v)}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: VS.text2, padding: 0, display: 'flex' }}>
+                  {showNew ? <EyeOff style={{ width: 14, height: 14 }} /> : <Eye style={{ width: 14, height: 14 }} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={labelStyle}>Confirm New Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  value={passwordForm.confirm}
+                  onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))}
+                  placeholder="Repeat new password"
+                  style={{ ...inputStyle, paddingRight: 40 }}
+                />
+                <button type="button" onClick={() => setShowConfirm(v => !v)}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: VS.text2, padding: 0, display: 'flex' }}>
+                  {showConfirm ? <EyeOff style={{ width: 14, height: 14 }} /> : <Eye style={{ width: 14, height: 14 }} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Feedback message */}
+            {passwordMsg && (
+              <p style={{ fontSize: 13, marginBottom: 16, color: passwordMsg.type === 'success' ? VS.teal : VS.red }}>
+                {passwordMsg.text}
+              </p>
+            )}
+
+            <button onClick={handleChangePassword} disabled={passwordSaving} style={{ ...saveButtonStyle, opacity: passwordSaving ? 0.6 : 1 }}>
+              <Save style={{ width: 14, height: 14 }} />
+              {passwordSaving ? 'Saving...' : 'Change Password'}
+            </button>
           </div>
         );
       default:
