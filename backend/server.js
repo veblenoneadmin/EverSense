@@ -2506,104 +2506,69 @@ app.post('/api/brain-dump/save-tasks', async (req, res) => {
 
     console.log('💾 save-tasks:', { userId, orgId, taskCount: extractedTasks?.length });
 
-    const pool = await getDbPool();
-
-    // Ensure brain_dumps table exists
+    // Ensure brain_dumps table exists (non-fatal)
     try {
-      await pool.execute(
-        `CREATE TABLE IF NOT EXISTS brain_dumps (
-          id VARCHAR(255) PRIMARY KEY,
-          userId VARCHAR(255) NOT NULL,
-          orgId VARCHAR(191) NOT NULL,
-          rawContent TEXT NOT NULL,
-          processedContent JSON,
-          processingStatus ENUM('pending','processing','completed','failed') DEFAULT 'pending',
-          aiModel VARCHAR(100),
-          processedAt TIMESTAMP NULL,
-          createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          INDEX bd_userId_idx (userId),
-          INDEX bd_orgId_idx (orgId)
-        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+      await prisma.$executeRawUnsafe(
+        'CREATE TABLE IF NOT EXISTS `brain_dumps` (' +
+        '  `id` VARCHAR(255) NOT NULL,' +
+        '  `userId` VARCHAR(255) NOT NULL,' +
+        '  `orgId` VARCHAR(191) NOT NULL,' +
+        '  `rawContent` TEXT NOT NULL,' +
+        '  `processedContent` JSON,' +
+        '  `processingStatus` ENUM(\'pending\',\'processing\',\'completed\',\'failed\') DEFAULT \'pending\',' +
+        '  `aiModel` VARCHAR(100),' +
+        '  `processedAt` DATETIME(3) NULL,' +
+        '  `createdAt` DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),' +
+        '  PRIMARY KEY (`id`),' +
+        '  KEY `bd_userId_idx` (`userId`),' +
+        '  KEY `bd_orgId_idx` (`orgId`)' +
+        ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
       );
     } catch (e) { /* table already exists */ }
 
     const savedTasks = [];
 
-    // Begin transaction
-    const connection = await pool.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      // Save tasks to macro_tasks table
-      for (const task of extractedTasks) {
-        const taskId = task.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-        // Insert into macro_tasks
-        await connection.execute(
-          `INSERT INTO macro_tasks (
-            id, title, description, userId, createdBy, orgId, priority, estimatedHours,
-            status, category, tags, createdAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'not_started', ?, ?, NOW())`,
-          [
-            taskId,
-            task.title,
-            task.description || '',
-            userId,
-            userId,
-            orgId,
-            task.priority || 'Medium',
-            task.estimatedHours || 1,
-            task.category || 'General',
-            JSON.stringify(task.tags || [])
-          ]
-        );
-
-        savedTasks.push({
-          id: taskId,
-          ...task
-        });
-
-      }
-
-      // Save brain dump record
-      const brainDumpId = `dump-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      await connection.execute(
-        `INSERT INTO brain_dumps (
-          id, userId, orgId, rawContent, processedContent, processingStatus,
-          aiModel, processedAt, createdAt
-        ) VALUES (?, ?, ?, ?, ?, 'completed', 'gpt-4o-mini', NOW(), NOW())`,
-        [
-          brainDumpId,
+    // Save tasks using Prisma (same as POST /api/tasks)
+    for (const task of extractedTasks) {
+      const created = await prisma.macroTask.create({
+        data: {
+          title: task.title,
+          description: task.description || null,
           userId,
           orgId,
-          req.body.originalContent || '',
-          JSON.stringify({
-            extractedTasks,
-            dailySchedule,
-            savedAt: new Date().toISOString()
-          })
-        ]
-      );
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: 'Tasks and schedule saved successfully',
-        data: {
-          brainDumpId,
-          savedTasks,
-          dailySchedule,
-          totalTasksCreated: savedTasks.length
+          createdBy: userId,
+          priority: task.priority || 'Medium',
+          estimatedHours: parseFloat(task.estimatedHours) || 0,
+          category: task.category || 'General',
+          tags: task.tags || null,
         }
       });
-
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
+      savedTasks.push({ id: created.id, ...task });
     }
+
+    // Save brain dump record (non-fatal)
+    const brainDumpId = `dump-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    try {
+      await prisma.$executeRawUnsafe(
+        'INSERT INTO `brain_dumps` (id, userId, orgId, rawContent, processedContent, processingStatus, aiModel, processedAt, createdAt) VALUES (?, ?, ?, ?, ?, \'completed\', \'claude\', NOW(), NOW())',
+        brainDumpId, userId, orgId,
+        req.body.originalContent || '',
+        JSON.stringify({ extractedTasks, dailySchedule, savedAt: new Date().toISOString() })
+      );
+    } catch (e) {
+      console.warn('brain_dumps record insert failed (non-fatal):', e.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'Tasks and schedule saved successfully',
+      data: {
+        brainDumpId,
+        savedTasks,
+        dailySchedule,
+        totalTasksCreated: savedTasks.length
+      }
+    });
 
   } catch (error) {
     console.error('❌ Brain dump save error:', error);
