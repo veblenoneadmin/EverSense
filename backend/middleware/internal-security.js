@@ -5,17 +5,22 @@ import { INTERNAL_CONFIG, isRegistrationAllowed } from '../config/internal.js';
  * Middleware to block public registration in internal mode
  */
 export function blockPublicRegistration(req, res, next) {
-  // Only block registration endpoints
+  // Invite-based registration is always allowed regardless of public registration setting
+  if (req.path.startsWith('/api/invites/') || req.path.startsWith('/api/invitations/')) {
+    return next();
+  }
+
+  // Only block public registration endpoints
   const registrationPaths = [
     '/api/auth/sign-up',
-    '/api/auth/signup', 
+    '/api/auth/signup',
     '/api/auth/register',
     '/signup',
     '/register'
   ];
 
-  const isRegistrationPath = registrationPaths.some(path => 
-    req.path === path || req.url.includes(path)
+  const isRegistrationPath = registrationPaths.some(path =>
+    req.path === path || req.path.startsWith(path + '/')
   );
 
   if (isRegistrationPath && !isRegistrationAllowed()) {
