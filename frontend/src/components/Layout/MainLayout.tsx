@@ -185,12 +185,12 @@ const MainLayout: React.FC = () => {
     }
   };
 
-  const getInitials = (email: string) =>
-    email.split('@')[0].split('.').map(n => n[0]?.toUpperCase()).join('').slice(0, 2);
+  const getInitials = (name: string) =>
+    name.split(' ').map(n => n[0]?.toUpperCase()).filter(Boolean).join('').slice(0, 2) || 'U';
 
   const pageTitle = pageTitles[location.pathname] ?? 'EverSense Ai';
   const email = session?.user?.email ?? '';
-  const displayName = email.split('@')[0] || 'User';
+  const displayName = session?.user?.name || email.split('@')[0] || 'User';
 
   return (
     <div className="min-h-screen" style={{ background: VS.bg0 }}>
@@ -346,7 +346,7 @@ const MainLayout: React.FC = () => {
                 className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
                 style={{ background: 'linear-gradient(135deg, hsl(252 87% 62%), hsl(260 80% 70%))' }}
               >
-                {email ? getInitials(email) : 'U'}
+                {getInitials(displayName)}
               </div>
               <div className="text-left leading-tight hidden sm:block">
                 <p className="text-[12px] font-medium capitalize" style={{ color: VS.text0 }}>{displayName}</p>
