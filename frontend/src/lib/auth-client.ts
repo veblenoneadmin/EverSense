@@ -40,8 +40,6 @@ export const {
   useSession,
 } = authClient;
 
-export { authClient };
-
 // Custom sign out with explicit session clearing
 export const signOut = async () => {
   try {
