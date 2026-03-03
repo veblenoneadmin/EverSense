@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { signIn } from '../lib/auth-client';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { EverSenseLogo } from '../components/EverSenseLogo';
-import { FcGoogle } from 'react-icons/fc';
-import { useAuthConfig } from '../hooks/useAuthConfig';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -14,7 +12,6 @@ export function Login() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { config } = useAuthConfig();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -33,18 +30,6 @@ export function Login() {
       console.error('Login error:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      await signIn.social({ provider: 'google' });
-    } catch (err) {
-      setLoading(false);
-      setError('An error occurred during Google sign in');
-      console.error('Google sign in error:', err);
     }
   };
 
@@ -212,45 +197,6 @@ export function Login() {
               </button>
             </form>
 
-            {/* Google OAuth */}
-            {config.googleOAuthEnabled && (
-              <>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#3c3c3c' }} />
-                  <span className="text-xs" style={{ color: '#858585' }}>or</span>
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#3c3c3c' }} />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-2 text-sm transition-all duration-200"
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: '1px solid #3c3c3c',
-                    borderRadius: '4px',
-                    color: '#cccccc',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    fontFamily: 'monospace',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget.style.backgroundColor = '#2d2d2d'); (e.currentTarget.style.borderColor = '#555'); }}
-                  onMouseLeave={e => { (e.currentTarget.style.backgroundColor = 'transparent'); (e.currentTarget.style.borderColor = '#3c3c3c'); }}
-                >
-                  <FcGoogle className="w-4 h-4" />
-                  Continue with Google
-                </button>
-              </>
-            )}
-
-            {/* Sign up */}
-            <div className="text-center pt-2" style={{ borderTop: '1px solid #3c3c3c' }}>
-              <p className="text-xs" style={{ color: '#858585' }}>
-                No account?{' '}
-                <Link to="/register" className="transition-colors" style={{ color: '#007acc' }}>
-                  Sign up here
-                </Link>
-              </p>
-            </div>
           </div>
         </div>
 
