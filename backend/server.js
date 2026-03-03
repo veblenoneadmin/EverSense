@@ -194,6 +194,10 @@ app.get("/api/auth", (req, res) => {
   });
 });
 
+// Password reset must be registered BEFORE the Better Auth catch-all
+// so these specific routes are not intercepted by Better Auth
+app.use('/api/auth', passwordResetRoutes);
+
 // Use a catch-all route for Better Auth sub-paths
 app.all(["/api/auth/*", "/api/auth/*splat"], (req, res) => {
   // Better Auth's toNodeHandler expects to handle the request/response directly
