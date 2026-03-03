@@ -80,11 +80,14 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
     if (priority) where.priority = priority;
     if (userId) where.userId = userId;
 
-    // If requester is CLIENT role, restrict to tasks from their assigned projects only
-    const clientMembership = await prisma.membership.findFirst({
-      where: { userId: req.user.id, orgId, role: 'CLIENT' }
+    // Role-based task visibility
+    const callerMembership = await prisma.membership.findFirst({
+      where: { userId: req.user.id, orgId }
     });
-    if (clientMembership) {
+    const callerRole = callerMembership?.role;
+
+    if (callerRole === 'CLIENT') {
+      // CLIENT: restrict to tasks from their assigned projects only
       let clientRows = [];
       try {
         clientRows = await prisma.$queryRawUnsafe(
@@ -110,6 +113,22 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         clientProjectIds = projects.map(p => p.id);
       }
       where.projectId = { in: clientProjectIds.length > 0 ? clientProjectIds : ['__none__'] };
+    } else if (callerRole === 'STAFF') {
+      // STAFF: only see tasks assigned to them (primary or multi-assignee)
+      delete where.userId; // ignore any userId filter — scope to self
+      let staffAssigneeTaskIds = [];
+      try {
+        await ensureAssigneesTable();
+        const rows = await prisma.$queryRawUnsafe(
+          `SELECT taskId FROM task_assignees WHERE userId = ? AND orgId = ?`,
+          req.user.id, orgId
+        );
+        staffAssigneeTaskIds = rows.map(r => r.taskId);
+      } catch (_) {}
+      where.OR = [
+        { userId: req.user.id },
+        ...(staffAssigneeTaskIds.length > 0 ? [{ id: { in: staffAssigneeTaskIds } }] : [])
+      ];
     }
 
     const tasks = await prisma.macroTask.findMany({
@@ -206,12 +225,14 @@ router.get('/recent', requireAuth, withOrgScope, validateQuery(commonSchemas.pag
       return res.status(400).json({ error: 'orgId is required' });
     }
     
-    // If requester is CLIENT role, restrict to tasks from their assigned projects only
+    // Role-based task visibility for recent tasks
     let recentWhere = { orgId, ...(userId ? { userId } : {}) };
-    const recentClientMembership = await prisma.membership.findFirst({
-      where: { userId: req.user.id, orgId, role: 'CLIENT' }
+    const recentMembership = await prisma.membership.findFirst({
+      where: { userId: req.user.id, orgId }
     });
-    if (recentClientMembership) {
+    const recentRole = recentMembership?.role;
+
+    if (recentRole === 'CLIENT') {
       let clientRows = [];
       try {
         clientRows = await prisma.$queryRawUnsafe(
@@ -236,6 +257,22 @@ router.get('/recent', requireAuth, withOrgScope, validateQuery(commonSchemas.pag
         clientProjectIds = projects.map(p => p.id);
       }
       recentWhere.projectId = { in: clientProjectIds.length > 0 ? clientProjectIds : ['__none__'] };
+    } else if (recentRole === 'STAFF') {
+      // STAFF: only see tasks assigned to them
+      delete recentWhere.userId;
+      let staffAssigneeTaskIds = [];
+      try {
+        await ensureAssigneesTable();
+        const rows = await prisma.$queryRawUnsafe(
+          `SELECT taskId FROM task_assignees WHERE userId = ? AND orgId = ?`,
+          req.user.id, orgId
+        );
+        staffAssigneeTaskIds = rows.map(r => r.taskId);
+      } catch (_) {}
+      recentWhere.OR = [
+        { userId: req.user.id },
+        ...(staffAssigneeTaskIds.length > 0 ? [{ id: { in: staffAssigneeTaskIds } }] : [])
+      ];
     }
 
     // EMERGENCY FIX: Remove relations causing collation mismatch

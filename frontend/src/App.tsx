@@ -20,6 +20,7 @@ import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { Admin } from './pages/Admin';
 import { KPIReport } from './pages/KPIReport';
+import { InviteAccept } from './pages/InviteAccept';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OrganizationProvider } from './contexts/OrganizationContext';
@@ -102,6 +103,10 @@ function AppContent() {
           <Route
             path="/email-verified"
             element={<EmailVerified />}
+          />
+          <Route
+            path="/invite"
+            element={<InviteAccept />}
           />
           <Route 
             path="/onboarding" 

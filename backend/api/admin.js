@@ -6,6 +6,7 @@ import { auth } from '../auth.js'; // Better Auth instance - handles hashing cor
 import { requireAuth, withOrgScope, requireAdmin, requireRole } from '../lib/rbac.js';
 import { checkDatabaseConnection, handleDatabaseError } from '../lib/api-error-handler.js';
 import crypto from 'crypto';
+import { sendInviteEmail, formatDuration } from '../lib/mailer.js';
 
 // Create a Client record via raw SQL — safe even when extended columns don't exist yet
 async function createClientRecord(name, email, userId, orgId) {
@@ -247,8 +248,26 @@ router.post('/invite', requireAuth, withOrgScope, requireRole('ADMIN'), async (r
       select: { name: true, email: true }
     });
 
-    console.log(`📧 Invitation created for ${email} with token: ${token}`);
-    console.log(`🔗 Invite link: ${process.env.BETTER_AUTH_URL}/invite/${token}`);
+    // Send invite email
+    const acceptUrl = `${process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL || 'http://localhost:5173'}/invite?token=${token}`;
+    console.log(`🔗 Invite link: ${acceptUrl}`);
+
+    try {
+      const org = await prisma.organization.findUnique({
+        where: { id: req.orgId },
+        select: { name: true }
+      });
+      await sendInviteEmail(email, {
+        orgName: org?.name || 'the organization',
+        role,
+        invitedBy: inviterUser?.name || inviterUser?.email || 'An admin',
+        acceptUrl,
+        expiresIn: formatDuration(7 * 24 * 60),
+      });
+      console.log(`📧 Invite email sent to ${email}`);
+    } catch (emailErr) {
+      console.error('❌ Failed to send invite email:', emailErr.message);
+    }
 
     res.status(201).json({
       success: true,
