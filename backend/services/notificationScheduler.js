@@ -27,7 +27,7 @@ async function runDueSoonJob() {
 
     // Tasks due in the next 24h that are not yet completed
     const tasks = await prisma.$queryRawUnsafe(
-      `SELECT id, title, dueDate, userId, orgId FROM MacroTask
+      `SELECT id, title, dueDate, userId, orgId FROM macro_tasks
        WHERE dueDate > ? AND dueDate <= ? AND status NOT IN ('completed', 'done')
        AND dueDate IS NOT NULL`,
       now, in24h
@@ -60,7 +60,7 @@ async function runOverdueJob() {
     const now = new Date();
 
     const tasks = await prisma.$queryRawUnsafe(
-      `SELECT t.id, t.title, t.dueDate, t.userId, t.orgId FROM MacroTask t
+      `SELECT t.id, t.title, t.dueDate, t.userId, t.orgId FROM macro_tasks t
        WHERE t.dueDate < ? AND t.status NOT IN ('completed', 'done')
        AND t.dueDate IS NOT NULL`,
       now

@@ -283,12 +283,25 @@ export function Dashboard() {
   };
 
   // ── Early returns ──────────────────────────────────────────────────────────
-  if (!session || orgLoading || !currentOrg) {
+  if (!session || orgLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: VS.bg0 }}>
         <div className="flex flex-col items-center gap-4">
           <EverSenseLogo width={560} height={110} />
           <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: VS.accent }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentOrg) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: VS.bg0 }}>
+        <div className="flex flex-col items-center gap-4">
+          <EverSenseLogo width={560} height={110} />
+          <p style={{ color: '#909090', fontSize: 13, marginTop: 8 }}>
+            Unable to load your organisation. Please refresh or contact your administrator.
+          </p>
         </div>
       </div>
     );

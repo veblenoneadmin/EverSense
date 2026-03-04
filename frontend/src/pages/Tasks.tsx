@@ -132,7 +132,7 @@ const inputStyle: React.CSSProperties = { background: '#3c3c3c', border: '1px so
 
 export function Tasks() {
   const { data: session } = useSession();
-  const { currentOrg } = useOrganization();
+  const { currentOrg, isLoading: orgLoading } = useOrganization();
   const apiClient = useApiClient();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -525,6 +525,25 @@ export function Tasks() {
 
   const tasksForCol = (colId: string) => filtered.filter(t => t.status === colId);
 
+  // While session or org context is still initialising, show a spinner
+  if (!session || orgLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: VS.accent }} />
+      </div>
+    );
+  }
+
+  // Org resolved but no membership found
+  if (!currentOrg) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p style={{ color: VS.text2, fontSize: 14 }}>No organisation found. Please contact your administrator.</p>
+      </div>
+    );
+  }
+
+  // Tasks are still being fetched from the server
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
