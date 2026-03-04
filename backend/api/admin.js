@@ -380,6 +380,16 @@ router.delete('/users/:userId', requireAuth, withOrgScope, requireRole('ADMIN'),
 
     const { userId } = req.params;
 
+    // Resolve caller's email and role
+    const callerUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } });
+    const callerEmail = callerUser?.email;
+    const callerMembership = await prisma.membership.findUnique({
+      where: { userId_orgId: { userId: req.user.id, orgId: req.orgId } },
+      select: { role: true },
+    });
+    const callerRole = callerMembership?.role;
+    const isSuperAdmin = callerEmail === 'admin@eversense.ai';
+
     const membership = await prisma.membership.findUnique({
       where: { userId_orgId: { userId, orgId: req.orgId } },
       include: { user: { select: { name: true, email: true } } }
@@ -388,8 +398,20 @@ router.delete('/users/:userId', requireAuth, withOrgScope, requireRole('ADMIN'),
     if (!membership) {
       return res.status(404).json({ error: 'User not found in this organization', code: 'USER_NOT_FOUND' });
     }
+
+    // Nobody can delete an OWNER
     if (membership.role === 'OWNER') {
       return res.status(403).json({ error: 'Cannot remove organization owner', code: 'CANNOT_REMOVE_OWNER' });
+    }
+
+    // Nobody (not even OWNER) can delete admin@eversense.ai
+    if (membership.user?.email === 'admin@eversense.ai') {
+      return res.status(403).json({ error: 'Cannot remove this protected account', code: 'PROTECTED_ACCOUNT' });
+    }
+
+    // Regular admins (not super admin, not owner) can only delete STAFF
+    if (!isSuperAdmin && callerRole !== 'OWNER' && membership.role !== 'STAFF') {
+      return res.status(403).json({ error: 'You can only remove Staff members', code: 'INSUFFICIENT_PERMISSIONS' });
     }
 
     await prisma.membership.delete({ where: { userId_orgId: { userId, orgId: req.orgId } } });
@@ -469,11 +491,25 @@ router.post('/users/bulk-delete', requireAuth, withOrgScope, requireRole('ADMIN'
   try {
     if (!(await checkDatabaseConnection(res))) return;
 
+    const callerUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } });
+    const callerMembership = await prisma.membership.findUnique({
+      where: { userId_orgId: { userId: req.user.id, orgId: req.orgId } },
+      select: { role: true },
+    });
+    if (callerUser?.email !== 'admin@eversense.ai' && callerMembership?.role !== 'OWNER') {
+      return res.status(403).json({ error: 'Only the super admin or owner can perform bulk delete', code: 'INSUFFICIENT_PERMISSIONS' });
+    }
+
+    // Find admin@eversense.ai's userId to preserve their membership
+    const protectedUser = await prisma.user.findUnique({ where: { email: 'admin@eversense.ai' }, select: { id: true } });
+
     const result = await prisma.membership.deleteMany({
       where: {
         orgId: req.orgId,
         role: { not: 'OWNER' },
-        userId: { not: req.user.id },
+        userId: {
+          notIn: [req.user.id, ...(protectedUser ? [protectedUser.id] : [])],
+        },
       },
     });
 
@@ -491,6 +527,15 @@ router.post('/users/bulk-delete', requireAuth, withOrgScope, requireRole('ADMIN'
 router.post('/timelogs/reset', requireAuth, withOrgScope, requireRole('ADMIN'), async (req, res) => {
   try {
     if (!(await checkDatabaseConnection(res))) return;
+
+    const callerUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } });
+    const callerMembership = await prisma.membership.findUnique({
+      where: { userId_orgId: { userId: req.user.id, orgId: req.orgId } },
+      select: { role: true },
+    });
+    if (callerUser?.email !== 'admin@eversense.ai' && callerMembership?.role !== 'OWNER') {
+      return res.status(403).json({ error: 'Only the super admin or owner can reset time logs', code: 'INSUFFICIENT_PERMISSIONS' });
+    }
 
     const result = await prisma.timeLog.deleteMany({ where: { orgId: req.orgId } });
 

@@ -233,6 +233,11 @@ export function Admin() {
   const pendingInvites = invites.filter(i => i.status === 'PENDING').length;
   const totalTasks     = users.reduce((a, u) => a + (u._count?.macroTasks ?? 0), 0);
 
+  // ── Permission helpers ──────────────────────────────────────────────────────
+  const myRole         = users.find(u => u.id === session?.user?.id)?.memberships[0]?.role ?? 'STAFF';
+  const isSuperAdmin   = session?.user?.email === 'admin@eversense.ai';
+  const canUseDangerZone = isSuperAdmin || myRole === 'OWNER';
+
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -358,6 +363,9 @@ export function Admin() {
           const Icon = cfg.icon;
           const initials = (user.name || user.email).charAt(0).toUpperCase();
           const isOwner = role === 'OWNER';
+          const isProtectedAdmin = user.email === 'admin@eversense.ai';
+          // Caller can delete if: target not OWNER, not protected, and (caller is super admin/owner OR target is STAFF)
+          const canDelete = !isOwner && !isProtectedAdmin && (canUseDangerZone || role === 'STAFF');
           return (
             <div
               key={user.id}
@@ -415,25 +423,25 @@ export function Admin() {
               {/* Actions */}
               <div className="flex items-center gap-2">
                 {!isOwner && (
-                  <>
-                    <button
-                      onClick={() => { setEditingUser(user); setEditingRole(role as any); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5"
-                      style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.blue }}
-                    >
-                      <Edit3 className="h-3 w-3" />
-                      Edit Role
-                    </button>
-                    <button
-                      onClick={() => handleRemoveMember(user.id)}
-                      disabled={removingId === user.id}
-                      className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5 disabled:opacity-40"
-                      style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.red }}
-                      title="Remove member"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </>
+                  <button
+                    onClick={() => { setEditingUser(user); setEditingRole(role as any); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5"
+                    style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.blue }}
+                  >
+                    <Edit3 className="h-3 w-3" />
+                    Edit Role
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => handleRemoveMember(user.id)}
+                    disabled={removingId === user.id}
+                    className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5 disabled:opacity-40"
+                    style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.red }}
+                    title="Remove member"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 )}
                 {isOwner && (
                   <span className="text-[11px]" style={{ color: VS.text2 }}>Owner</span>
@@ -683,8 +691,8 @@ export function Admin() {
         </div>
       )}
 
-      {/* ── Danger Zone ── */}
-      <div
+      {/* ── Danger Zone (super admin / owner only) ── */}
+      {canUseDangerZone && <div
         className="rounded-xl p-5"
         style={{ background: 'rgba(244,71,71,0.04)', border: `1px solid ${VS.red}33` }}
       >
@@ -712,7 +720,7 @@ export function Admin() {
             {resettingTimeLogs ? 'Resetting...' : 'Reset All Time Logs'}
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* ── Add User Modal ── */}
       {showAddUser && (
