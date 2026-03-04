@@ -491,7 +491,7 @@ export function Settings() {
         ))}
       </div>
       <div style={{ marginTop: 24 }}>
-        <button onClick={() => handleSave('notifications')} style={saveButtonStyle}>
+        <button onClick={() => {}} style={saveButtonStyle}>
           <Save style={{ width: 14, height: 14 }} />
           Save Preferences
         </button>
