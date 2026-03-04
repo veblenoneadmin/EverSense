@@ -2945,11 +2945,26 @@ async function ensureTaskAssigneesSchema() {
   } catch (e) { console.warn('  ⚠️  task_assignees table:', e.message); }
 }
 
+// Widen Account.scope column to TEXT so long Google scope strings fit
+async function ensureAccountScopeText() {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE `account` MODIFY COLUMN `scope` TEXT NULL"
+    );
+    console.log('  ✅ account.scope widened to TEXT');
+  } catch (e) {
+    // Harmless if already TEXT
+    if (!e.message?.includes('already')) console.warn('  ⚠️  account.scope alter:', e.message);
+  }
+}
+
 // Run migrations and start server
 async function startServer() {
   await runDatabaseMigrations();
   await ensureTaskTablesSchema();
   await ensureTaskAssigneesSchema();
+  await ensureAccountScopeText();
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
 

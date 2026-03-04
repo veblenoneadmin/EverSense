@@ -94,7 +94,7 @@ model Account {
   type                 String    @default("oauth")
   expires_at           Int?
   token_type           String?
-  scope                String?
+  scope                String?   @db.Text
   session_state        String?
   password             String?   @db.Text
   createdAt            DateTime  @default(now())
