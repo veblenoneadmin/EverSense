@@ -8,11 +8,11 @@ const router = express.Router();
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 async function getRole(userId, orgId) {
-  const rows = await prisma.$queryRawUnsafe(
-    `SELECT role FROM memberships WHERE userId = ? AND orgId = ? LIMIT 1`,
-    userId, orgId
-  );
-  return rows[0]?.role || 'STAFF';
+  const membership = await prisma.membership.findFirst({
+    where: { userId, orgId },
+    select: { role: true },
+  });
+  return membership?.role || 'STAFF';
 }
 
 // ── GET /api/user-reports ─────────────────────────────────────────────────────
@@ -100,25 +100,13 @@ router.get('/', requireAuth, withOrgScope, async (req, res) => {
     // ── Member list (admin only) ─────────────────────────────────────────────
     let members = [];
     if (isPrivileged) {
-      const mRows    = await prisma.$queryRawUnsafe(
-        `SELECT userId, role FROM memberships WHERE orgId = ? AND role IN ('OWNER','ADMIN','STAFF')`, orgId
-      );
-      const mUserIds = mRows.map(m => m.userId).filter(Boolean);
-      const mMap     = {};
-      if (mUserIds.length) {
-        try {
-          const mu = await prisma.user.findMany({
-            where: { id: { in: mUserIds } },
-            select: { id: true, name: true, email: true },
-          });
-          mu.forEach(u => { mMap[u.id] = u; });
-        } catch (e) {
-          console.error('Member enrichment failed (non-fatal):', e.message);
-        }
-      }
+      const mRows = await prisma.membership.findMany({
+        where: { orgId, role: { in: ['OWNER', 'ADMIN', 'STAFF'] } },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
       members = mRows.map(m => ({
         id:   m.userId,
-        name: mMap[m.userId]?.name || mMap[m.userId]?.email || 'Unknown',
+        name: m.user?.name || m.user?.email || 'Unknown',
         role: m.role,
       }));
     }
