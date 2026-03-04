@@ -63,7 +63,7 @@ function fmtClock(s: number): string {
 }
 function fmtTime(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 }
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -716,6 +716,9 @@ export function TimeLogs() {
                           <div>
                             <p className="font-medium leading-tight" style={{ color: VS.text0 }}>
                               {log.memberName}
+                            </p>
+                            <p className="text-[10px] leading-tight" style={{ color: VS.text2 }}>
+                              {log.memberEmail}
                             </p>
                             <span className="text-[10px] font-semibold capitalize"
                               style={{ color: (ROLE_STYLE[log.memberRole] ?? ROLE_STYLE.STAFF).color }}>
