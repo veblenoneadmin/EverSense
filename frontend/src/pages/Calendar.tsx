@@ -8,6 +8,7 @@ import type { EventInput, EventClickArg, EventChangeArg, EventSourceFuncArg } fr
 import type { DateClickArg } from '@fullcalendar/interaction';
 import { useApiClient } from '../lib/api-client';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { signIn } from '../lib/auth-client';
 import {
   Plus, X, Video, Users, Calendar as CalendarIcon,
   Check, ExternalLink, Search, ChevronDown, MapPin,
@@ -202,21 +203,31 @@ export function Calendar() {
           <h1 style={{ color: VS.text0, fontSize: 20, fontWeight: 600, margin: 0 }}>Calendar</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Google Calendar status badge */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500,
-            ...(googleConnected
-              ? { background: 'rgba(78,201,176,0.12)', color: VS.teal, border: `1px solid rgba(78,201,176,0.25)` }
-              : { background: 'rgba(144,144,144,0.08)', color: VS.text2, border: `1px solid ${VS.border}` }
-            ),
-          }}>
+          {/* Google Calendar status badge / connect button */}
+          {googleConnected ? (
             <div style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: googleConnected ? VS.teal : VS.text2,
-            }} />
-            {googleConnected ? 'Google Calendar Connected' : 'Google Calendar Not Connected'}
-          </div>
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+              background: 'rgba(78,201,176,0.12)', color: VS.teal,
+              border: '1px solid rgba(78,201,176,0.25)',
+            }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: VS.teal }} />
+              Google Calendar Connected
+            </div>
+          ) : (
+            <button
+              onClick={() => signIn.social({ provider: 'google', callbackURL: '/calendar' })}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+                background: 'rgba(144,144,144,0.08)', color: VS.text1,
+                border: `1px solid ${VS.border}`, cursor: 'pointer',
+              }}
+            >
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: VS.text2 }} />
+              Connect Google Calendar
+            </button>
+          )}
           <button
             onClick={() => openCreateModal()}
             style={{
