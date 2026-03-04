@@ -29,7 +29,7 @@ import attendanceRoutes from './api/attendance.js';
 import calendarRoutes from './api/calendar.js';
 import kpiReportRoutes from './api/kpi-report.js';
 import notificationsRoutes from './api/notifications.js';
-import firefliesRoutes from './api/fireflies.js';
+import firefliesRoutes, { startFirefliesPolling } from './api/fireflies.js';
 import { 
   blockPublicRegistration, 
   addInternalBranding, 
@@ -2949,6 +2949,7 @@ async function startServer() {
   await runDatabaseMigrations();
   await ensureTaskTablesSchema();
   await ensureTaskAssigneesSchema();
+  startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);

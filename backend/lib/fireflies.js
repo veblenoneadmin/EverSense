@@ -20,6 +20,24 @@ const TRANSCRIPT_QUERY = `
   }
 `;
 
+const LATEST_TRANSCRIPTS_QUERY = `
+  query {
+    transcripts(limit: 20) {
+      id
+      title
+      date
+      duration
+      participants
+      summary {
+        overview
+        action_items
+        keywords
+        outline
+      }
+    }
+  }
+`;
+
 /**
  * Fetch a single transcript (with summary) from Fireflies.
  * @param {string} meetingId — the Fireflies transcript/meeting ID
@@ -54,4 +72,30 @@ export async function fetchTranscript(meetingId) {
   }
 
   return json.data?.transcript ?? null;
+}
+
+/**
+ * Fetch the latest transcripts (up to 20) from Fireflies.
+ * @returns {Array} array of transcript objects or empty array
+ */
+export async function fetchLatestTranscripts() {
+  const apiKey = process.env.FIREFLIES_API_KEY;
+  if (!apiKey) {
+    console.warn('[Fireflies] FIREFLIES_API_KEY not set — skipping poll');
+    return [];
+  }
+
+  const res = await fetch(FIREFLIES_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ query: LATEST_TRANSCRIPTS_QUERY }),
+  });
+
+  if (!res.ok) throw new Error(`Fireflies API HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.errors?.length) throw new Error(`Fireflies GraphQL: ${json.errors[0].message}`);
+  return json.data?.transcripts ?? [];
 }

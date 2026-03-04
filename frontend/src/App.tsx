@@ -17,6 +17,7 @@ import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { Admin } from './pages/Admin';
 import { KPIReport } from './pages/KPIReport';
+import { Meetings } from './pages/Meetings';
 import { InviteAccept } from './pages/InviteAccept';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -68,6 +69,8 @@ function AppContent() {
                 <Route path="skills" element={<Skills />} />
                 <Route path="calendar" element={<Calendar />} />
                 <Route path="kpi-report" element={<KPIReport />} />
+                <Route path="meetings" element={<Meetings />} />
+                <Route path="meetings/:id" element={<Meetings />} />
               </Route>
 
               <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />

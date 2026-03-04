@@ -14,6 +14,7 @@ import {
   Star,
   CalendarDays,
   FileBarChart,
+  Video,
 } from 'lucide-react';
 
 // VS Code Dark+ tokens — match MainLayout
@@ -32,6 +33,7 @@ const navItems = [
   { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Tasks',          href: '/tasks',       icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Calendar',       href: '/calendar',    icon: CalendarDays,    roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
+  { name: 'Meetings',       href: '/meetings',    icon: Video,           roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Skills',         href: '/skills',      icon: Star,            roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Projects',       href: '/projects',    icon: Building2,       roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Time Logs',      href: '/timesheets',  icon: Clock,           roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
