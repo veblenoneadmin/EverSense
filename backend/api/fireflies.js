@@ -3,7 +3,7 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
-import { fetchTranscript, fetchLatestTranscripts } from '../lib/fireflies.js';
+import { fetchTranscript, fetchLatestTranscripts, fetchTranscriptRaw } from '../lib/fireflies.js';
 import { requireAuth, withOrgScope } from '../lib/rbac.js';
 
 const router = express.Router();
@@ -57,11 +57,9 @@ function tryParseJSON(str, fallback = []) {
   try { return JSON.parse(str); } catch { return fallback; }
 }
 
-// Fireflies plans differ in which summary sub-fields are populated.
-// Pick the first non-empty value across all known variants.
 function pickSummaryOverview(summary) {
   if (!summary) return null;
-  return summary.overview || summary.gist || summary.short_summary || summary.bullet_gist || summary.shorthand_bullet || null;
+  return summary.overview || null;
 }
 
 function buildNotifBody(transcript) {
@@ -200,20 +198,62 @@ router.post('/transcripts/:id/refresh', requireAuth, async (req, res) => {
     const transcript = await fetchTranscript(req.params.id);
     if (!transcript) return res.status(404).json({ success: false, error: 'Transcript not found in Fireflies' });
 
-    // Force update regardless of existing summary state
     const resolvedOverview = pickSummaryOverview(transcript.summary);
-    await prisma.$executeRawUnsafe(
-      'UPDATE fireflies_transcripts SET overview=?, action_items=?, keywords=?, outline=? WHERE id=?',
-      resolvedOverview,
-      transcript.summary?.action_items || null,
-      transcript.summary?.keywords || null,
-      transcript.summary?.outline || null,
-      req.params.id,
+    const { id, title, date, duration, participants = [], summary } = transcript;
+
+    // Check if already stored
+    const existing = await prisma.$queryRawUnsafe(
+      'SELECT id FROM fireflies_transcripts WHERE id = ? LIMIT 1', id
     );
-    console.log(`[Fireflies] Force-refreshed transcript: ${req.params.id}`);
-    res.json({ success: true, hasSummary: !!resolvedOverview });
+
+    if (existing.length) {
+      // Force update summary fields
+      await prisma.$executeRawUnsafe(
+        'UPDATE fireflies_transcripts SET overview=?, action_items=?, keywords=?, outline=? WHERE id=?',
+        resolvedOverview,
+        summary?.action_items || null,
+        summary?.keywords || null,
+        summary?.outline || null,
+        id,
+      );
+    } else {
+      // Not in DB yet — insert it now
+      let parsedDate = null;
+      if (date) {
+        const d = typeof date === 'number' ? new Date(date) : new Date(date);
+        parsedDate = isNaN(d.getTime()) ? null : d;
+      }
+      await prisma.$executeRawUnsafe(
+        'INSERT INTO fireflies_transcripts (id, title, date, duration, participants, overview, action_items, keywords, outline, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+        id,
+        title?.trim() || 'Untitled Meeting',
+        parsedDate,
+        duration || null,
+        JSON.stringify(participants.map(e => String(e).trim()).filter(Boolean)),
+        resolvedOverview,
+        summary?.action_items || null,
+        summary?.keywords     || null,
+        summary?.outline      || null,
+      );
+    }
+
+    console.log(`[Fireflies] Force-refreshed transcript: ${id} (${existing.length ? 'updated' : 'inserted'})`);
+    res.json({ success: true, hasSummary: !!resolvedOverview, wasNew: !existing.length });
   } catch (err) {
     console.error('[Fireflies] Refresh error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── GET /api/fireflies/debug/:id — raw Fireflies API response for diagnosis ──
+router.get('/debug/:id', requireAuth, async (req, res) => {
+  if (!process.env.FIREFLIES_API_KEY) {
+    return res.status(503).json({ success: false, error: 'FIREFLIES_API_KEY not configured' });
+  }
+  try {
+    const raw = await fetchTranscriptRaw(req.params.id);
+    res.json({ success: true, raw });
+  } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });

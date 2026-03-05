@@ -2,15 +2,11 @@
 
 const FIREFLIES_API = 'https://api.fireflies.ai/graphql';
 
-// Fetch all known summary variants — different Fireflies plans populate
-// different fields (some accounts have 'overview', others only 'gist' etc.)
+// Standard Fireflies summary fields — keep minimal to avoid GraphQL
+// "unknown field" errors on accounts that don't support extended fields
 const SUMMARY_FIELDS = `
   summary {
     overview
-    gist
-    bullet_gist
-    short_summary
-    shorthand_bullet
     action_items
     keywords
     outline
@@ -83,6 +79,29 @@ export async function fetchTranscript(meetingId) {
  * Fetch the latest transcripts (up to 20) from Fireflies.
  * @returns {Array} array of transcript objects or empty array
  */
+/**
+ * Fetch raw Fireflies API response for a transcript (for debugging).
+ * Returns the full unparsed JSON so we can see exactly what the API gives us.
+ */
+export async function fetchTranscriptRaw(meetingId) {
+  const apiKey = process.env.FIREFLIES_API_KEY;
+  if (!apiKey) return { error: 'FIREFLIES_API_KEY not set' };
+
+  const res = await fetch(FIREFLIES_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      query: TRANSCRIPT_QUERY,
+      variables: { id: meetingId },
+    }),
+  });
+
+  return res.json();
+}
+
 export async function fetchLatestTranscripts() {
   const apiKey = process.env.FIREFLIES_API_KEY;
   if (!apiKey) {
