@@ -143,18 +143,31 @@ async function processTranscript(transcript) {
   const hasSummary = !!(resolvedOverview || summary?.notes || summary?.action_items || summary?.keywords || summary?.outline);
 
   // Log what Fireflies returned so Railway logs confirm the data
-  console.log(`[Fireflies] "${title}" summary:`, JSON.stringify({
-    summary_object: !!summary,
-    overview:     summary?.overview     ? summary.overview.slice(0, 80)     : null,
-    notes:        summary?.notes        ? summary.notes.slice(0, 80)        : null,
-    action_items: summary?.action_items ? '(present)'                       : null,
-    keywords:     normaliseKeywords(summary?.keywords) || null,
-    outline:      summary?.outline      ? '(present)'                       : null,
+  console.log(`[Fireflies] "${title}" summary+participants:`, JSON.stringify({
+    summary_object:    !!summary,
+    overview:          summary?.overview     ? summary.overview.slice(0, 80) : null,
+    notes:             summary?.notes        ? summary.notes.slice(0, 80)    : null,
+    action_items:      summary?.action_items ? '(present)'                   : null,
+    keywords:          normaliseKeywords(summary?.keywords) || null,
     hasSummary,
+    participants_raw:  participants.length,
+    meeting_attendees: meeting_attendees.length,
+    allParticipants:   allParticipants.length,
   }));
 
   if (existing.length) {
-    // Already stored — if it had no summary before but now has one, update it
+    let didUpdate = false;
+
+    // Always sync participants — meeting_attendees enriches the stored list
+    if (allParticipants.length > 0) {
+      await prisma.$executeRawUnsafe(
+        'UPDATE fireflies_transcripts SET participants=? WHERE id=?',
+        JSON.stringify(allParticipants.map(e => String(e).trim()).filter(Boolean)),
+        id,
+      );
+    }
+
+    // Update summary if it was missing before and is now available
     if (!existing[0].overview && hasSummary) {
       await prisma.$executeRawUnsafe(
         'UPDATE fireflies_transcripts SET overview=?, notes=?, action_items=?, keywords=?, outline=? WHERE id=?',
@@ -166,9 +179,10 @@ async function processTranscript(transcript) {
         id,
       );
       console.log(`[Fireflies] Updated summary for: "${title}"`);
-      return true; // treat as new so notifications are sent
+      didUpdate = true;
     }
-    return false; // fully up to date, skip
+
+    return didUpdate; // only send notifications if summary was newly added
   }
 
   // New transcript — store it
