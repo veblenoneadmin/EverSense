@@ -313,8 +313,84 @@ router.get('/transcripts/:id', requireAuth, withOrgScope, async (req, res) => {
 });
 
 // ── GET /api/fireflies/status ─────────────────────────────────────────────────
+// Quick check used by the frontend badge — just needs to know key is present
 router.get('/status', async (req, res) => {
   res.json({ connected: !!process.env.FIREFLIES_API_KEY });
+});
+
+// ── GET /api/fireflies/diagnostics — full connection + data check ─────────────
+router.get('/diagnostics', requireAuth, async (req, res) => {
+  const result = {
+    apiKeySet:      !!process.env.FIREFLIES_API_KEY,
+    apiKeyPrefix:   process.env.FIREFLIES_API_KEY ? process.env.FIREFLIES_API_KEY.slice(0, 8) + '...' : null,
+    apiReachable:   false,
+    graphqlErrors:  null,
+    transcriptCount: 0,
+    firstTranscript: null,
+    dbRowCount:     0,
+    dbRows:         [],
+    error:          null,
+  };
+
+  if (!result.apiKeySet) {
+    return res.json(result);
+  }
+
+  // Test live Fireflies API
+  try {
+    const raw = await fetchTranscriptRaw('test-connection-ping').catch(() => null);
+    // Even if ID is wrong, a good API key returns data.errors, not HTTP error
+    result.apiReachable = true;
+  } catch (e) {
+    result.error = `API unreachable: ${e.message}`;
+    return res.json(result);
+  }
+
+  // Fetch real transcripts list
+  try {
+    const { fetchLatestTranscripts: fetchList } = await import('../lib/fireflies.js');
+    // We'll call the raw fetch directly to capture errors
+    const apiKey = process.env.FIREFLIES_API_KEY;
+    const gqlRes = await fetch('https://api.fireflies.ai/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        query: `query { transcripts(limit: 5) { id title date duration participants summary { overview action_items keywords outline } } }`,
+      }),
+    });
+    const json = await gqlRes.json();
+
+    if (json.errors?.length) {
+      result.graphqlErrors = json.errors;
+    } else {
+      const list = json.data?.transcripts ?? [];
+      result.transcriptCount = list.length;
+      result.firstTranscript = list[0] ? {
+        id:          list[0].id,
+        title:       list[0].title,
+        date:        list[0].date,
+        duration:    list[0].duration,
+        participants: list[0].participants,
+        summary:     list[0].summary,
+      } : null;
+    }
+  } catch (e) {
+    result.error = `Transcript fetch error: ${e.message}`;
+  }
+
+  // Check what's in our DB
+  try {
+    await ensureTables();
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT id, title, overview IS NOT NULL as hasSummary, createdAt FROM fireflies_transcripts ORDER BY createdAt DESC LIMIT 10'
+    );
+    result.dbRowCount = rows.length;
+    result.dbRows = rows;
+  } catch (e) {
+    result.error = (result.error ? result.error + ' | ' : '') + `DB error: ${e.message}`;
+  }
+
+  res.json(result);
 });
 
 // ── Polling: check Fireflies every 30 minutes ─────────────────────────────────
