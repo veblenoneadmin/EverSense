@@ -82,11 +82,10 @@ async function processTranscript(transcript) {
 
   await ensureTables();
 
-  // Deduplicate — skip if already stored
+  // Check if already stored
   const existing = await prisma.$queryRawUnsafe(
-    'SELECT id FROM fireflies_transcripts WHERE id = ? LIMIT 1', id
+    'SELECT id, overview FROM fireflies_transcripts WHERE id = ? LIMIT 1', id
   );
-  if (existing.length) return false;
 
   // Parse date safely
   let parsedDate = null;
@@ -95,7 +94,26 @@ async function processTranscript(transcript) {
     parsedDate = isNaN(d.getTime()) ? null : d;
   }
 
-  // Store transcript
+  const hasSummary = !!(summary?.overview || summary?.action_items || summary?.keywords || summary?.outline);
+
+  if (existing.length) {
+    // Already stored — if it had no summary before but now has one, update it
+    if (!existing[0].overview && hasSummary) {
+      await prisma.$executeRawUnsafe(
+        'UPDATE fireflies_transcripts SET overview=?, action_items=?, keywords=?, outline=? WHERE id=?',
+        summary.overview || null,
+        summary.action_items || null,
+        summary.keywords || null,
+        summary.outline || null,
+        id,
+      );
+      console.log(`[Fireflies] Updated summary for: "${title}"`);
+      return true; // treat as new so notifications are sent
+    }
+    return false; // fully up to date, skip
+  }
+
+  // New transcript — store it
   await prisma.$executeRawUnsafe(
     'INSERT INTO fireflies_transcripts (id, title, date, duration, participants, overview, action_items, keywords, outline, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
     id,
