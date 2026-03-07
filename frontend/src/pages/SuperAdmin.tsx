@@ -3,8 +3,8 @@ import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
 import {
   Users, Building2, CheckSquare, FolderOpen, UserPlus, Trash2,
-  Crown, Shield, UserCog, Mail, TrendingUp, X, AlertTriangle,
-  RefreshCw, Eye, ChevronDown, ChevronUp, Search,
+  Crown, Shield, UserCog, X, AlertTriangle,
+  RefreshCw, ChevronDown, ChevronUp, Search,
 } from 'lucide-react';
 
 // ── VS Code Dark+ tokens ───────────────────────────────────────────────────────
