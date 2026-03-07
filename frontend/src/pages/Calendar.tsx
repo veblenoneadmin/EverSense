@@ -15,15 +15,7 @@ import {
 } from 'lucide-react';
 import './Calendar.css';
 
-// ── VS Code Dark+ tokens ──────────────────────────────────────────────────────
-const VS = {
-  bg0: '#1e1e1e', bg1: '#252526', bg2: '#2d2d2d', bg3: '#333333',
-  border: '#3c3c3c', border2: '#454545',
-  text0: '#f0f0f0', text1: '#c0c0c0', text2: '#909090',
-  blue: '#569cd6', teal: '#4ec9b0', yellow: '#dcdcaa',
-  orange: '#ce9178', purple: '#c586c0', red: '#f44747',
-  green: '#6a9955', accent: '#007acc',
-};
+import { VS } from '../lib/theme';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface OrgMember { id: string; name: string | null; email: string; image: string | null; role: string; }

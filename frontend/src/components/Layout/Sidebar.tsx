@@ -17,17 +17,8 @@ import {
   Video,
 } from 'lucide-react';
 
-// VS Code Dark+ tokens — match MainLayout
-const VS = {
-  bg1:      '#252526',
-  bg2:      '#2d2d2d',
-  border:   '#3c3c3c',
-  text0:    '#f0f0f0',
-  text1:    '#c0c0c0',
-  text2:    '#909090',
-  accent:   '#007acc',
-  accentBg: 'rgba(0,122,204,0.15)',
-};
+import { VS } from '../../lib/theme';
+const accentBg = 'rgba(0,122,204,0.15)';
 
 const navItems = [
   { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
@@ -96,7 +87,7 @@ const Sidebar: React.FC = () => {
                 fontSize: '13px',
                 fontWeight: active ? 500 : 400,
                 color: active ? VS.text0 : VS.text2,
-                background: active ? VS.accentBg : 'transparent',
+                background: active ? accentBg : 'transparent',
                 borderLeft: active ? `2px solid ${VS.accent}` : '2px solid transparent',
                 textDecoration: 'none',
                 transition: 'background 0.15s, color 0.15s',

@@ -5,22 +5,7 @@ import {
   Search, Wifi, WifiOff, FileText, Tag, RefreshCw,
 } from 'lucide-react';
 
-const VS = {
-  bg0:    '#1e1e1e',
-  bg1:    '#252526',
-  bg2:    '#2d2d2d',
-  bg3:    '#333333',
-  border: '#3c3c3c',
-  text0:  '#f0f0f0',
-  text1:  '#c0c0c0',
-  text2:  '#909090',
-  teal:   '#4ec9b0',
-  blue:   '#569cd6',
-  yellow: '#dcdcaa',
-  green:  '#6a9955',
-  accent: '#007acc',
-  red:    '#f44747',
-};
+import { VS } from '../lib/theme';
 
 interface Transcript {
   id: string;

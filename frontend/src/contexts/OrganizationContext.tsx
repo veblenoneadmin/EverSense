@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useSession } from '../lib/auth-client';
+import { applyTheme, type Theme } from '../lib/theme';
 
 interface Organization {
   id: string;
   name: string;
   slug: string;
   role: 'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT';
+  theme: Theme;
 }
 
 interface OrganizationContextType {
@@ -17,6 +19,9 @@ interface OrganizationContextType {
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
+
+// Apply dark theme immediately on load to avoid flash
+applyTheme('dark');
 
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
@@ -57,11 +62,14 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         // Set current org to first one if none selected
         if (orgs.length > 0 && !currentOrg) {
           const firstOrg = orgs[0];
+          const theme: Theme = firstOrg.theme === 'light' ? 'light' : 'dark';
+          applyTheme(theme);
           setCurrentOrg({
             id: firstOrg.id,
             name: firstOrg.name,
             slug: firstOrg.slug,
-            role: firstOrg.role || 'OWNER'
+            role: firstOrg.role || 'OWNER',
+            theme,
           });
         }
       } else {
@@ -82,11 +90,14 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const switchOrganization = (orgId: string) => {
     const org = allOrganizations.find(o => o.id === orgId);
     if (org) {
+      const theme: Theme = org.theme === 'light' ? 'light' : 'dark';
+      applyTheme(theme);
       setCurrentOrg({
         id: org.id,
         name: org.name,
         slug: org.slug,
-        role: org.role || 'ADMIN'
+        role: org.role || 'ADMIN',
+        theme,
       });
     }
   };

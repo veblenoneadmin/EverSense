@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '../lib/auth-client';
-import { CheckCircle, ArrowRight, User, Building2, Phone, Briefcase, Globe, Users } from 'lucide-react';
+import { CheckCircle, ArrowRight, User, Building2, Phone, Briefcase, Globe, Users, Moon, Sun } from 'lucide-react';
 import { EverSenseLogo } from '../components/EverSenseLogo';
+import { DARK_PALETTE, LIGHT_PALETTE, applyTheme, type Theme } from '../lib/theme';
 
 // ── VS Code Dark theme ─────────────────────────────────────────────────────────
 const C = {
@@ -24,6 +25,7 @@ const STEPS = [
   { id: 'welcome',  label: 'Welcome',      file: 'welcome.ts'  },
   { id: 'personal', label: 'Your Profile', file: 'profile.ts'  },
   { id: 'company',  label: 'Company',      file: 'company.ts'  },
+  { id: 'theme',    label: 'Theme',        file: 'theme.ts'    },
 ];
 
 const INDUSTRIES = [
@@ -155,6 +157,9 @@ export function Onboarding() {
   const [size, setSize]               = useState('');
   const [website, setWebsite]         = useState('');
 
+  // Theme
+  const [selectedTheme, setSelectedTheme] = useState<Theme>('dark');
+
   useEffect(() => {
     if (session?.user) {
       setFullName(session.user.name || '');
@@ -279,16 +284,89 @@ export function Onboarding() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyName, industry, size, website }),
       });
+    } catch { /* continue */ }
+    setLoading(false);
+    setStepIdx(3);
+  };
+
+  const handleSkip = async () => {
+    setStepIdx(3);
+  };
+
+  // ── STEP 3: Theme ─────────────────────────────────────────────────────────────
+  const handleThemeFinish = async () => {
+    setLoading(true);
+    try {
+      applyTheme(selectedTheme);
+      await fetch('/api/wizard/save-theme', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: selectedTheme }),
+      });
       await completeStep('profile');
     } catch { /* continue */ }
     window.location.href = '/dashboard';
   };
 
-  const handleSkip = async () => {
-    setLoading(true);
-    await completeStep('profile');
-    window.location.href = '/dashboard';
-  };
+  // ── STEP 3 render ────────────────────────────────────────────────────────────
+  if (stepIdx === 3) {
+    const themes: { id: Theme; label: string; desc: string; palette: typeof DARK_PALETTE }[] = [
+      { id: 'dark',  label: 'VS Code Dark',  desc: 'Dark editor background, light syntax tokens', palette: DARK_PALETTE },
+      { id: 'light', label: 'VS Code Light', desc: 'Clean white background, dark tokens',          palette: LIGHT_PALETTE },
+    ];
+    return (
+      <Shell stepIdx={3}>
+        <div className="space-y-4">
+          <p className="text-xs" style={{ color: C.text2, fontFamily: 'monospace' }}>// choose your interface theme</p>
+          <div className="space-y-3">
+            {themes.map(t => {
+              const p = t.palette;
+              const selected = selectedTheme === t.id;
+              return (
+                <button
+                  key={t.id} type="button"
+                  onClick={() => setSelectedTheme(t.id)}
+                  className="w-full text-left rounded-lg overflow-hidden transition-all"
+                  style={{ border: `2px solid ${selected ? C.accent : C.border}`, outline: 'none' }}
+                >
+                  {/* Mini editor preview */}
+                  <div className="p-3" style={{ background: p.bg1 }}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#ff5f57' }} />
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#febc2e' }} />
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#28c840' }} />
+                      <span className="ml-auto text-[9px]" style={{ color: p.text2, fontFamily: 'monospace' }}>theme.ts</span>
+                    </div>
+                    <div className="space-y-1 text-[10px] font-mono pl-1">
+                      <div><span style={{ color: p.blue }}>const</span> <span style={{ color: p.teal }}>theme</span> <span style={{ color: p.text1 }}>=</span> <span style={{ color: p.orange }}>'{t.id}'</span></div>
+                      <div><span style={{ color: p.purple }}>// {t.desc}</span></div>
+                      <div><span style={{ color: p.yellow }}>background</span><span style={{ color: p.text1 }}>:</span> <span style={{ color: p.green }}>'{p.bg0}'</span></div>
+                    </div>
+                  </div>
+                  <div className="px-3 py-2 flex items-center justify-between" style={{ background: p.bg0 }}>
+                    <div>
+                      <p className="text-xs font-semibold" style={{ color: p.text0, fontFamily: 'monospace' }}>{t.label}</p>
+                      <p className="text-[10px]" style={{ color: p.text2, fontFamily: 'monospace' }}>{t.desc}</p>
+                    </div>
+                    {selected ? <Sun className="h-4 w-4" style={{ color: C.accent }} /> : <Moon className="h-4 w-4" style={{ color: p.text2 }} />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={handleThemeFinish} disabled={loading}
+            className="w-full py-2.5 text-sm font-medium transition-all flex items-center justify-center gap-2"
+            style={btnPrimary(loading)}
+            onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = '#1177bb'; }}
+            onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = C.accent; }}
+          >
+            {loading ? '▶ Saving...' : <><span>▶ Go to Dashboard</span> <ArrowRight className="w-4 h-4" /></>}
+          </button>
+        </div>
+      </Shell>
+    );
+  }
 
   return (
     <Shell stepIdx={2}>

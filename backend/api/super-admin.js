@@ -345,7 +345,9 @@ router.post('/create-lead-account', requireAuth, requireSuperAdminUser, async (r
 
     // Send invite email
     try {
-      const acceptUrl = `${process.env.APP_URL || process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL || 'http://localhost:5173'}/invite?token=${invitation.token}`;
+      const baseUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL || 'http://localhost:5173';
+      console.log('[SuperAdmin] invite baseUrl:', baseUrl, '| APP_URL:', process.env.APP_URL);
+      const acceptUrl = `${baseUrl}/invite?token=${invitation.token}`;
       await sendInviteEmail(email, {
         orgName: companyName,
         role: 'Owner',
@@ -363,6 +365,18 @@ router.post('/create-lead-account', requireAuth, requireSuperAdminUser, async (r
   } catch (err) {
     console.error('[SuperAdmin] create-lead-account error:', err);
     res.status(500).json({ error: 'Failed to create lead account' });
+  }
+});
+
+// ── DELETE /api/super-admin/invites/:inviteId ─────────────────────────────────
+router.delete('/invites/:inviteId', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { inviteId } = req.params;
+    await prisma.invite.delete({ where: { id: inviteId } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[SuperAdmin] delete-invite error:', err);
+    res.status(500).json({ error: 'Failed to delete invitation' });
   }
 });
 

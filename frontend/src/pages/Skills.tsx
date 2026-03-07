@@ -5,15 +5,7 @@ import {
   Search, X, Check, Sparkles,
 } from 'lucide-react';
 
-// ─── VS Code Dark+ tokens ─────────────────────────────────────────────────────
-const VS = {
-  bg0: '#1e1e1e', bg1: '#252526', bg2: '#2d2d2d', bg3: '#3c3c3c',
-  border: '#3c3c3c', border2: '#4d4d4d',
-  text0: '#d4d4d4', text1: '#cccccc', text2: '#888888',
-  blue: '#569cd6', teal: '#4ec9b0', yellow: '#dcdcaa',
-  orange: '#ce9178', purple: '#c586c0', red: '#f44747',
-  green: '#4ec9b0', accent: '#007acc',
-};
+import { VS } from '../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Skill { id: string; name: string; category: string; _count?: { staffSkills: number } }

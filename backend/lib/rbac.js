@@ -295,6 +295,7 @@ export async function getUserOrganizations(userId) {
             id: true,
             name: true,
             slug: true,
+            theme: true,
             createdAt: true,
             _count: {
               select: { memberships: true }
@@ -312,6 +313,7 @@ export async function getUserOrganizations(userId) {
       id: m.org.id,
       name: m.org.name,
       slug: m.org.slug,
+      theme: m.org.theme ?? 'dark',
       role: m.role,
       memberCount: m.org._count.memberships,
       createdAt: m.org.createdAt,

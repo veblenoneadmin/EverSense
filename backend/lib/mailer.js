@@ -37,7 +37,7 @@ export function inviteEmailHtml(data) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Join ${data.orgName} on VebTask</title>
+    <title>Join ${data.orgName} on EverSense AI</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -53,15 +53,15 @@ export function inviteEmailHtml(data) {
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">VebTask</div>
+            <div class="logo">EverSense AI</div>
             <h1>You're invited to join ${data.orgName}</h1>
         </div>
         <div class="content">
             <p>Hi there! 👋</p>
             
-            <p><strong>${data.invitedBy}</strong> has invited you to join <strong>${data.orgName}</strong> on VebTask as a <span class="role-badge">${data.role}</span>.</p>
+            <p><strong>${data.invitedBy}</strong> has invited you to join <strong>${data.orgName}</strong> on EverSense AI as a <span class="role-badge">${data.role}</span>.</p>
             
-            <p>VebTask is a powerful productivity platform that helps teams manage tasks, track time, and collaborate effectively with AI-powered workflow optimization.</p>
+            <p>EverSense AI is a powerful productivity platform that helps teams manage tasks, track time, and collaborate effectively with AI-powered workflow optimization.</p>
             
             <div style="text-align: center; margin: 30px 0;">
                 <a href="${data.acceptUrl}" class="btn">Accept Invitation</a>
@@ -103,7 +103,7 @@ export function passwordResetEmailHtml(data) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Your VebTask Password</title>
+    <title>Reset Your EverSense AI Password</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -119,13 +119,13 @@ export function passwordResetEmailHtml(data) {
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">VebTask</div>
+            <div class="logo">EverSense AI</div>
             <h1>Reset Your Password</h1>
         </div>
         <div class="content">
             <p>Hi ${data.name || 'there'}! 👋</p>
             
-            <p>We received a request to reset your VebTask password. If you made this request, click the button below to reset your password:</p>
+            <p>We received a request to reset your EverSense AI password. If you made this request, click the button below to reset your password:</p>
             
             <div style="text-align: center; margin: 30px 0;">
                 <a href="${data.resetUrl}" class="btn">Reset Password</a>
@@ -155,7 +155,7 @@ export function passwordResetEmailHtml(data) {
  * Send organization invite email
  */
 export async function sendInviteEmail(to, data) {
-  const subject = `Join ${data.orgName} on VebTask`;
+  const subject = `Join ${data.orgName} on EverSense AI`;
   
   await transporter.sendMail({
     from: process.env.SMTP_FROM,
@@ -169,7 +169,7 @@ export async function sendInviteEmail(to, data) {
  * Send password reset email
  */
 export async function sendPasswordResetEmail(to, data) {
-  const subject = 'Reset Your VebTask Password';
+  const subject = 'Reset Your EverSense AI Password';
   
   await transporter.sendMail({
     from: process.env.SMTP_FROM,
@@ -189,7 +189,7 @@ export function welcomeEmailHtml(data) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to ${data.orgName} on VebTask</title>
+    <title>Welcome to ${data.orgName} on EverSense AI</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -206,7 +206,7 @@ export function welcomeEmailHtml(data) {
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">VebTask</div>
+            <div class="logo">EverSense AI</div>
             <h1>Welcome to ${data.orgName}! 🎉</h1>
         </div>
         <div class="content">
@@ -264,7 +264,7 @@ export function welcomeEmailHtml(data) {
  * Send welcome email after user joins organization
  */
 export async function sendWelcomeEmail(to, data) {
-  const subject = `Welcome to ${data.orgName} on VebTask!`;
+  const subject = `Welcome to ${data.orgName} on EverSense AI!`;
   
   await transporter.sendMail({
     from: process.env.SMTP_FROM,

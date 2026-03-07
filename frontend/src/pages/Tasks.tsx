@@ -56,26 +56,7 @@ interface OrgMember {
   email: string;
 }
 
-// ── VS Code Dark+ theme tokens ────────────────────────────────────────────────
-const VS = {
-  bg0:     '#1e1e1e', // editor background
-  bg1:     '#252526', // sidebar / panel
-  bg2:     '#2d2d2d', // elevated surface (cards)
-  bg3:     '#333333', // inputs / buttons
-  border:  '#3c3c3c',
-  border2: '#454545',
-  text0:   '#f0f0f0', // primary text
-  text1:   '#c0c0c0', // secondary text
-  text2:   '#909090', // muted text
-  blue:    '#569cd6', // keywords
-  teal:    '#4ec9b0', // types
-  yellow:  '#dcdcaa', // functions
-  orange:  '#ce9178', // strings
-  purple:  '#c586c0', // control flow
-  red:     '#f44747', // errors
-  green:   '#6a9955', // comments
-  accent:  '#007acc', // VS Code brand blue
-};
+import { VS } from '../lib/theme';
 
 const COLUMNS: { id: Task['status']; label: string; accent: string; bg: string }[] = [
   { id: 'not_started', label: 'To Do',       accent: VS.blue,   bg: 'rgba(86,156,214,0.10)'  },

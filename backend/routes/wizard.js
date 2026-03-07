@@ -277,4 +277,37 @@ router.post('/save-company', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/wizard/save-theme
+ * Save org theme preference: 'dark' or 'light'
+ */
+router.post('/save-theme', requireAuth, async (req, res) => {
+  try {
+    const { theme } = req.body;
+    if (theme !== 'dark' && theme !== 'light') {
+      return res.status(400).json({ error: 'Invalid theme. Must be "dark" or "light".' });
+    }
+
+    const membership = await prisma.membership.findFirst({
+      where: { userId: req.user.id, role: { in: ['OWNER', 'ADMIN'] } },
+      orderBy: { createdAt: 'asc' },
+      select: { orgId: true },
+    });
+
+    if (!membership) {
+      return res.json({ success: true, skipped: true });
+    }
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE organizations SET theme = ? WHERE id = ?`,
+      theme, membership.orgId
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save theme error:', error);
+    res.status(500).json({ error: 'Failed to save theme' });
+  }
+});
+
 export default router;

@@ -8,26 +8,7 @@ import {
   Terminal, Settings, Activity, Trash,
 } from 'lucide-react';
 
-// ── VS Code Dark+ tokens ───────────────────────────────────────────────────────
-const VS = {
-  bg0:    '#1e1e1e',
-  bg1:    '#252526',
-  bg2:    '#2d2d2d',
-  bg3:    '#333333',
-  border: '#3c3c3c',
-  border2:'#454545',
-  text0:  '#f0f0f0',
-  text1:  '#c0c0c0',
-  text2:  '#909090',
-  blue:   '#569cd6',
-  teal:   '#4ec9b0',
-  yellow: '#dcdcaa',
-  orange: '#ce9178',
-  purple: '#c586c0',
-  red:    '#f44747',
-  green:  '#6a9955',
-  accent: '#007acc',
-};
+import { VS } from '../lib/theme';
 
 const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
 
@@ -281,7 +262,7 @@ export function SuperAdmin() {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [showInvite, setShowInvite]   = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
-  const [confirm, setConfirm]         = useState<{ type: 'user'|'org'; id: string; label: string } | null>(null);
+  const [confirm, setConfirm]         = useState<{ type: 'user'|'org'|'invite'; id: string; label: string } | null>(null);
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
@@ -315,6 +296,16 @@ export function SuperAdmin() {
       setUsers(prev => prev.filter(u => u.id !== userId));
       showToast('User deleted', true);
     } catch { showToast('Failed to delete user', false); }
+    setConfirm(null);
+  }
+
+  async function handleDeleteInvite(inviteId: string) {
+    try {
+      const data = await saFetch(`/api/super-admin/invites/${inviteId}`, { method: 'DELETE' });
+      if (data.error) { showToast(data.error, false); return; }
+      setPendingInvites(prev => prev.filter(i => i.id !== inviteId));
+      showToast('Invitation deleted', true);
+    } catch { showToast('Failed to delete invitation', false); }
     setConfirm(null);
   }
 
@@ -701,6 +692,12 @@ export function SuperAdmin() {
                               </span>
                             </div>
                           </div>
+                          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${VS.border}` }}>
+                            <button onClick={() => setConfirm({ type: 'invite', id: inv.id, label: inv.email })}
+                              className="flex items-center gap-1.5 text-[12px] opacity-50 hover:opacity-100 transition-all" style={{ color: VS.red }}>
+                              <Trash2 className="h-3 w-3" /> Delete invitation
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -853,9 +850,9 @@ export function SuperAdmin() {
       {showAddLead && <AddLeadModal   onClose={() => setShowAddLead(false)} onSuccess={msg => { showToast(msg, true); loadAll(); }} />}
       {confirm && (
         <ConfirmDialog
-          title={`Delete ${confirm.type === 'user' ? 'User' : 'Company'}`}
-          body={`Permanently delete "${confirm.label}"? This cannot be undone.`}
-          onConfirm={() => confirm.type === 'user' ? handleDeleteUser(confirm.id) : handleDeleteOrg(confirm.id)}
+          title={confirm.type === 'user' ? 'Delete User' : confirm.type === 'org' ? 'Delete Company' : 'Delete Invitation'}
+          body={confirm.type === 'invite' ? `Cancel the invitation for "${confirm.label}"? This cannot be undone.` : `Permanently delete "${confirm.label}"? This cannot be undone.`}
+          onConfirm={() => confirm.type === 'user' ? handleDeleteUser(confirm.id) : confirm.type === 'org' ? handleDeleteOrg(confirm.id) : handleDeleteInvite(confirm.id)}
           onCancel={() => setConfirm(null)}
         />
       )}

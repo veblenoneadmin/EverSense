@@ -4,20 +4,7 @@ import { useSession, signOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info } from 'lucide-react';
 
-// ── VS Code Dark+ tokens ──────────────────────────────────────────────────────
-const VS = {
-  bg0:    '#1e1e1e',
-  bg1:    '#252526',
-  bg2:    '#2d2d2d',
-  bg3:    '#333333',
-  border: '#3c3c3c',
-  text0:  '#f0f0f0',
-  text1:  '#c0c0c0',
-  text2:  '#909090',
-  accent: '#007acc',
-  teal:   '#4ec9b0',
-  red:    '#f44747',
-};
+import { VS } from '../../lib/theme';
 
 function fmtElapsed(s: number) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
