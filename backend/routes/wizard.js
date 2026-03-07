@@ -27,7 +27,27 @@ const markStepSchema = z.object({
 router.get('/status', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
+    // Only OWNER-role users go through onboarding
+    const ownerMembership = await prisma.membership.findFirst({
+      where: { userId, role: 'OWNER' },
+      select: { orgId: true },
+    });
+
+    if (!ownerMembership) {
+      return res.json({
+        success: true,
+        data: {
+          needsOnboarding: false,
+          progress: 100,
+          completedSteps: WIZARD_STEPS,
+          nextStep: null,
+          totalSteps: WIZARD_STEPS.length,
+          allSteps: WIZARD_STEPS,
+        },
+      });
+    }
+
     const [needsOnboarding, progress, completedSteps, nextStep] = await Promise.all([
       userNeedsOnboarding(userId),
       getOnboardingProgress(userId),
