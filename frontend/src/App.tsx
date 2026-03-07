@@ -56,6 +56,8 @@ function AppContent() {
               <Route path="/email-verified" element={<EmailVerified />} />
               <Route path="/invite" element={<InviteAccept />} />
 
+              <Route path="super-admin" element={session ? <SuperAdmin /> : <Navigate to="/login" replace />} />
+
               <Route path="/*" element={session ? <MainLayout /> : <Navigate to="/login" replace />}>
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="brain-dump" element={<BrainDump />} />
@@ -72,7 +74,6 @@ function AppContent() {
                 <Route path="kpi-report" element={<KPIReport />} />
                 <Route path="meetings" element={<Meetings />} />
                 <Route path="meetings/:id" element={<Meetings />} />
-                <Route path="super-admin" element={<SuperAdmin />} />
               </Route>
 
               <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />

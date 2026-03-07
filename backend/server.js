@@ -30,7 +30,7 @@ import calendarRoutes from './api/calendar.js';
 import kpiReportRoutes from './api/kpi-report.js';
 import notificationsRoutes from './api/notifications.js';
 import firefliesRoutes, { startFirefliesPolling } from './api/fireflies.js';
-import superAdminRoutes from './api/super-admin.js';
+import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
 import {
   blockPublicRegistration, 
@@ -2982,6 +2982,14 @@ async function ensureAccountScopeText() {
     console.warn('  ⚠️  ensureAccountScopeText failed:', e.message, e.stack?.split('\n')[1] || '');
   }
 }
+
+// Global error handler — captures all unhandled API errors into super-admin log
+app.use((err, req, res, next) => {
+  const msg = err?.message || String(err);
+  logError('error', `${req.method} ${req.path}`, msg, err?.stack?.split('\n')[1]?.trim() ?? null);
+  console.error('❌ Unhandled error:', msg);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // Run migrations and start server
 async function startServer() {

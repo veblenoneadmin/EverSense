@@ -42,6 +42,15 @@ const COOKIE_OPTS = {
 
 const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
 
+// ── In-memory error log (last 200 entries) ────────────────────────────────────
+const ERROR_LOG = [];
+const MAX_ERRORS = 200;
+
+export function logError(level, source, message, detail = null) {
+  ERROR_LOG.unshift({ level, source, message, detail: detail ? String(detail).slice(0, 500) : null, ts: new Date().toISOString() });
+  if (ERROR_LOG.length > MAX_ERRORS) ERROR_LOG.length = MAX_ERRORS;
+}
+
 // Middleware: require logged-in user with the super-admin email
 function requireSuperAdminUser(req, res, next) {
   if (!req.user || req.user.email !== SUPER_ADMIN_EMAIL) {
@@ -281,6 +290,20 @@ router.delete('/users/:userId', requireAuth, requireSuperAdminUser, async (req, 
     console.error('[SuperAdmin] delete user error:', err);
     res.status(500).json({ error: 'Failed to delete user' });
   }
+});
+
+// ── GET /api/super-admin/errors ───────────────────────────────────────────────
+router.get('/errors', requireAuth, requireSuperAdminUser, (req, res) => {
+  const { level, limit = 100 } = req.query;
+  let logs = ERROR_LOG;
+  if (level) logs = logs.filter(e => e.level === level);
+  res.json({ errors: logs.slice(0, Number(limit)) });
+});
+
+// ── POST /api/super-admin/errors/clear ────────────────────────────────────────
+router.post('/errors/clear', requireAuth, requireSuperAdminUser, (req, res) => {
+  ERROR_LOG.length = 0;
+  res.json({ success: true });
 });
 
 // ── DELETE /api/super-admin/orgs/:orgId ──────────────────────────────────────

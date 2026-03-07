@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSession } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { ClientDashboard } from './ClientDashboard';
@@ -109,6 +110,7 @@ function StatCard({
 export function Dashboard() {
   const { data: session } = useSession();
   const { currentOrg, isLoading: orgLoading } = useOrganization();
+  const navigate = useNavigate();
 
   // ── Data state ─────────────────────────────────────────────────────────────
   const [stats, setStats] = useState<{
@@ -372,13 +374,13 @@ export function Dashboard() {
             {currentOrg.name}
           </div>
           {session?.user?.email === 'admin@eversense.ai' && (
-            <a
-              href="/super-admin"
+            <button
+              onClick={() => navigate('/super-admin')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold shrink-0 transition-all hover:opacity-80"
-              style={{ background: 'rgba(220,220,170,0.12)', border: '1px solid rgba(220,220,170,0.3)', color: VS.yellow, textDecoration: 'none' }}
+              style={{ background: 'rgba(220,220,170,0.12)', border: '1px solid rgba(220,220,170,0.3)', color: VS.yellow }}
             >
               ★ Super Admin
-            </a>
+            </button>
           )}
         </div>
       </div>
