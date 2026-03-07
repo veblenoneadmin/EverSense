@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../lib/rbac.js';
+import { prisma } from '../lib/prisma.js';
 import { 
   WIZARD_STEPS, 
   hasCompletedWizardStep, 
@@ -180,6 +181,79 @@ router.post('/reset', requireAuth, async (req, res) => {
       error: 'Failed to reset wizard progress',
       code: 'WIZARD_RESET_ERROR' 
     });
+  }
+});
+
+/**
+ * POST /api/wizard/save-profile
+ * Save personal info: name, jobTitle, phone
+ */
+router.post('/save-profile', requireAuth, async (req, res) => {
+  try {
+    const { name, jobTitle, phone } = req.body;
+    const userId = req.user.id;
+
+    const fields = [];
+    const values = [];
+    if (name?.trim())           { fields.push('`name` = ?');     values.push(name.trim()); }
+    if (jobTitle !== undefined) { fields.push('`jobTitle` = ?'); values.push(jobTitle ?? ''); }
+    if (phone !== undefined)    { fields.push('`phone` = ?');    values.push(phone ?? ''); }
+
+    if (fields.length > 0) {
+      values.push(userId);
+      await prisma.$executeRawUnsafe(
+        `UPDATE \`user\` SET ${fields.join(', ')} WHERE id = ?`,
+        ...values
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save profile error:', error);
+    res.status(500).json({ error: 'Failed to save profile' });
+  }
+});
+
+/**
+ * POST /api/wizard/save-company
+ * Save company info: companyName, industry, size, website
+ */
+router.post('/save-company', requireAuth, async (req, res) => {
+  try {
+    const { companyName, industry, size, website } = req.body;
+    const userId = req.user.id;
+
+    // Find the user's owner/admin org
+    const membership = await prisma.membership.findFirst({
+      where: { userId, role: { in: ['OWNER', 'ADMIN'] } },
+      orderBy: { createdAt: 'asc' },
+      select: { orgId: true },
+    });
+
+    if (!membership) {
+      return res.json({ success: true, skipped: true });
+    }
+
+    const orgId = membership.orgId;
+    const fields = [];
+    const values = [];
+    if (companyName?.trim())  { fields.push('`name` = ?');     values.push(companyName.trim()); }
+    if (industry !== undefined) { fields.push('`industry` = ?'); values.push(industry ?? ''); }
+    if (size !== undefined)     { fields.push('`size` = ?');     values.push(size ?? ''); }
+    if (website !== undefined)  { fields.push('`website` = ?');  values.push(website ?? ''); }
+
+    if (fields.length > 0) {
+      values.push(orgId);
+      await prisma.$executeRawUnsafe(
+        `UPDATE organizations SET ${fields.join(', ')} WHERE id = ?`,
+        ...values
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save company error:', error);
+    res.status(500).json({ error: 'Failed to save company info' });
   }
 });
 

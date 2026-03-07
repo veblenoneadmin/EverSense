@@ -177,6 +177,67 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   );
 }
 
+function AddLeadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (msg: string) => void }) {
+  const [email, setEmail]       = useState('');
+  const [name, setName]         = useState('');
+  const [company, setCompany]   = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      const data = await saFetch('/api/super-admin/create-lead-account', {
+        method: 'POST',
+        body: JSON.stringify({ email, name: name || undefined, companyName: company }),
+      });
+      if (data.error) { setError(data.error); return; }
+      onSuccess(data.message || 'Lead account created'); onClose();
+    } catch { setError('Failed to create lead account'); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+      <div className="w-full max-w-md rounded-xl shadow-2xl" style={{ background: VS.bg1, border: `1px solid ${VS.border2}` }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${VS.border}` }}>
+          <div className="flex items-center gap-2">
+            <Crown className="h-4 w-4" style={{ color: VS.yellow }} />
+            <h2 className="text-[15px] font-bold" style={{ color: VS.text0 }}>Add Lead Account</h2>
+          </div>
+          <button onClick={onClose} className="opacity-50 hover:opacity-100"><X className="h-4 w-4" style={{ color: VS.text1 }} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Company Name *</label>
+            <input className={inputCls} style={inputStyle} type="text" required placeholder="Acme Corp" value={company} onChange={e => setCompany(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Owner Email *</label>
+            <input className={inputCls} style={inputStyle} type="email" required placeholder="owner@company.com" value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Owner Name (optional)</label>
+            <input className={inputCls} style={inputStyle} type="text" placeholder="Full name" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <p className="text-[11px] px-3 py-2 rounded-lg" style={{ background: VS.bg3, color: VS.text2 }}>
+            A new organization will be created and an invitation sent to the owner email with <span style={{ color: VS.yellow }}>Owner</span> role.
+          </p>
+          {error && <p className="text-[12px]" style={{ color: VS.red }}>{error}</p>}
+          <div className="flex gap-2 justify-end pt-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-white/[0.05] transition-all"
+              style={{ border: `1px solid ${VS.border}`, color: VS.text1 }}>Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-50 transition-all"
+              style={{ background: `${VS.yellow}22`, border: `1px solid ${VS.yellow}55`, color: VS.yellow }}>
+              {loading ? 'Creating…' : 'Create Lead Account'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Sidebar nav item ───────────────────────────────────────────────────────────
 function NavItem({ icon: Icon, label, active, badge, onClick }: {
   icon: React.ElementType; label: string; active: boolean; badge?: number; onClick: () => void;
@@ -214,6 +275,7 @@ export function SuperAdmin() {
   const [search, setSearch]           = useState('');
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [showInvite, setShowInvite]   = useState(false);
+  const [showAddLead, setShowAddLead] = useState(false);
   const [confirm, setConfirm]         = useState<{ type: 'user'|'org'; id: string; label: string } | null>(null);
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
@@ -365,6 +427,14 @@ export function SuperAdmin() {
                 style={{ background: VS.accent, color: '#fff', border: 'none' }}>
                 <UserPlus className="h-3.5 w-3.5" />
                 Invite User
+              </button>
+            )}
+            {section === 'leads' && (
+              <button onClick={() => setShowAddLead(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all"
+                style={{ background: `${VS.yellow}22`, border: `1px solid ${VS.yellow}55`, color: VS.yellow }}>
+                <Crown className="h-3.5 w-3.5" />
+                Add Lead Account
               </button>
             )}
           </div>
@@ -576,7 +646,13 @@ export function SuperAdmin() {
               <div className="space-y-4">
                 <div className="flex items-center gap-3 flex-wrap">
                   <p className="text-[13px]" style={{ color: VS.text2 }}>Owner-role accounts across all companies</p>
-                  <div className="relative ml-auto flex-1 min-w-[200px] max-w-xs">
+                  <button onClick={() => setShowAddLead(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all"
+                    style={{ background: `${VS.yellow}22`, border: `1px solid ${VS.yellow}55`, color: VS.yellow }}>
+                    <Crown className="h-3.5 w-3.5" />
+                    Add Lead Account
+                  </button>
+                  <div className="relative flex-1 min-w-[200px] max-w-xs">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
                     <input className="w-full pl-8 pr-3 py-1.5 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50"
                       style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}
@@ -717,7 +793,8 @@ export function SuperAdmin() {
       </div>
 
       {/* ── Modals ── */}
-      {showInvite && <InviteModal onClose={() => setShowInvite(false)} onSuccess={msg => { showToast(msg, true); loadAll(); }} />}
+      {showInvite  && <InviteModal    onClose={() => setShowInvite(false)}  onSuccess={msg => { showToast(msg, true); loadAll(); }} />}
+      {showAddLead && <AddLeadModal   onClose={() => setShowAddLead(false)} onSuccess={msg => { showToast(msg, true); loadAll(); }} />}
       {confirm && (
         <ConfirmDialog
           title={`Delete ${confirm.type === 'user' ? 'User' : 'Company'}`}

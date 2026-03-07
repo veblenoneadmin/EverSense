@@ -272,6 +272,63 @@ router.post('/invite', requireAuth, requireSuperAdminUser, async (req, res) => {
   }
 });
 
+// ── POST /api/super-admin/create-lead-account ────────────────────────────────
+// Creates a new org + owner invitation (or membership if user already exists)
+router.post('/create-lead-account', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { email, name, companyName } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    if (!companyName) return res.status(400).json({ error: 'Company name required' });
+
+    // Generate unique slug from company name
+    let baseSlug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!baseSlug) baseSlug = 'org';
+    let slug = baseSlug;
+    let attempt = 1;
+    while (await prisma.organization.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${++attempt}`;
+    }
+
+    // Create the organization
+    const org = await prisma.organization.create({
+      data: {
+        name: companyName,
+        slug,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    // If user already exists, add OWNER membership; otherwise create invitation
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      await prisma.membership.create({
+        data: { userId: existingUser.id, orgId: org.id, role: 'OWNER' },
+      });
+      return res.json({ success: true, message: 'Existing user added as owner of new organization', orgId: org.id, slug });
+    }
+
+    const invitation = await prisma.invitation.create({
+      data: {
+        email,
+        orgId: org.id,
+        invitedById: req.user.id,
+        role: 'OWNER',
+        name: name || null,
+        status: 'sent',
+        token: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    console.log(`[SuperAdmin] Lead account created: org=${slug} email=${email} token=${invitation.token}`);
+    res.json({ success: true, message: 'Organization created and invitation sent', orgId: org.id, slug, token: invitation.token });
+  } catch (err) {
+    console.error('[SuperAdmin] create-lead-account error:', err);
+    res.status(500).json({ error: 'Failed to create lead account' });
+  }
+});
+
 // ── DELETE /api/super-admin/users/:userId ─────────────────────────────────────
 router.delete('/users/:userId', requireAuth, requireSuperAdminUser, async (req, res) => {
   try {

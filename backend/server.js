@@ -2991,12 +2991,35 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// Add jobTitle/phone to user, industry/size/website to organizations
+async function ensureProfileColumns() {
+  if (!process.env.DATABASE_URL) return;
+  const cols = [
+    ['user',          'jobTitle', 'VARCHAR(100) NULL DEFAULT NULL'],
+    ['user',          'phone',    'VARCHAR(50)  NULL DEFAULT NULL'],
+    ['organizations', 'industry', 'VARCHAR(100) NULL DEFAULT NULL'],
+    ['organizations', 'size',     'VARCHAR(50)  NULL DEFAULT NULL'],
+    ['organizations', 'website',  'VARCHAR(500) NULL DEFAULT NULL'],
+  ];
+  for (const [tbl, col, def] of cols) {
+    try {
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+        tbl, col
+      );
+      if (!rows.length) await prisma.$executeRawUnsafe(`ALTER TABLE \`${tbl}\` ADD COLUMN \`${col}\` ${def}`);
+    } catch { /* column already exists or table not ready */ }
+  }
+  console.log('  ✅ profile columns ready');
+}
+
 // Run migrations and start server
 async function startServer() {
   await runDatabaseMigrations();
   await ensureTaskTablesSchema();
   await ensureTaskAssigneesSchema();
   await ensureAccountScopeText();
+  await ensureProfileColumns();
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
 

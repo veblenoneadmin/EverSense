@@ -20,8 +20,10 @@ import { KPIReport } from './pages/KPIReport';
 import { Meetings } from './pages/Meetings';
 import { InviteAccept } from './pages/InviteAccept';
 import { SuperAdmin } from './pages/SuperAdmin';
+import { Onboarding } from './pages/Onboarding';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { OnboardingGuard } from './components/OnboardingGuard';
 import { OrganizationProvider } from './contexts/OrganizationContext';
 import { SessionProvider, useSessionContext } from './contexts/SessionContext';
 import { initializeWidgets } from './lib/widgets/widgetRegistry';
@@ -57,8 +59,9 @@ function AppContent() {
               <Route path="/invite" element={<InviteAccept />} />
 
               <Route path="super-admin" element={session ? <SuperAdmin /> : <Navigate to="/login" replace />} />
+              <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
 
-              <Route path="/*" element={session ? <MainLayout /> : <Navigate to="/login" replace />}>
+              <Route path="/*" element={session ? <OnboardingGuard><MainLayout /></OnboardingGuard> : <Navigate to="/login" replace />}>
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="brain-dump" element={<BrainDump />} />
                 <Route path="tasks" element={<Tasks />} />
