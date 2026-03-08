@@ -47,7 +47,8 @@ router.post('/reset-password', async (req, res) => {
 
     // Send reset email via nodemailer (uses SMTP_HOST/PORT/USER/PASS env vars)
     try {
-      const resetUrl = `${process.env.BETTER_AUTH_URL || 'https://vebtask.com'}/reset-password?token=${resetToken}`;
+      const appUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL || 'https://eversense-ai.up.railway.app';
+      const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
       const fromAddr = (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim().replace(/^["']|["']$/g, '');
 
       console.log(`📧 Sending reset email to ${email} from ${fromAddr}`);
