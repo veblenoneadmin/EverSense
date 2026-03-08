@@ -370,8 +370,8 @@ export function Dashboard() {
               }
             >
               {viewMode === 'admin'
-                ? <><UserCog className="h-3.5 w-3.5" /> {currentOrg.role === 'OWNER' ? 'Owner' : 'Admin'} View</>
-                : <><LayoutDashboard className="h-3.5 w-3.5" /> Staff View</>
+                ? <><LayoutDashboard className="h-3.5 w-3.5" /> Staff View</>
+                : <><UserCog className="h-3.5 w-3.5" /> {currentOrg.role === 'OWNER' ? 'Owner' : 'Admin'} View</>
               }
             </button>
           )}
@@ -521,8 +521,8 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* ── KPI strip ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* ── Staff dashboard content (hidden in admin view) ── */}
+      {(!canToggleView || viewMode === 'staff') && <><div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           label="Completed Today"
           value={stats?.completedToday ?? 0}
@@ -840,6 +840,7 @@ export function Dashboard() {
 
         </div>
       </div>
+      </>}
     </div>
   );
 }
