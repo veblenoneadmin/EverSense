@@ -568,10 +568,10 @@ export function Tasks() {
           {isAdminOrOwner && (
             <button
               onClick={() => setShowAllTasks(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-80"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 active:scale-95"
               style={showAllTasks
-                ? { background: 'rgba(86,156,214,0.15)', border: '1px solid rgba(86,156,214,0.35)', color: VS.blue }
-                : { background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text2 }
+                ? { background: VS.blue, border: `1px solid ${VS.blue}`, color: '#fff', boxShadow: `0 0 0 2px ${VS.blue}33` }
+                : { background: VS.bg1, border: `2px solid ${VS.border2}`, color: VS.text1, boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }
               }
             >
               {showAllTasks
