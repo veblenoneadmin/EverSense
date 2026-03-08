@@ -21,22 +21,22 @@ export const DARK_PALETTE = {
 };
 
 export const LIGHT_PALETTE = {
-  bg0:    '#ffffff',
-  bg1:    '#f3f3f3',
-  bg2:    '#ebebeb',
-  bg3:    '#e4e4e4',
-  border: '#e0e0e0',
-  border2:'#cecece',
-  text0:  '#1e1e1e',
-  text1:  '#3b3b3b',
-  text2:  '#717171',
+  bg0:    '#e8e8e8',  // page background — medium-light gray
+  bg1:    '#f2f2f2',  // card / sidebar — noticeably lighter than bg0
+  bg2:    '#dcdcdc',  // inner card sections, inputs
+  bg3:    '#d0d0d0',  // deepest recessed elements
+  border: '#c4c4c4',  // visible borders
+  border2:'#b0b0b0',  // stronger borders
+  text0:  '#1a1a1a',  // primary text
+  text1:  '#3a3a3a',  // secondary text
+  text2:  '#6a6a6a',  // muted text / labels
   blue:   '#0070c1',
-  teal:   '#267f99',
-  yellow: '#795e26',
-  orange: '#a31515',
-  purple: '#af00db',
-  red:    '#cd3131',
-  green:  '#008000',
+  teal:   '#107c7c',
+  yellow: '#7a6000',
+  orange: '#a34200',
+  purple: '#8a00c2',
+  red:    '#c50f1f',
+  green:  '#107c10',
   accent: '#0078d4',
 };
 
