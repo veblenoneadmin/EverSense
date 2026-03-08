@@ -18,6 +18,8 @@ import {
   Square,
   Brain,
   Check,
+  Users,
+  User,
 } from 'lucide-react';
 import BrainDumpModal from '../components/BrainDumpModal';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
@@ -156,6 +158,10 @@ export function Tasks() {
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [taskCounts, setTaskCounts] = useState<Record<string, { comments: number; attachments: number }>>({});
 
+  // My tasks vs all tasks toggle (OWNER/ADMIN only)
+  const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
+  const [showAllTasks, setShowAllTasks] = useState(false);
+
   // Filter
   const [showFilter, setShowFilter] = useState(false);
   const [filterPriorities, setFilterPriorities] = useState<string[]>([]);
@@ -198,8 +204,12 @@ export function Tasks() {
     if (!session?.user?.id || !currentOrg?.id) return;
     try {
       setLoading(true);
+      const isAdmin = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
+      const taskUrl = (isAdmin && !showAllTasks)
+        ? `/api/tasks?userId=${session.user.id}`
+        : '/api/tasks';
       const [data, countsData] = await Promise.all([
-        apiClient.fetch('/api/tasks', { method: 'GET' }),
+        apiClient.fetch(taskUrl, { method: 'GET' }),
         apiClient.fetch('/api/tasks/counts', { method: 'GET' }).catch(() => ({ counts: {} })),
       ]);
       if (data.success) {
@@ -216,7 +226,7 @@ export function Tasks() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchTasks(); }, [session?.user?.id, currentOrg?.id]);
+  useEffect(() => { fetchTasks(); }, [session?.user?.id, currentOrg?.id, showAllTasks]);
 
   // ── fetch projects ─────────────────────────────────────────────────────────
   const fetchProjects = async () => {
@@ -542,17 +552,34 @@ export function Tasks() {
         style={{ borderBottom: `1px solid ${VS.border}` }}
       >
         {/* Left: title + meta */}
-        <div>
-          <h1 className="text-lg font-bold tracking-tight" style={{ color: VS.text0 }}>
-            {userRole === 'CLIENT' ? 'My Tasks' : 'Task Board'}
-            <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded align-middle"
-              style={{ background: VS.bg3, color: VS.text2, border: `1px solid ${VS.border}` }}>
-              Private
-            </span>
-          </h1>
-          <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
-            {filtered.length}{filtered.length !== tasks.length ? ` / ${tasks.length}` : ''} tasks · {COLUMNS.length} stages
-          </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div>
+            <h1 className="text-lg font-bold tracking-tight" style={{ color: VS.text0 }}>
+              {userRole === 'CLIENT' ? 'My Tasks' : (isAdminOrOwner && !showAllTasks ? 'My Tasks' : 'Task Board')}
+              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded align-middle"
+                style={{ background: VS.bg3, color: VS.text2, border: `1px solid ${VS.border}` }}>
+                {isAdminOrOwner && showAllTasks ? 'All Members' : 'My Tasks'}
+              </span>
+            </h1>
+            <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
+              {filtered.length}{filtered.length !== tasks.length ? ` / ${tasks.length}` : ''} tasks · {COLUMNS.length} stages
+            </p>
+          </div>
+          {isAdminOrOwner && (
+            <button
+              onClick={() => setShowAllTasks(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-80"
+              style={showAllTasks
+                ? { background: 'rgba(86,156,214,0.15)', border: '1px solid rgba(86,156,214,0.35)', color: VS.blue }
+                : { background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text2 }
+              }
+            >
+              {showAllTasks
+                ? <><User className="h-3.5 w-3.5" /> My Tasks</>
+                : <><Users className="h-3.5 w-3.5" /> All Tasks</>
+              }
+            </button>
+          )}
         </div>
 
         {/* Right: search + actions */}
