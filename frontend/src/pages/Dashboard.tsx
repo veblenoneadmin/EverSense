@@ -8,7 +8,7 @@ import {
   Clock, LogIn, LogOut, CheckCircle2, Timer, AlertTriangle,
   FolderOpen, Users, TrendingUp, TrendingDown, Minus,
   CheckSquare, BarChart3, ArrowRight, Circle,
-  Target, Zap, CalendarClock, Activity,
+  Target, Zap, CalendarClock, Activity, LayoutDashboard, UserCog,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -107,6 +107,12 @@ export function Dashboard() {
 
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ── View mode (staff vs admin/owner) ──────────────────────────────────────
+  // OWNER and ADMIN (except admin@eversense.ai) default to staff view
+  const isSuperAdminEmail = session?.user?.email === 'admin@eversense.ai';
+  const canToggleView = (currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN') && !isSuperAdminEmail;
+  const [viewMode, setViewMode] = useState<'staff' | 'admin'>('staff');
 
   // ── Attendance state ───────────────────────────────────────────────────────
   const [attendanceActive, setAttendanceActive] = useState<{ id: string; timeIn: string } | null>(null);
@@ -339,9 +345,9 @@ export function Dashboard() {
     <div className="space-y-6">
 
       {/* ── Page header ── */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: VS.text0 }}>
+          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: VS.text0 }}>
             {getGreeting()}, {displayName}
           </h1>
           <p className="text-[13px] mt-1" style={{ color: VS.text2 }}>{fmtDate()}</p>
@@ -354,6 +360,21 @@ export function Dashboard() {
             <Activity className="h-3.5 w-3.5" style={{ color: VS.teal }} />
             {currentOrg.name}
           </div>
+          {canToggleView && (
+            <button
+              onClick={() => setViewMode(m => m === 'staff' ? 'admin' : 'staff')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold shrink-0 transition-all hover:opacity-80"
+              style={viewMode === 'admin'
+                ? { background: 'rgba(86,156,214,0.15)', border: '1px solid rgba(86,156,214,0.35)', color: VS.blue }
+                : { background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text2 }
+              }
+            >
+              {viewMode === 'admin'
+                ? <><UserCog className="h-3.5 w-3.5" /> {currentOrg.role === 'OWNER' ? 'Owner' : 'Admin'} View</>
+                : <><LayoutDashboard className="h-3.5 w-3.5" /> Staff View</>
+              }
+            </button>
+          )}
           {session?.user?.email === 'admin@eversense.ai' && (
             <button
               onClick={() => navigate('/super-admin')}
@@ -368,7 +389,7 @@ export function Dashboard() {
 
       {/* ── Attendance clock-in/out ── */}
       <div
-        className="rounded-xl p-4 flex items-center justify-between gap-4"
+        className="rounded-xl p-4 flex flex-wrap items-center justify-between gap-3"
         style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}
       >
         <div className="flex items-center gap-4">
@@ -431,6 +452,74 @@ export function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* ── Admin/Owner management panel ── */}
+      {canToggleView && viewMode === 'admin' && (
+        <div
+          className="rounded-xl p-5"
+          style={{ background: VS.bg1, border: `1px solid rgba(86,156,214,0.3)` }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <UserCog className="h-4 w-4" style={{ color: VS.blue }} />
+            <h2 className="text-[13px] font-bold" style={{ color: VS.blue }}>
+              {currentOrg.role === 'OWNER' ? 'Owner' : 'Admin'} Management Panel
+            </h2>
+            <span
+              className="ml-2 text-[10px] px-2 py-0.5 rounded-full font-semibold"
+              style={{ background: 'rgba(86,156,214,0.15)', color: VS.blue }}
+            >
+              {currentOrg.role}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Manage Team', desc: 'Users & invites', href: '/admin', color: VS.blue, icon: Users },
+              { label: 'View Reports', desc: 'Time & activity', href: '/reports', color: VS.purple, icon: BarChart3 },
+              { label: 'All Projects', desc: 'Company-wide', href: '/projects', color: VS.orange, icon: FolderOpen },
+              { label: 'KPI Reports', desc: 'Performance data', href: '/kpi-reports', color: VS.teal, icon: TrendingUp },
+            ].map(a => {
+              const Icon = a.icon;
+              return (
+                <a
+                  key={a.href}
+                  href={a.href}
+                  className="flex flex-col gap-2 p-3 rounded-lg transition-all hover:bg-white/[0.04]"
+                  style={{ background: VS.bg2, border: `1px solid ${VS.border}`, textDecoration: 'none' }}
+                >
+                  <div className="h-8 w-8 rounded-lg flex items-center justify-center"
+                    style={{ background: `${a.color}18`, border: `1px solid ${a.color}33` }}>
+                    <Icon className="h-4 w-4" style={{ color: a.color }} />
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-semibold" style={{ color: VS.text0 }}>{a.label}</div>
+                    <div className="text-[11px]" style={{ color: VS.text2 }}>{a.desc}</div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${VS.border}` }}>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]" style={{ color: VS.text2 }}>
+              <div className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" style={{ color: VS.teal }} />
+                <span><strong style={{ color: VS.teal }}>{stats?.teamMembers ?? 0}</strong> total members</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Activity className="h-3.5 w-3.5" style={{ color: VS.blue }} />
+                <span><strong style={{ color: VS.blue }}>{stats?.activeToday ?? 0}</strong> active today</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <FolderOpen className="h-3.5 w-3.5" style={{ color: VS.orange }} />
+                <span><strong style={{ color: VS.orange }}>{stats?.activeProjects ?? 0}</strong> active projects</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" style={{ color: stats?.overdue ? VS.red : VS.teal }} />
+                <span><strong style={{ color: stats?.overdue ? VS.red : VS.teal }}>{stats?.overdue ?? 0}</strong> overdue tasks</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── KPI strip ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">

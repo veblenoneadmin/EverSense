@@ -15,6 +15,7 @@ import {
   CalendarDays,
   FileBarChart,
   Video,
+  X,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -35,7 +36,12 @@ const navItems = [
   { name: 'Settings',       href: '/settings',    icon: Settings,        roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
 ];
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { data: session } = useSession();
   const [userRole, setUserRole] = useState<string>('CLIENT');
@@ -52,67 +58,87 @@ const Sidebar: React.FC = () => {
       .catch(() => {});
   }, [session]);
 
+  // Close sidebar on route change (mobile)
+  useEffect(() => { onClose(); }, [location.pathname]);
+
   const visible = navItems.filter(item => item.roles.includes(userRole));
 
   return (
-    <div
-      className="fixed inset-y-0 left-0 z-50 w-60 flex flex-col"
-      style={{ background: VS.bg1, borderRight: `1px solid ${VS.border}` }}
-    >
-      {/* Logo */}
+    <>
+      {/* Mobile backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Sidebar panel */}
       <div
-        className="flex h-14 items-center gap-3 px-4 shrink-0"
-        style={{ borderBottom: `1px solid ${VS.border}` }}
+        className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-300 md:translate-x-0 md:w-60 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ background: VS.bg1, borderRight: `1px solid ${VS.border}` }}
       >
-        <EverSenseLogo height={36} width={211} />
+        {/* Logo + mobile close */}
+        <div
+          className="flex h-14 items-center justify-between px-4 shrink-0"
+          style={{ borderBottom: `1px solid ${VS.border}` }}
+        >
+          <EverSenseLogo height={36} width={180} />
+          <button
+            className="md:hidden flex items-center justify-center h-7 w-7 rounded-lg transition-colors"
+            style={{ color: VS.text2 }}
+            onClick={onClose}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+          {visible.map(item => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.href ||
+              (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
+
+            return (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                style={({ isActive: active }) => ({
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: active ? 500 : 400,
+                  color: active ? VS.text0 : VS.text2,
+                  background: active ? accentBg : 'transparent',
+                  borderLeft: active ? `2px solid ${VS.accent}` : '2px solid transparent',
+                  textDecoration: 'none',
+                  transition: 'background 0.15s, color 0.15s',
+                })}
+                onMouseEnter={e => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = VS.bg2;
+                    (e.currentTarget as HTMLElement).style.color = VS.text1;
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    (e.currentTarget as HTMLElement).style.color = VS.text2;
+                  }
+                }}
+              >
+                <Icon size={15} />
+                {item.name}
+              </NavLink>
+            );
+          })}
+        </nav>
       </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {visible.map(item => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.href ||
-            (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
-
-          return (
-            <NavLink
-              key={item.name}
-              to={item.href}
-              style={({ isActive: active }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '7px 10px',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: active ? 500 : 400,
-                color: active ? VS.text0 : VS.text2,
-                background: active ? accentBg : 'transparent',
-                borderLeft: active ? `2px solid ${VS.accent}` : '2px solid transparent',
-                textDecoration: 'none',
-                transition: 'background 0.15s, color 0.15s',
-              })}
-              onMouseEnter={e => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.background = VS.bg2;
-                  (e.currentTarget as HTMLElement).style.color = VS.text1;
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                  (e.currentTarget as HTMLElement).style.color = VS.text2;
-                }
-              }}
-            >
-              <Icon size={15} />
-              {item.name}
-            </NavLink>
-          );
-        })}
-      </nav>
-
-    </div>
+    </>
   );
 };
 

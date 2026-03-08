@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useSession, signOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
-import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info } from 'lucide-react';
+import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
 
@@ -35,6 +35,7 @@ const MainLayout: React.FC = () => {
   const { data: session } = useSession();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
   const [orgId, setOrgId] = useState<string>('');
 
@@ -194,20 +195,27 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen" style={{ background: VS.bg0 }}>
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Top Navbar */}
       <header
-        className="fixed top-0 right-0 z-40 flex h-14 items-center justify-between px-4 md:px-6 md:left-60 left-0"
+        className="fixed top-0 right-0 z-40 flex h-14 items-center justify-between px-3 md:px-6 md:left-60 left-0"
         style={{ background: VS.bg1, borderBottom: `1px solid ${VS.border}` }}
       >
-        {/* Left — page title */}
-        <div className="flex items-center gap-3">
+        {/* Left — hamburger (mobile) + page title */}
+        <div className="flex items-center gap-2">
+          <button
+            className="md:hidden flex items-center justify-center h-8 w-8 rounded-lg"
+            style={{ color: VS.text2 }}
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <h1 className="text-sm font-semibold" style={{ color: VS.text2 }}>{pageTitle}</h1>
         </div>
 
-        {/* Center — wall clock + attendance elapsed (absolutely centered) */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
+        {/* Center — wall clock + attendance elapsed (absolutely centered, hidden on small screens) */}
+        <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center gap-3">
           <span className="text-[13px] font-mono font-semibold tabular-nums" style={{ color: VS.text1 }}>
             {currentTime}
           </span>
@@ -263,7 +271,7 @@ const MainLayout: React.FC = () => {
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
                 <div
-                  className="absolute right-0 top-full mt-2 w-80 rounded-xl z-20 overflow-hidden flex flex-col"
+                  className="absolute right-0 top-full mt-2 w-[calc(100vw-1.5rem)] sm:w-80 rounded-xl z-20 overflow-hidden flex flex-col"
                   style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 16px 48px rgba(0,0,0,0.7)', maxHeight: 420 }}
                 >
                   {/* Header */}
@@ -402,8 +410,8 @@ const MainLayout: React.FC = () => {
       </header>
 
       {/* Page content */}
-      <main className="md:pl-60 pt-14">
-        <div className="p-4 md:p-7">
+      <main className="md:pl-60 pt-14 min-w-0">
+        <div className="p-3 sm:p-5 md:p-7">
           <Outlet />
         </div>
       </main>
