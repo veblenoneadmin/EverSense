@@ -205,11 +205,11 @@ const MainLayout: React.FC = () => {
         {/* Left — hamburger (mobile) + page title */}
         <div className="flex items-center gap-2">
           <button
-            className="md:hidden flex items-center justify-center h-8 w-8 rounded-lg"
-            style={{ color: VS.text2 }}
-            onClick={() => setSidebarOpen(true)}
+            className="md:hidden flex items-center justify-center h-8 w-8 rounded-lg transition-colors"
+            style={{ color: sidebarOpen ? VS.text0 : VS.text2, background: sidebarOpen ? VS.bg2 : 'transparent' }}
+            onClick={() => setSidebarOpen(v => !v)}
           >
-            <Menu className="h-5 w-5" />
+            {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <h1 className="text-sm font-semibold" style={{ color: VS.text2 }}>{pageTitle}</h1>
         </div>
