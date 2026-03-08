@@ -45,19 +45,24 @@ router.post('/reset-password', async (req, res) => {
       }
     });
 
-    // Send reset email via nodemailer (uses SMTP_HOST/PORT/USER/PASS env vars)
-    try {
-      const appUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL || 'https://eversense-ai.up.railway.app';
-      const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
-      const fromAddr = (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim().replace(/^["']|["']$/g, '');
+    // Check SMTP is configured
+    if (!process.env.SMTP_HOST) {
+      console.error('❌ SMTP_HOST not configured — cannot send reset email');
+      return res.status(500).json({ success: false, message: 'Email service is not configured. Please contact your administrator.' });
+    }
 
-      console.log(`📧 Sending reset email to ${email} from ${fromAddr}`);
+    // Send reset email
+    const appUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL || 'https://eversense-ai.up.railway.app';
+    const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
+    const fromAddr = (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim().replace(/^["']|["']$/g, '');
 
-      await transporter.sendMail({
-        from: fromAddr,
-        to: email,
-        subject: 'Reset your VebTask password',
-        html: `<!DOCTYPE html>
+    console.log(`📧 Sending reset email to ${email} from ${fromAddr}, url: ${resetUrl}`);
+
+    await transporter.sendMail({
+      from: fromAddr,
+      to: email,
+      subject: 'Reset your EverSense AI password',
+      html: `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
@@ -68,7 +73,7 @@ router.post('/reset-password', async (req, res) => {
       </td></tr>
       <tr><td style="padding:40px;">
         <p style="margin:0 0 20px;color:#334155;font-size:16px;line-height:1.6;">Hi ${user.name || 'there'},</p>
-        <p style="margin:0 0 20px;color:#334155;font-size:16px;line-height:1.6;">We received a request to reset your VebTask password. If you didn't make this request, you can safely ignore this email.</p>
+        <p style="margin:0 0 20px;color:#334155;font-size:16px;line-height:1.6;">We received a request to reset your EverSense AI password. If you didn't make this request, you can safely ignore this email.</p>
         <div style="text-align:center;margin:40px 0;">
           <a href="${resetUrl}" style="display:inline-block;background:#007acc;color:#fff;padding:16px 32px;text-decoration:none;border-radius:6px;font-weight:600;font-size:16px;">Reset Password</a>
         </div>
@@ -79,29 +84,28 @@ router.post('/reset-password', async (req, res) => {
         </div>
       </td></tr>
       <tr><td style="padding:20px 40px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-        <p style="margin:0;color:#94a3b8;font-size:12px;">VebTask — Secure Task Management</p>
+        <p style="margin:0;color:#94a3b8;font-size:12px;">EverSense AI — Secure Task Management</p>
       </td></tr>
     </table>
   </td></tr></table>
 </body>
 </html>`,
-      });
+    });
 
-      console.log(`✅ Password reset email sent to ${email}`);
-    } catch (emailError) {
-      console.error('❌ Failed to send reset email:', emailError.message);
-    }
+    console.log(`✅ Password reset email sent to ${email}`);
 
-    res.json({ 
-      success: true, 
-      message: 'If an account with that email exists, you will receive a password reset email.' 
+    res.json({
+      success: true,
+      message: 'If an account with that email exists, you will receive a password reset email.'
     });
 
   } catch (error) {
     console.error('Password reset error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'An error occurred. Please try again.' 
+    res.status(500).json({
+      success: false,
+      message: error.message?.includes('SMTP') || error.message?.includes('ECONNREFUSED') || error.message?.includes('connect')
+        ? 'Failed to send email. Please contact your administrator.'
+        : 'An error occurred. Please try again.',
     });
   }
 });
