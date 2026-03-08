@@ -204,16 +204,22 @@ router.post('/reset-password/confirm', async (req, res) => {
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Update password in Account table
-    await prisma.account.updateMany({
+    // Update password in Account table — Better Auth uses providerId 'credential'
+    const updated = await prisma.account.updateMany({
       where: {
         userId: user.id,
-        providerId: 'email-password'
+        providerId: 'credential',
       },
-      data: {
-        password: hashedPassword
-      }
+      data: { password: hashedPassword },
     });
+
+    // Fallback: if no 'credential' account found, try 'email-password'
+    if (updated.count === 0) {
+      await prisma.account.updateMany({
+        where: { userId: user.id, providerId: 'email-password' },
+        data: { password: hashedPassword },
+      });
+    }
 
     // Delete used verification token
     await prisma.verification.delete({
