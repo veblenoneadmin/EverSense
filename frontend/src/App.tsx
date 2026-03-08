@@ -54,8 +54,8 @@ function AppContent() {
             <Routes>
               <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
               <Route path="/register" element={session ? <Navigate to="/dashboard" replace /> : <Register />} />
-              <Route path="/forgot-password" element={session ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
-              <Route path="/reset-password" element={session ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/email-verified" element={<EmailVerified />} />
               <Route path="/invite" element={<InviteAccept />} />
 
