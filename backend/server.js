@@ -230,7 +230,13 @@ app.get('/api/health', async (req, res) => {
       nodeEnv: process.env.NODE_ENV,
       hasDbUrl: !!process.env.DATABASE_URL,
       hasAuthSecret: !!process.env.BETTER_AUTH_SECRET,
-      baseUrl: process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL
+      baseUrl: process.env.APP_URL || process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL,
+      smtp: {
+        configured: !!process.env.SMTP_HOST,
+        host: process.env.SMTP_HOST || '(not set)',
+        port: process.env.SMTP_PORT || '587 (default)',
+        from: process.env.SMTP_FROM || process.env.SMTP_USER || '(not set)',
+      }
     }
   };
 
