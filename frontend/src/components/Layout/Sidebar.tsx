@@ -16,6 +16,7 @@ import {
   FileBarChart,
   Video,
   X,
+  History,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -23,7 +24,8 @@ const accentBg = 'rgba(0,122,204,0.15)';
 
 const navItems = [
   { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
-  { name: 'Tasks',          href: '/tasks',       icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
+  { name: 'Tasks',          href: '/tasks',        icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
+  { name: 'Task History',   href: '/task-history', icon: History,         roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Calendar',       href: '/calendar',    icon: CalendarDays,    roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Meetings',       href: '/meetings',    icon: Video,           roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Skills',         href: '/skills',      icon: Star,            roles: ['OWNER', 'ADMIN', 'STAFF'] },
