@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, ArrowRight, UserPlus, Building2, LogIn, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle, ArrowRight, UserPlus, Building2, LogIn, Eye, EyeOff, LogOut } from 'lucide-react';
 import { EverSenseLogo } from '../components/EverSenseLogo';
 import { useSessionContext } from '../contexts/SessionContext';
+import { signOut } from '../lib/auth-client';
 
 interface InviteDetails {
   email: string;
@@ -439,11 +440,23 @@ export function InviteAccept() {
           </div>
         </div>
 
-        {/* Email mismatch warning */}
+        {/* Email mismatch — offer sign-out so they can create the invited account */}
         {emailMismatch && (
-          <div className="px-3 py-2 text-xs rounded" style={{ backgroundColor: 'rgba(244,71,71,0.1)', border: '1px solid rgba(244,71,71,0.3)', color: '#f47171', fontFamily: 'monospace' }}>
-            ⚠ This invite is for <strong>{invite.email}</strong>, but you're signed in as <strong>{session.user.email}</strong>.
-            Please sign in with the correct account.
+          <div className="space-y-2">
+            <div className="px-3 py-2 text-xs rounded" style={{ backgroundColor: 'rgba(244,71,71,0.1)', border: '1px solid rgba(244,71,71,0.3)', color: '#f47171', fontFamily: 'monospace' }}>
+              ⚠ This invite is for <strong>{invite.email}</strong>, but you're signed in as <strong>{session.user.email}</strong>.
+            </div>
+            <button
+              onClick={async () => {
+                await signOut();
+                window.location.reload();
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium rounded"
+              style={{ backgroundColor: '#2d2d2d', border: '1px solid #555', color: '#cccccc', fontFamily: 'monospace', cursor: 'pointer' }}
+            >
+              <LogOut size={13} />
+              Sign out &amp; create account for {invite.email}
+            </button>
           </div>
         )}
 
