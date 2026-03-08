@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { CheckCircle, ArrowRight, UserPlus, Building2, LogIn, Eye, EyeOff, LogOut } from 'lucide-react';
 import { EverSenseLogo } from '../components/EverSenseLogo';
 import { useSessionContext } from '../contexts/SessionContext';
-import { signOut } from '../lib/auth-client';
+import { authSignOut } from '../lib/auth-client';
 
 interface InviteDetails {
   email: string;
@@ -448,8 +448,8 @@ export function InviteAccept() {
             </div>
             <button
               onClick={async () => {
-                await signOut();
-                window.location.reload();
+                await authSignOut();
+                window.location.assign(window.location.pathname + window.location.search);
               }}
               className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium rounded"
               style={{ backgroundColor: '#2d2d2d', border: '1px solid #555', color: '#cccccc', fontFamily: 'monospace', cursor: 'pointer' }}

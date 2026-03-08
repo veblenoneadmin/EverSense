@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { useSession, signOut } from '../../lib/auth-client';
+import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu } from 'lucide-react';
 
@@ -163,7 +163,7 @@ const MainLayout: React.FC = () => {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await authSignOut();
       // Redirect to login after logout
       window.location.href = '/login';
     } catch (error) {
