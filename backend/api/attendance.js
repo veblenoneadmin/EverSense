@@ -141,7 +141,7 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
   try {
     const userId = req.user.id;
     const orgId  = req.orgId;
-    const limit  = Math.min(parseInt(req.query.limit || '100'), 500);
+    const limit  = Math.min(parseInt(req.query.limit || '1000'), 2000);
 
     const membership = await prisma.membership.findUnique({
       where: { userId_orgId: { userId, orgId } },

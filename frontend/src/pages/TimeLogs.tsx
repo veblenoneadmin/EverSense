@@ -130,16 +130,10 @@ export function TimeLogs() {
   const [searchTerm, setSearchTerm]       = useState('');
   const [filterMember, setFilterMember]   = useState('all');
   const [filterStatus, setFilterStatus]   = useState<'all' | 'active' | 'completed'>('all');
-  // Default to current week
-  const [activePreset, setActivePreset]   = useState<'today' | 'week' | 'month' | 'all' | null>('week');
-  const [dateTo, setDateTo]               = useState(() => new Date().toISOString().slice(0, 10));
-  const [dateFrom, setDateFrom]           = useState(() => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day; // Monday
-    d.setDate(d.getDate() + diff);
-    return d.toISOString().slice(0, 10);
-  });
+  // Privileged users (admin/owner) default to All Time; staff default to This Week
+  const [activePreset, setActivePreset]   = useState<'today' | 'week' | 'month' | 'all' | null>('all');
+  const [dateTo, setDateTo]               = useState('');
+  const [dateFrom, setDateFrom]           = useState('');
 
   const applyPreset = (preset: 'today' | 'week' | 'month' | 'all') => {
     setActivePreset(preset);
