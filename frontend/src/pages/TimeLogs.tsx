@@ -680,7 +680,7 @@ export function TimeLogs() {
             <tbody>
               {/* Members with no logs in date range — admin/owner only */}
               {isPrivileged && allMembers
-                .filter(m => !filteredLogs.some(l => l.memberId === m.id))
+                .filter(m => !logs.some(l => l.memberId === m.id))
                 .filter(m => filterMember === 'all' || filterMember === m.id)
                 .filter(m => !searchTerm || m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.email.toLowerCase().includes(searchTerm.toLowerCase()))
                 .filter(() => filterStatus === 'all' || filterStatus === 'completed')
