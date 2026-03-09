@@ -683,7 +683,7 @@ export function TimeLogs() {
                 .filter(m => !filteredLogs.some(l => l.memberId === m.id))
                 .filter(m => filterMember === 'all' || filterMember === m.id)
                 .filter(m => !searchTerm || m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.email.toLowerCase().includes(searchTerm.toLowerCase()))
-                .filter(m => filterStatus === 'all' || filterStatus === 'completed')
+                .filter(() => filterStatus === 'all' || filterStatus === 'completed')
                 .map(m => (
                   <tr key={`absent-${m.id}`}
                     className="transition-colors hover:bg-white/[0.02]"
