@@ -108,6 +108,7 @@ export function TimeLogs() {
   const orgId = currentOrg?.id || '';
 
   const [logs, setLogs]             = useState<AttendanceLog[]>([]);
+  const [allMembers, setAllMembers] = useState<{ id: string; name: string; email: string; image: string | null; role: string }[]>([]);
   const [loading, setLoading]       = useState(true);
   const [isPrivileged, setIsPrivileged] = useState(false);
   const [userRole, setUserRole]     = useState('STAFF');
@@ -171,6 +172,7 @@ export function TimeLogs() {
         setIsPrivileged(data.isPrivileged ?? false);
         setUserRole(data.role ?? 'STAFF');
         setLogs(data.logs || []);
+        setAllMembers(data.allMembers || []);
       }
     } catch (err) {
       console.error('Failed to fetch attendance logs:', err);
@@ -300,7 +302,7 @@ export function TimeLogs() {
   // ── Derived data ───────────────────────────────────────────────────────────
   const uniqueMembers = [...new Map(logs.map(l => [l.memberId, { id: l.memberId, name: l.memberName }])).values()];
 
-  const filteredLogs = logs.filter(log => {
+  const filteredLogs = logs.filter((log: AttendanceLog) => {
     const matchSearch =
       log.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (log.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -676,7 +678,47 @@ export function TimeLogs() {
               </tr>
             </thead>
             <tbody>
-              {filteredLogs.map(log => {
+              {/* Members with no logs in date range — admin/owner only */}
+              {isPrivileged && allMembers
+                .filter(m => !filteredLogs.some(l => l.memberId === m.id))
+                .filter(m => filterMember === 'all' || filterMember === m.id)
+                .filter(m => !searchTerm || m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.email.toLowerCase().includes(searchTerm.toLowerCase()))
+                .filter(m => filterStatus === 'all' || filterStatus === 'completed')
+                .map(m => (
+                  <tr key={`absent-${m.id}`}
+                    className="transition-colors hover:bg-white/[0.02]"
+                    style={{ borderBottom: `1px solid ${VS.border}`, opacity: 0.55 }}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <MemberAvatar name={m.name} image={m.image} />
+                        <div>
+                          <p className="font-medium leading-tight" style={{ color: VS.text0 }}>{m.name}</p>
+                          <p className="text-[10px] leading-tight" style={{ color: VS.text2 }}>{m.email}</p>
+                          <span className="text-[10px] font-semibold capitalize"
+                            style={{ color: (ROLE_STYLE[m.role] ?? ROLE_STYLE.STAFF).color }}>
+                            {m.role.toLowerCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                        style={{ background: `${VS.text2}10`, color: VS.text2, border: `1px solid ${VS.border}` }}>
+                        Not clocked in
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              }
+              {filteredLogs.map((log: AttendanceLog) => {
                 const isOwnActive = log.isActive && log.memberId === session?.user?.id;
                 return (
                   <tr key={log.id}

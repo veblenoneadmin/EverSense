@@ -236,9 +236,35 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
     // CLIENT sees a "team" view when they have project staff
     const showTeamView = isPrivileged || (isClient && clientStaffIds && clientStaffIds.length > 1);
 
+    // For privileged users, also return all org members so frontend can show "not clocked in" rows
+    let allMembers = [];
+    if (isPrivileged) {
+      try {
+        const memberships = await prisma.membership.findMany({
+          where: { orgId },
+          select: { userId: true, role: true },
+        });
+        const memberUserIds = memberships.map(m => m.userId);
+        const memberUsers = await prisma.user.findMany({
+          where: { id: { in: memberUserIds } },
+          select: { id: true, name: true, email: true, image: true },
+        });
+        const memberUserMap = {};
+        memberUsers.forEach(u => { memberUserMap[u.id] = u; });
+        allMembers = memberships.map(m => ({
+          id: m.userId,
+          name: memberUserMap[m.userId]?.name || memberUserMap[m.userId]?.email || 'Unknown',
+          email: memberUserMap[m.userId]?.email || '',
+          image: memberUserMap[m.userId]?.image || null,
+          role: m.role,
+        }));
+      } catch { /* non-fatal */ }
+    }
+
     return res.json({
       role,
       isPrivileged: showTeamView,
+      allMembers,
       logs: logs.map(l => formatLog(l, usersMap[l.userId], roleMap[l.userId] || role)),
     });
   } catch (err) {
