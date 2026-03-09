@@ -2,7 +2,7 @@
 import express from 'express';
 import { prisma } from '../lib/prisma.js';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from 'better-auth/crypto';
 import { transporter } from '../lib/mailer.js';
 
 const router = express.Router();
@@ -201,8 +201,8 @@ router.post('/reset-password/confirm', async (req, res) => {
       });
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Hash new password using Better Auth's own hashing (scrypt-based)
+    const hashedPassword = await hashPassword(password);
 
     // Debug: log what accounts exist for this user
     const accounts = await prisma.account.findMany({
