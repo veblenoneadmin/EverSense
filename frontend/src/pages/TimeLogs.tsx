@@ -302,6 +302,11 @@ export function TimeLogs() {
   // ── Derived data ───────────────────────────────────────────────────────────
   const uniqueMembers = [...new Map(logs.map(l => [l.memberId, { id: l.memberId, name: l.memberName }])).values()];
 
+  // Date-only filtered logs — used to determine "not clocked in" for the selected date range
+  const dateRangeLogs = logs.filter((log: AttendanceLog) =>
+    (!dateFrom || log.date >= dateFrom) && (!dateTo || log.date <= dateTo)
+  );
+
   const filteredLogs = logs.filter((log: AttendanceLog) => {
     const matchSearch =
       log.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -680,7 +685,7 @@ export function TimeLogs() {
             <tbody>
               {/* Members with no logs in date range — admin/owner only */}
               {isPrivileged && allMembers
-                .filter(m => !logs.some(l => l.memberId === m.id))
+                .filter(m => !dateRangeLogs.some(l => l.memberId === m.id))
                 .filter(m => filterMember === 'all' || filterMember === m.id)
                 .filter(m => !searchTerm || m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.email.toLowerCase().includes(searchTerm.toLowerCase()))
                 .filter(() => filterStatus === 'all' || filterStatus === 'completed')
