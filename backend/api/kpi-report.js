@@ -42,26 +42,15 @@ router.get('/', requireAuth, async (req, res) => {
       ({ start, end, previousStart, previousEnd, label } = getDateRange(period, refDate));
     }
 
-    // ─── Fetch all members in org (separate queries to avoid collation JOIN issues) ──
-    const rawMemberships = await prisma.membership.findMany({
+    // ─── Fetch all members in org ───────────────────────────────────────────
+    const memberships = await prisma.membership.findMany({
       where: { orgId },
-      select: { userId: true, role: true },
+      include: {
+        user: { select: { id: true, name: true, email: true, image: true } }
+      }
     });
-    const memberIds = rawMemberships.map(m => m.userId);
-    const usersMap = {};
-    if (memberIds.length) {
-      const ph = memberIds.map(() => '?').join(',');
-      const userRows = await prisma.$queryRawUnsafe(
-        `SELECT id, name, email, image FROM \`user\` WHERE id IN (${ph})`,
-        ...memberIds
-      );
-      userRows.forEach(u => { usersMap[u.id] = u; });
-    }
-    const memberships = rawMemberships.map(m => ({
-      userId: m.userId,
-      role: m.role,
-      user: usersMap[m.userId] || { id: m.userId, name: 'Unknown', email: '', image: null },
-    }));
+
+    const memberIds = memberships.map(m => m.userId);
 
     // ─── Fetch time logs for current & previous period ────────────────────
     const [currentLogs, previousLogs] = await Promise.all([
