@@ -309,9 +309,9 @@ export function TimeLogs() {
   // ── Derived data ───────────────────────────────────────────────────────────
   const uniqueMembers = [...new Map(logs.map(l => [l.memberId, { id: l.memberId, name: l.memberName }])).values()];
 
-  // Date-only filtered logs — used to determine "not clocked in" for the selected date range
+  // Used to determine "not clocked in" — mirrors filteredLogs date logic (active sessions always included)
   const dateRangeLogs = logs.filter((log: AttendanceLog) =>
-    (!dateFrom || log.date >= dateFrom) && (!dateTo || log.date <= dateTo)
+    log.isActive || ((!dateFrom || log.date >= dateFrom) && (!dateTo || log.date <= dateTo))
   );
 
   const filteredLogs = logs.filter((log: AttendanceLog) => {
