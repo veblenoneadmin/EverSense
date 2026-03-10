@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { fetchTranscript, fetchLatestTranscripts, fetchTranscriptRaw } from '../lib/fireflies.js';
 import { requireAuth, withOrgScope } from '../lib/rbac.js';
+import { broadcast } from '../lib/sse.js';
 
 const router = express.Router();
 
@@ -238,6 +239,7 @@ async function processTranscript(transcript) {
         'INSERT INTO notifications (id, userId, orgId, title, body, link, type, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())',
         randomUUID(), user.id, orgId, notifTitle, notifBody, notifLink, 'meeting'
       );
+      broadcast(orgId, 'notification', { userId: user.id });
       notified++;
     }
   }

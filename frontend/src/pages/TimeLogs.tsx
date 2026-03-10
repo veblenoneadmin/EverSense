@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { useSSE } from '../hooks/useSSE';
 import {
   Clock, Calendar, Download, Search, LogIn, LogOut,
   Coffee, Zap, BarChart3, Users, AlertTriangle, Filter, X,
@@ -213,12 +214,10 @@ export function TimeLogs() {
     if (session?.user?.id) { fetchLogs(); fetchStatus(); }
   }, [session?.user?.id, orgId, fetchLogs, fetchStatus]);
 
-  // Auto-refresh logs every 30 seconds so admin sees real-time clock-ins
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    const id = setInterval(() => { fetchLogs(); fetchStatus(); }, 30_000);
-    return () => clearInterval(id);
-  }, [session?.user?.id, fetchLogs, fetchStatus]);
+  // SSE — real-time push (replaces 30s polling interval)
+  useSSE(orgId || undefined, (event) => {
+    if (event === 'attendance') { fetchLogs(); fetchStatus(); }
+  });
 
   // ── Net elapsed timer (pauses on break) ───────────────────────────────────
   useEffect(() => {

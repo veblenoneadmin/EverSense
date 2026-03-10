@@ -3,6 +3,7 @@ import express from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth, withOrgScope } from '../lib/rbac.js';
 import { randomUUID } from 'crypto';
+import { broadcast } from '../lib/sse.js';
 
 const router = express.Router();
 
@@ -90,6 +91,7 @@ async function handleClockIn(req, res) {
 
     const log = await prisma.attendanceLog.findUnique({ where: { id } });
     console.log(`[Attendance] ✅ Clock in: ${req.user.email} at ${now}`);
+    broadcast(orgId, 'attendance', { action: 'clock-in', userId });
     res.status(201).json({ message: 'Clocked in successfully', log });
   } catch (err) {
     console.error('[Attendance] clock-in error:', err);
@@ -127,6 +129,7 @@ async function handleClockOut(req, res) {
 
     const log = await prisma.attendanceLog.findUnique({ where: { id: active.id } });
     console.log(`[Attendance] ✅ Clock out: ${req.user.email}, net ${Math.round(duration/60)}min, break ${Math.round(breakDuration/60)}min`);
+    broadcast(orgId, 'attendance', { action: 'clock-out', userId });
     res.json({ message: 'Clocked out successfully', log });
   } catch (err) {
     console.error('[Attendance] clock-out error:', err);

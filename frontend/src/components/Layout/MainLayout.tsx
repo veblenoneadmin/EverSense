@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu } from 'lucide-react';
+import { useSSE } from '../../hooks/useSSE';
 
 import { VS } from '../../lib/theme';
 
@@ -77,46 +78,50 @@ const MainLayout: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Fetch attendance status once orgId is known, then poll every 30s
-  useEffect(() => {
+  // Fetch attendance status
+  const fetchStatus = useCallback(async () => {
     if (!session?.user?.id || !orgId) return;
-    const fetchStatus = async () => {
-      try {
-        const q = new URLSearchParams({ userId: session!.user!.id, orgId }).toString();
-        const res = await fetch(`/api/attendance/status?${q}`, { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setAttendanceActive(data.active);
-          setNavOnBreak(!!localStorage.getItem('att_break_start'));
-        }
-      } catch { /* ignore */ }
-    };
-    fetchStatus();
-    const poll = setInterval(fetchStatus, 30_000);
-    window.addEventListener('attendance-change', fetchStatus);
-    return () => {
-      clearInterval(poll);
-      window.removeEventListener('attendance-change', fetchStatus);
-    };
+    try {
+      const q = new URLSearchParams({ userId: session!.user!.id, orgId }).toString();
+      const res = await fetch(`/api/attendance/status?${q}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setAttendanceActive(data.active);
+        setNavOnBreak(!!localStorage.getItem('att_break_start'));
+      }
+    } catch { /* ignore */ }
   }, [session?.user?.id, orgId]);
 
-  // Fetch notifications once orgId is known, poll every 60s
   useEffect(() => {
     if (!session?.user?.id || !orgId) return;
-    const fetchNotifs = async () => {
-      try {
-        const res = await fetch('/api/notifications');
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications(data.notifications ?? []);
-          setUnreadCount(data.unreadCount ?? 0);
-        }
-      } catch { /* ignore */ }
-    };
-    fetchNotifs();
-    const poll = setInterval(fetchNotifs, 60_000);
-    return () => clearInterval(poll);
+    fetchStatus();
+    window.addEventListener('attendance-change', fetchStatus);
+    return () => window.removeEventListener('attendance-change', fetchStatus);
+  }, [session?.user?.id, orgId, fetchStatus]);
+
+  // Fetch notifications
+  const fetchNotifs = useCallback(async () => {
+    if (!session?.user?.id || !orgId) return;
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications ?? []);
+        setUnreadCount(data.unreadCount ?? 0);
+      }
+    } catch { /* ignore */ }
   }, [session?.user?.id, orgId]);
+
+  useEffect(() => {
+    if (!session?.user?.id || !orgId) return;
+    fetchNotifs();
+  }, [session?.user?.id, orgId, fetchNotifs]);
+
+  // SSE — real-time push updates (replaces polling intervals)
+  useSSE(orgId || undefined, (event) => {
+    if (event === 'attendance')   fetchStatus();
+    if (event === 'notification') fetchNotifs();
+  });
 
   const handleMarkAllRead = async () => {
     try {
