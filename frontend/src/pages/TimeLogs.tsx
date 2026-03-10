@@ -320,7 +320,8 @@ export function TimeLogs() {
       (log.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.date.includes(searchTerm);
     const matchMember = filterMember === 'all' || log.memberId === filterMember;
-    const matchDate   = (!dateFrom || log.date >= dateFrom) && (!dateTo || log.date <= dateTo);
+    // Active sessions (no clock-out) always show regardless of date filter
+    const matchDate   = log.isActive || ((!dateFrom || log.date >= dateFrom) && (!dateTo || log.date <= dateTo));
     const matchStatus = filterStatus === 'all' || (filterStatus === 'active' ? log.isActive : !log.isActive);
     return matchSearch && matchMember && matchDate && matchStatus;
   });
