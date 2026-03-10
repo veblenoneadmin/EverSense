@@ -310,9 +310,13 @@ export function TimeLogs() {
   const uniqueMembers = [...new Map(logs.map(l => [l.memberId, { id: l.memberId, name: l.memberName }])).values()];
 
   // Used to determine "not clocked in" — mirrors filteredLogs date logic (active sessions always included)
-  const dateRangeLogs = logs.filter((log: AttendanceLog) =>
-    log.isActive || ((!dateFrom || log.date >= dateFrom) && (!dateTo || log.date <= dateTo))
-  );
+  const dateRangeLogs = logs.filter((log: AttendanceLog) => {
+    if (log.isActive) return true;
+    const logInDate  = new Date(log.timeIn).toLocaleDateString('en-CA');
+    const logOutDate = log.timeOut ? new Date(log.timeOut).toLocaleDateString('en-CA') : null;
+    const inRange    = (d: string) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
+    return inRange(logInDate) || (logOutDate ? inRange(logOutDate) : false);
+  });
 
   const filteredLogs = logs.filter((log: AttendanceLog) => {
     const matchSearch =
@@ -320,8 +324,11 @@ export function TimeLogs() {
       (log.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.date.includes(searchTerm);
     const matchMember = filterMember === 'all' || log.memberId === filterMember;
-    // Active sessions (no clock-out) always show regardless of date filter
-    const matchDate   = log.isActive || ((!dateFrom || log.date >= dateFrom) && (!dateTo || log.date <= dateTo));
+    // Use local date from timeIn/timeOut so overnight sessions (clocked in yesterday, out today) show correctly
+    const logInDate  = new Date(log.timeIn).toLocaleDateString('en-CA');
+    const logOutDate = log.timeOut ? new Date(log.timeOut).toLocaleDateString('en-CA') : null;
+    const inRange    = (d: string) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
+    const matchDate  = log.isActive || inRange(logInDate) || (logOutDate ? inRange(logOutDate) : false);
     const matchStatus = filterStatus === 'all' || (filterStatus === 'active' ? log.isActive : !log.isActive);
     return matchSearch && matchMember && matchDate && matchStatus;
   });
