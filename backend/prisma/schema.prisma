@@ -419,3 +419,23 @@ model CalendarEventAttendee {
   @@index([userId])
   @@map("calendar_event_attendees")
 }
+
+
+model Leave {
+  id          String   @id @default(cuid()) @db.VarChar(191)
+  userId      String   @db.VarChar(36)
+  orgId       String   @db.VarChar(191)
+  type        String   @db.VarChar(50)   // ANNUAL, SICK, UNPAID, MATERNITY, PATERNITY, BEREAVEMENT
+  status      String   @default("APPROVED") @db.VarChar(20)
+  startDate   DateTime
+  endDate     DateTime
+  days        Int
+  reason      String?  @db.Text
+  approvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([orgId])
+  @@index([userId, startDate])
+  @@map("leaves")
+}
