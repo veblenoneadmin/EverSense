@@ -253,7 +253,7 @@ export function TimeLogs() {
         headers,
         body: JSON.stringify({ ...(orgId && { orgId }) }),
       });
-      if (res.ok) { await fetchStatus(); await fetchLogs(); window.dispatchEvent(new CustomEvent('attendance-change')); }
+      if (res.ok) { await fetchStatus(); await fetchLogs(false); window.dispatchEvent(new CustomEvent('attendance-change')); }
       else { const d = await res.json(); alert(d.error || 'Failed to clock in'); }
     } catch (err) { console.error(err); } finally { setClockLoading(false); }
   };
@@ -279,7 +279,7 @@ export function TimeLogs() {
         headers,
         body: JSON.stringify({ ...(orgId && { orgId }), breakDuration: totalBreak }),
       });
-      if (res.ok) { await fetchStatus(); await fetchLogs(); window.dispatchEvent(new CustomEvent('attendance-change')); }
+      if (res.ok) { await fetchStatus(); await fetchLogs(false); window.dispatchEvent(new CustomEvent('attendance-change')); }
       else { const d = await res.json(); alert(d.error || 'Failed to clock out'); }
     } catch (err) { console.error(err); } finally { setClockLoading(false); }
   };
