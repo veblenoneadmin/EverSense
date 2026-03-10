@@ -213,6 +213,13 @@ export function TimeLogs() {
     if (session?.user?.id) { fetchLogs(); fetchStatus(); }
   }, [session?.user?.id, orgId, fetchLogs, fetchStatus]);
 
+  // Auto-refresh logs every 30 seconds so admin sees real-time clock-ins
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const id = setInterval(() => { fetchLogs(); fetchStatus(); }, 30_000);
+    return () => clearInterval(id);
+  }, [session?.user?.id, fetchLogs, fetchStatus]);
+
   // ── Net elapsed timer (pauses on break) ───────────────────────────────────
   useEffect(() => {
     if (!clockedIn || !activeLog?.timeIn || onBreak) { if (!clockedIn) setElapsed(0); return; }
