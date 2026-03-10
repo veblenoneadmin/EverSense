@@ -158,9 +158,9 @@ export function TimeLogs() {
   };
 
   // ── Fetch logs ─────────────────────────────────────────────────────────────
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (showLoader = true) => {
     if (!session?.user?.id) return;
-    setLoading(true);
+    if (showLoader) setLoading(true);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (orgId) headers['x-org-id'] = orgId;
@@ -178,7 +178,7 @@ export function TimeLogs() {
     } catch (err) {
       console.error('Failed to fetch attendance logs:', err);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }, [session?.user?.id, orgId]);
 
@@ -214,9 +214,9 @@ export function TimeLogs() {
     if (session?.user?.id) { fetchLogs(); fetchStatus(); }
   }, [session?.user?.id, orgId, fetchLogs, fetchStatus]);
 
-  // SSE — real-time push (replaces 30s polling interval)
+  // SSE — real-time push (replaces 30s polling interval), no loading spinner
   useSSE(orgId || undefined, (event) => {
-    if (event === 'attendance') { fetchLogs(); fetchStatus(); }
+    if (event === 'attendance') { fetchLogs(false); fetchStatus(); }
   });
 
   // ── Net elapsed timer (pauses on break) ───────────────────────────────────
