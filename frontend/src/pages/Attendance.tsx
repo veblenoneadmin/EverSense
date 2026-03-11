@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { pauseTaskTimer, resumeTaskTimer, stopTaskTimer } from '../lib/task-timer';
 import { LogIn, LogOut, Clock, Calendar, AlertCircle, Timer, TrendingUp, CheckCircle2 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -214,7 +215,7 @@ export function Attendance() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to clock out');
-      window.dispatchEvent(new CustomEvent('task-timer-stop'));
+      stopTaskTimer();
       setNotes('');
       await loadAll();
       window.dispatchEvent(new CustomEvent('attendance-change'));
@@ -230,7 +231,7 @@ export function Attendance() {
       localStorage.setItem('att_break_used', todayStr());
       setOnBreak(true);
       setBreakUsed(true);
-      window.dispatchEvent(new CustomEvent('task-timer-pause'));
+      pauseTaskTimer();
     } else {
       const started = Number(localStorage.getItem('att_break_start') || Date.now());
       const secs = Math.floor((Date.now() - started) / 1000);
@@ -239,7 +240,7 @@ export function Attendance() {
       localStorage.removeItem('att_break_start');
       setBreakAccum(newAccum);
       setOnBreak(false);
-      window.dispatchEvent(new CustomEvent('task-timer-resume'));
+      resumeTaskTimer();
     }
     window.dispatchEvent(new CustomEvent('attendance-change'));
   };

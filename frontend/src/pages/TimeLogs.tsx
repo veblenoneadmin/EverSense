@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { useSSE } from '../hooks/useSSE';
+import { pauseTaskTimer, resumeTaskTimer, stopTaskTimer } from '../lib/task-timer';
 import {
   Clock, Calendar, Download, Search, LogIn, LogOut,
   Coffee, Zap, BarChart3, Users, AlertTriangle, Filter, X,
@@ -280,7 +281,7 @@ export function TimeLogs() {
         body: JSON.stringify({ ...(orgId && { orgId }), breakDuration: totalBreak }),
       });
       if (res.ok) {
-        window.dispatchEvent(new CustomEvent('task-timer-stop'));
+        stopTaskTimer();
         await fetchStatus(); await fetchLogs(false); window.dispatchEvent(new CustomEvent('attendance-change'));
       }
       else { const d = await res.json(); alert(d.error || 'Failed to clock out'); }
@@ -295,7 +296,7 @@ export function TimeLogs() {
       localStorage.setItem('att_break_used', todayStr());
       setOnBreak(true);
       setBreakUsed(true);
-      window.dispatchEvent(new CustomEvent('task-timer-pause'));
+      pauseTaskTimer();
     } else {
       const started = Number(localStorage.getItem('att_break_start') || Date.now());
       const secs    = Math.floor((Date.now() - started) / 1000);
@@ -305,7 +306,7 @@ export function TimeLogs() {
       setBreakAccum(newAccum);
       setOnBreak(false);
       setBreakElapsed(0);
-      window.dispatchEvent(new CustomEvent('task-timer-resume'));
+      resumeTaskTimer();
     }
     window.dispatchEvent(new CustomEvent('attendance-change'));
   };

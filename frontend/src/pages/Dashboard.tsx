@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { pauseTaskTimer, resumeTaskTimer, stopTaskTimer } from '../lib/task-timer';
 import { useSession } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { ClientDashboard } from './ClientDashboard';
@@ -237,7 +238,7 @@ export function Dashboard() {
         body: JSON.stringify({ ...(currentOrg?.id && { orgId: currentOrg.id }), breakDuration: totalBreak }),
       });
       if (res.ok) {
-        window.dispatchEvent(new CustomEvent('task-timer-stop'));
+        stopTaskTimer();
         setAttendanceActive(null);
         fetchDashboard();
         window.dispatchEvent(new CustomEvent('attendance-change'));
@@ -254,7 +255,7 @@ export function Dashboard() {
       localStorage.setItem('att_break_used', todayStr());
       setOnBreak(true);
       setBreakUsed(true);
-      window.dispatchEvent(new CustomEvent('task-timer-pause'));
+      pauseTaskTimer();
     } else {
       const started = Number(localStorage.getItem('att_break_start') || Date.now());
       const secs = Math.floor((Date.now() - started) / 1000);
@@ -263,7 +264,7 @@ export function Dashboard() {
       localStorage.removeItem('att_break_start');
       setBreakAccum(newAccum);
       setOnBreak(false);
-      window.dispatchEvent(new CustomEvent('task-timer-resume'));
+      resumeTaskTimer();
     }
     window.dispatchEvent(new CustomEvent('attendance-change'));
   };
