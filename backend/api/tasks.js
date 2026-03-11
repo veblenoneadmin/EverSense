@@ -65,13 +65,13 @@ router.get('/members', requireAuth, withOrgScope, async (req, res) => {
 // Get tasks (main endpoint)
 router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.pagination), async (req, res) => {
   try {
-    const { orgId, userId, status, priority, limit = 50, offset = 0 } = req.query;
+    const { orgId, userId, status, priority, projectId, limit = 50, offset = 0 } = req.query;
 
     if (!orgId) {
       return res.status(400).json({ error: 'orgId is required' });
     }
 
-    console.log('📋 Fetching tasks:', { orgId, userId, status, priority, limit, offset });
+    console.log('📋 Fetching tasks:', { orgId, userId, status, priority, projectId, limit, offset });
 
     const where = { orgId };
 
@@ -79,6 +79,7 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (userId) where.userId = userId;
+    if (projectId) where.projectId = projectId;
 
     // Role-based task visibility
     const callerMembership = await prisma.membership.findFirst({
