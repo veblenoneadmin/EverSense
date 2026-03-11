@@ -361,8 +361,8 @@ export function TimeLogs() {
     const overlaps = (!dateFrom || end >= dateFrom) && (!dateTo || start <= dateTo);
     const matchSearch = !searchTerm || lv.memberName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchMember = filterMember === 'all' || lv.userId === filterMember;
-    const matchStatus = filterStatus === 'all' || filterStatus === 'completed';
-    return overlaps && matchSearch && matchMember && matchStatus;
+    // Leaves show regardless of status filter — they are neither "active" nor "completed" clock sessions
+    return overlaps && matchSearch && matchMember;
   });
 
   // Members on leave today (used to replace "Not clocked in" with leave status)

@@ -211,13 +211,13 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
       take:    limit,
     });
 
-    // Enrich with user data separately (non-fatal)
-    const userIds  = [...new Set(logs.map(l => l.userId).filter(Boolean))];
+    // Collect user IDs from logs — leave user IDs added after leaves are fetched
+    const logUserIds = [...new Set(logs.map(l => l.userId).filter(Boolean))];
     const usersMap = {};
-    if (userIds.length) {
+    if (logUserIds.length) {
       try {
         const users = await prisma.user.findMany({
-          where: { id: { in: userIds } },
+          where: { id: { in: logUserIds } },
           select: { id: true, name: true, email: true, image: true },
         });
         users.forEach(u => { usersMap[u.id] = u; });
@@ -267,9 +267,7 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
     // Fetch approved leaves for the same scope
     let leaves = [];
     try {
-      const leaveUserIds = isPrivileged
-        ? null // all org members — filter by orgId only
-        : clientStaffIds || [userId];
+      const leaveUserIds = isPrivileged ? null : clientStaffIds || [userId];
       let leaveSql, leaveParams;
       if (isPrivileged) {
         leaveSql = 'SELECT id, userId, orgId, type, status, startDate, endDate, days, reason FROM leaves WHERE orgId = ? AND status = ? ORDER BY startDate DESC LIMIT 500';
@@ -280,8 +278,26 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
         leaveParams = [orgId, ...leaveUserIds, 'APPROVED'];
       }
       const rawLeaves = await prisma.$queryRawUnsafe(leaveSql, ...leaveParams);
+
+      // Build a rich user lookup: allMembers already has everyone for privileged; also merge usersMap
+      const richUserMap = {};
+      allMembers.forEach(m => { richUserMap[m.id] = { name: m.name, email: m.email, image: m.image }; });
+      Object.entries(usersMap).forEach(([id, u]) => { if (!richUserMap[id]) richUserMap[id] = u; });
+
+      // If any leave user is still missing, fetch them now
+      const missingIds = rawLeaves.map(l => l.userId).filter(id => !richUserMap[id]);
+      if (missingIds.length) {
+        try {
+          const extra = await prisma.user.findMany({
+            where: { id: { in: [...new Set(missingIds)] } },
+            select: { id: true, name: true, email: true, image: true },
+          });
+          extra.forEach(u => { richUserMap[u.id] = u; });
+        } catch { /* non-fatal */ }
+      }
+
       leaves = rawLeaves.map(l => {
-        const u = usersMap[l.userId];
+        const u = richUserMap[l.userId];
         return {
           id:          l.id,
           userId:      l.userId,
@@ -289,7 +305,7 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
           status:      l.status,
           startDate:   l.startDate instanceof Date ? l.startDate.toISOString() : l.startDate,
           endDate:     l.endDate   instanceof Date ? l.endDate.toISOString()   : l.endDate,
-          days:        l.days,
+          days:        Number(l.days),
           reason:      l.reason || null,
           memberName:  u?.name || u?.email || 'Unknown',
           memberEmail: u?.email || '',
