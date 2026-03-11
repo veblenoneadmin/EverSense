@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Project } from '../hooks/useTasks';
-import { X, Save, Building2, Star, Calendar, DollarSign, Users, Target, Zap, Search, ChevronDown } from 'lucide-react';
+import { X, Save, Building2, Star, Calendar, Users, Target, Zap, Search, ChevronDown } from 'lucide-react';
 
 import { VS } from '../lib/theme';
 
@@ -401,20 +401,6 @@ export function ProjectModal({ isOpen, onClose, onSave, onUpdate, project, clien
                 <option value="high">High Priority</option>
               </select>
             </div>
-          </div>
-
-          {/* Budget */}
-          <div>
-            <label style={labelStyle}><DollarSign size={13} /> Budget ($)</label>
-            <input
-              type="number"
-              value={formData.budget}
-              onChange={e => setFormData(prev => ({ ...prev, budget: e.target.value }))}
-              placeholder="0"
-              min="0"
-              step="100"
-              style={fieldStyle}
-            />
           </div>
 
           {/* Start + End Date */}

@@ -21,6 +21,7 @@ interface Client {
   totalHours: number;
   totalEarnings: number;
   hourlyRate: number;
+  budget: number | null;
   lastActivity: string;
   contactPerson: string;
   industry: string;
@@ -61,7 +62,7 @@ const taskStatusColor: Record<string, string> = {
 
 const EMPTY_FORM = {
   name: '', company: '', email: '', phone: '', address: '',
-  contactPerson: '', industry: '', hourlyRate: 95,
+  contactPerson: '', industry: '', hourlyRate: 95, budget: '' as string | number,
   priority: 'medium' as 'low' | 'medium' | 'high', notes: '', status: 'active' as 'active' | 'inactive' | 'potential',
 };
 
@@ -149,7 +150,8 @@ export function Clients() {
       name: c.name, company: c.company || '', email: c.email || '',
       phone: c.phone || '', address: c.address || '',
       contactPerson: c.contactPerson || '', industry: c.industry || '',
-      hourlyRate: c.hourlyRate || 0, priority: c.priority || 'medium',
+      hourlyRate: c.hourlyRate || 0, budget: c.budget || '',
+      priority: c.priority || 'medium',
       notes: c.notes || '', status: c.status || 'active',
     });
   };
@@ -335,6 +337,12 @@ export function Clients() {
                       <div>
                         <div className="text-[14px] font-bold" style={{ color: VS.text0 }}>${client.hourlyRate}/hr</div>
                         <div className="text-[11px]" style={{ color: VS.text2 }}>Rate</div>
+                      </div>
+                    )}
+                    {client.budget != null && client.budget > 0 && (
+                      <div>
+                        <div className="text-[14px] font-bold" style={{ color: VS.orange }}>${Number(client.budget).toLocaleString()}</div>
+                        <div className="text-[11px]" style={{ color: VS.text2 }}>Budget</div>
                       </div>
                     )}
                   </div>
@@ -527,6 +535,11 @@ function ClientForm({ form, setForm, onSubmit, loading, onCancel, label, showSta
           <label className="block text-[12px] font-semibold mb-1.5" style={{ color: VS.text2 }}>Hourly Rate ($)</label>
           <input type="number" min="0" step="5" value={form.hourlyRate}
             onChange={e => f('hourlyRate', parseFloat(e.target.value) || 0)} style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[12px] font-semibold mb-1.5" style={{ color: VS.text2 }}>Budget ($)</label>
+          <input type="number" min="0" step="100" placeholder="0" value={form.budget}
+            onChange={e => f('budget', e.target.value)} style={inputStyle} />
         </div>
         <div>
           <label className="block text-[12px] font-semibold mb-1.5" style={{ color: VS.text2 }}>Priority</label>
