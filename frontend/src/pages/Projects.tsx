@@ -20,6 +20,8 @@ import {
   X,
   User,
   ChevronRight,
+  ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { ProjectModal } from '../components/ProjectModal';
 
@@ -345,6 +347,23 @@ export function Projects() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
   const [userRole, setUserRole] = useState<string>('');
+
+  // ── Tasks dropdown per card ──
+  const [expandedTasksId, setExpandedTasksId] = useState<string | null>(null);
+  const [projectTasksMap, setProjectTasksMap] = useState<Record<string, { id: string; title: string; status: string; priority: string; assignee?: string }[]>>({});
+  const [tasksFetchingId, setTasksFetchingId] = useState<string | null>(null);
+
+  const toggleProjectTasks = async (projectId: string) => {
+    if (expandedTasksId === projectId) { setExpandedTasksId(null); return; }
+    setExpandedTasksId(projectId);
+    if (projectTasksMap[projectId]) return; // already cached
+    setTasksFetchingId(projectId);
+    try {
+      const data = await apiClient.fetch(`/api/tasks?projectId=${projectId}`);
+      setProjectTasksMap(m => ({ ...m, [projectId]: data.tasks || [] }));
+    } catch { /* ignore */ }
+    finally { setTasksFetchingId(null); }
+  };
 
   // ── Overview / generate state ──
   const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -771,6 +790,51 @@ export function Projects() {
                         </span>
                       ) : '—'}
                     </span>
+                  </div>
+
+                  {/* ── Tasks toggle ── */}
+                  <div style={{ borderTop: `1px dashed ${VS.border}` }}>
+                    <button
+                      onClick={() => toggleProjectTasks(project.id)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-[12px] transition-colors hover:bg-white/5"
+                      style={{ color: expandedTasksId === project.id ? VS.accent : VS.text2 }}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <CheckSquare className="h-3.5 w-3.5" />
+                        Tasks ({project.tasks?.total || 0})
+                      </span>
+                      {tasksFetchingId === project.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : expandedTasksId === project.id
+                          ? <ChevronDown className="h-3.5 w-3.5" />
+                          : <ChevronRight className="h-3.5 w-3.5" />
+                      }
+                    </button>
+
+                    {expandedTasksId === project.id && (
+                      <div className="px-4 pb-3 space-y-1.5">
+                        {(projectTasksMap[project.id] || []).length === 0 ? (
+                          <p className="text-[11px] py-1" style={{ color: VS.text2 }}>No tasks yet</p>
+                        ) : (projectTasksMap[project.id] || []).map(task => {
+                          const tsCfg = TASK_STATUS[task.status] || { label: task.status, color: VS.text2 };
+                          const tpCfg = TASK_PRIORITY[task.priority] || { label: task.priority, color: VS.text2 };
+                          return (
+                            <div key={task.id}
+                              className="flex items-center gap-2 rounded-lg px-2.5 py-2"
+                              style={{ background: VS.bg3, border: `1px solid ${VS.border}` }}
+                            >
+                              <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: tsCfg.color }} />
+                              <span className="flex-1 text-[12px] truncate" style={{ color: VS.text1 }}>{task.title}</span>
+                              <span className="text-[10px] font-semibold shrink-0" style={{ color: tpCfg.color }}>{tpCfg.label}</span>
+                              <span className="text-[10px] shrink-0" style={{ color: tsCfg.color }}>{tsCfg.label}</span>
+                              {task.assignee && (
+                                <span className="text-[10px] truncate max-w-[70px] shrink-0" style={{ color: VS.text2 }}>{task.assignee}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                 </div>
