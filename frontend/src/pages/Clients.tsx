@@ -532,11 +532,6 @@ function ClientForm({ form, setForm, onSubmit, loading, onCancel, label, showSta
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[12px] font-semibold mb-1.5" style={{ color: VS.text2 }}>Hourly Rate ($)</label>
-          <input type="number" min="0" step="5" value={form.hourlyRate}
-            onChange={e => f('hourlyRate', parseFloat(e.target.value) || 0)} style={inputStyle} />
-        </div>
-        <div>
           <label className="block text-[12px] font-semibold mb-1.5" style={{ color: VS.text2 }}>Budget ($)</label>
           <input type="number" min="0" step="100" placeholder="0" value={form.budget}
             onChange={e => f('budget', e.target.value)} style={inputStyle} />
