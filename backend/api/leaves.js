@@ -51,6 +51,29 @@ function requireInternalSecret(req, res, next) {
   next();
 }
 
+// GET /api/leaves?userId=xxx&orgId=xxx — query synced leaves (internal use)
+router.get('/', requireInternalSecret, async (req, res) => {
+  try {
+    await ensureTable();
+    const { userId, orgId } = req.query;
+    if (!userId && !orgId) return res.status(400).json({ error: 'userId or orgId is required' });
+
+    const where = [];
+    const params = [];
+    if (userId) { where.push('userId = ?'); params.push(userId); }
+    if (orgId)  { where.push('orgId = ?');  params.push(orgId); }
+
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM leaves WHERE ${where.join(' AND ')} ORDER BY startDate DESC LIMIT 100`,
+      ...params
+    );
+    res.json({ leaves: rows });
+  } catch (err) {
+    console.error('[Leaves] GET error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/leaves — receive approved leave from HRSense
 router.post('/', requireInternalSecret, async (req, res) => {
   try {
