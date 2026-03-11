@@ -200,10 +200,10 @@ export function Tasks() {
   }, [session]);
 
   // ── fetch tasks ────────────────────────────────────────────────────────────
-  const fetchTasks = async () => {
+  const fetchTasks = async (showLoader = true) => {
     if (!session?.user?.id || !currentOrg?.id) return;
     try {
-      setLoading(true);
+      if (showLoader) setLoading(true);
       const isAdmin = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
       const taskUrl = (isAdmin && !showAllTasks)
         ? `/api/tasks?userId=${session.user.id}`
@@ -394,7 +394,7 @@ export function Tasks() {
         method: 'PATCH',
         body: JSON.stringify({ actualHours: parseFloat((newAccum[taskId] / 3600).toFixed(2)) }),
       });
-      await fetchTasks();
+      await fetchTasks(false);
     } catch { /* silent */ }
   };
 
@@ -472,7 +472,7 @@ export function Tasks() {
         }),
       });
       if (data.task) {
-        await fetchTasks();
+        await fetchTasks(false);
         setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] });
         setShowNewTaskForm(false);
       }
@@ -502,7 +502,7 @@ export function Tasks() {
         }),
       });
       if (data.task) {
-        await fetchTasks();
+        await fetchTasks(false);
         setEditingTask(null);
       }
     } catch { alert('Failed to update task.'); }

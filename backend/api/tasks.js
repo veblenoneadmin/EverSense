@@ -130,6 +130,21 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         { userId: req.user.id },
         ...(staffAssigneeTaskIds.length > 0 ? [{ id: { in: staffAssigneeTaskIds } }] : [])
       ];
+    } else if (userId && callerRole !== 'CLIENT') {
+      // ADMIN/OWNER with userId filter — also include tasks where they're a multi-assignee
+      let assigneeTaskIds = [];
+      try {
+        await ensureAssigneesTable();
+        const rows = await prisma.$queryRawUnsafe(
+          `SELECT taskId FROM task_assignees WHERE userId = ? AND orgId = ?`,
+          userId, orgId
+        );
+        assigneeTaskIds = rows.map(r => r.taskId);
+      } catch (_) {}
+      if (assigneeTaskIds.length > 0) {
+        delete where.userId;
+        where.OR = [{ userId }, { id: { in: assigneeTaskIds } }];
+      }
     }
 
     const tasks = await prisma.macroTask.findMany({
