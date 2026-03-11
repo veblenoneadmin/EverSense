@@ -42,7 +42,33 @@ async function ensureAttendanceTable() {
     // Column already exists — silently ignore
   }
 }
+
+async function ensureLeavesTable() {
+  try {
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `leaves` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `userId` VARCHAR(36) NOT NULL,' +
+      '  `orgId` VARCHAR(191) NOT NULL,' +
+      '  `type` VARCHAR(50) NOT NULL,' +
+      '  `status` VARCHAR(20) NOT NULL DEFAULT \'APPROVED\',' +
+      '  `startDate` DATETIME(3) NOT NULL,' +
+      '  `endDate` DATETIME(3) NOT NULL,' +
+      '  `days` INT NOT NULL,' +
+      '  `reason` TEXT NULL,' +
+      '  `approvedAt` DATETIME(3) NULL,' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  PRIMARY KEY (`id`),' +
+      '  KEY `leaves_userId_idx` (`userId`),' +
+      '  KEY `leaves_orgId_idx` (`orgId`),' +
+      '  KEY `leaves_userId_startDate_idx` (`userId`, `startDate`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+  } catch { /* already exists */ }
+}
+
 ensureAttendanceTable();
+ensureLeavesTable();
 
 // ── Helper: today's date string YYYY-MM-DD ────────────────────────────────────
 function todayStr() {
@@ -313,7 +339,8 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
           memberRole:  roleMap[l.userId] || role,
         };
       });
-    } catch (e) { console.warn('[Attendance] leaves fetch failed:', e.message); }
+      console.log(`[Attendance] leaves fetched: ${rawLeaves.length} record(s) for orgId=${orgId}`);
+    } catch (e) { console.error('[Attendance] leaves fetch failed:', e.message); }
 
     return res.json({
       role,
