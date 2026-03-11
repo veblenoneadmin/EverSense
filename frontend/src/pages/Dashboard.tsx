@@ -237,6 +237,7 @@ export function Dashboard() {
         body: JSON.stringify({ ...(currentOrg?.id && { orgId: currentOrg.id }), breakDuration: totalBreak }),
       });
       if (res.ok) {
+        window.dispatchEvent(new CustomEvent('task-timer-stop'));
         setAttendanceActive(null);
         fetchDashboard();
         window.dispatchEvent(new CustomEvent('attendance-change'));
@@ -253,6 +254,7 @@ export function Dashboard() {
       localStorage.setItem('att_break_used', todayStr());
       setOnBreak(true);
       setBreakUsed(true);
+      window.dispatchEvent(new CustomEvent('task-timer-pause'));
     } else {
       const started = Number(localStorage.getItem('att_break_start') || Date.now());
       const secs = Math.floor((Date.now() - started) / 1000);
@@ -261,6 +263,7 @@ export function Dashboard() {
       localStorage.removeItem('att_break_start');
       setBreakAccum(newAccum);
       setOnBreak(false);
+      window.dispatchEvent(new CustomEvent('task-timer-resume'));
     }
     window.dispatchEvent(new CustomEvent('attendance-change'));
   };

@@ -279,7 +279,10 @@ export function TimeLogs() {
         headers,
         body: JSON.stringify({ ...(orgId && { orgId }), breakDuration: totalBreak }),
       });
-      if (res.ok) { await fetchStatus(); await fetchLogs(false); window.dispatchEvent(new CustomEvent('attendance-change')); }
+      if (res.ok) {
+        window.dispatchEvent(new CustomEvent('task-timer-stop'));
+        await fetchStatus(); await fetchLogs(false); window.dispatchEvent(new CustomEvent('attendance-change'));
+      }
       else { const d = await res.json(); alert(d.error || 'Failed to clock out'); }
     } catch (err) { console.error(err); } finally { setClockLoading(false); }
   };
@@ -292,6 +295,7 @@ export function TimeLogs() {
       localStorage.setItem('att_break_used', todayStr());
       setOnBreak(true);
       setBreakUsed(true);
+      window.dispatchEvent(new CustomEvent('task-timer-pause'));
     } else {
       const started = Number(localStorage.getItem('att_break_start') || Date.now());
       const secs    = Math.floor((Date.now() - started) / 1000);
@@ -301,6 +305,7 @@ export function TimeLogs() {
       setBreakAccum(newAccum);
       setOnBreak(false);
       setBreakElapsed(0);
+      window.dispatchEvent(new CustomEvent('task-timer-resume'));
     }
     window.dispatchEvent(new CustomEvent('attendance-change'));
   };

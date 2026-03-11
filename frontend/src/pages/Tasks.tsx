@@ -184,8 +184,11 @@ export function Tasks() {
   const [timerAccum, setTimerAccum] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
   });
+  const [timerPaused, setTimerPaused] = useState<boolean>(() => !!localStorage.getItem('task_timer_paused'));
   const [, setTick] = useState(0); // drives live display
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Refs so event handlers always see current values without re-registering
+  const timerStateRef = useRef({ timerTaskId, timerStart, timerPaused });
 
   // ── fetch user role ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -253,15 +256,77 @@ export function Tasks() {
       .catch(() => {});
   }, [session?.user?.id, currentOrg?.id]);
 
+  // Keep ref in sync with latest timer state
+  useEffect(() => {
+    timerStateRef.current = { timerTaskId, timerStart, timerPaused };
+  }, [timerTaskId, timerStart, timerPaused]);
+
   // ── timer: resume interval on mount if a timer was running ─────────────────
   useEffect(() => {
     const active = (() => {
       try { return JSON.parse(localStorage.getItem('task_timer_active') || 'null'); } catch { return null; }
     })();
-    if (active?.taskId && active?.startTime) {
+    const paused = !!localStorage.getItem('task_timer_paused');
+    if (active?.taskId && active?.startTime && !paused) {
       timerInterval.current = setInterval(() => setTick(t => t + 1), 1000);
     }
     return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
+  }, []);
+
+  // ── timer: respond to attendance break/resume/clock-out ────────────────────
+  useEffect(() => {
+    const onPause = () => {
+      const { timerTaskId: taskId, timerStart: start, timerPaused: paused } = timerStateRef.current;
+      if (!taskId || paused) return;
+      if (timerInterval.current) { clearInterval(timerInterval.current); timerInterval.current = null; }
+      // Save elapsed since last start into accum
+      const elapsed = start !== null ? Math.floor((Date.now() - start) / 1000) : 0;
+      const stored: Record<string, number> = (() => {
+        try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
+      })();
+      const newAccum = { ...stored, [taskId]: (stored[taskId] || 0) + elapsed };
+      localStorage.setItem('task_timers', JSON.stringify(newAccum));
+      setTimerAccum(newAccum);
+      setTimerStart(null);
+      localStorage.removeItem('task_timer_start');
+      localStorage.setItem('task_timer_paused', taskId);
+      setTimerPaused(true);
+    };
+
+    const onResume = () => {
+      const pausedTaskId = localStorage.getItem('task_timer_paused');
+      if (!pausedTaskId) return;
+      const startTime = Date.now();
+      setTimerTaskId(pausedTaskId);
+      setTimerStart(startTime);
+      localStorage.setItem('task_timer_active', JSON.stringify({ taskId: pausedTaskId, startTime }));
+      localStorage.setItem('task_timer_start', String(startTime));
+      localStorage.removeItem('task_timer_paused');
+      setTimerPaused(false);
+      if (timerInterval.current) clearInterval(timerInterval.current);
+      timerInterval.current = setInterval(() => setTick(t => t + 1), 1000);
+    };
+
+    const onStop = () => {
+      const { timerTaskId: taskId } = timerStateRef.current;
+      const pausedTaskId = localStorage.getItem('task_timer_paused');
+      const activeTaskId = taskId || pausedTaskId;
+      if (!activeTaskId) return;
+      localStorage.removeItem('task_timer_paused');
+      setTimerPaused(false);
+      // handleStopTimer reads from localStorage, works for both running and paused states
+      handleStopTimer(activeTaskId);
+    };
+
+    window.addEventListener('task-timer-pause',  onPause);
+    window.addEventListener('task-timer-resume', onResume);
+    window.addEventListener('task-timer-stop',   onStop);
+    return () => {
+      window.removeEventListener('task-timer-pause',  onPause);
+      window.removeEventListener('task-timer-resume', onResume);
+      window.removeEventListener('task-timer-stop',   onStop);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── timer helpers ──────────────────────────────────────────────────────────

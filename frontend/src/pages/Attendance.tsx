@@ -214,6 +214,7 @@ export function Attendance() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to clock out');
+      window.dispatchEvent(new CustomEvent('task-timer-stop'));
       setNotes('');
       await loadAll();
       window.dispatchEvent(new CustomEvent('attendance-change'));
@@ -229,6 +230,7 @@ export function Attendance() {
       localStorage.setItem('att_break_used', todayStr());
       setOnBreak(true);
       setBreakUsed(true);
+      window.dispatchEvent(new CustomEvent('task-timer-pause'));
     } else {
       const started = Number(localStorage.getItem('att_break_start') || Date.now());
       const secs = Math.floor((Date.now() - started) / 1000);
@@ -237,6 +239,7 @@ export function Attendance() {
       localStorage.removeItem('att_break_start');
       setBreakAccum(newAccum);
       setOnBreak(false);
+      window.dispatchEvent(new CustomEvent('task-timer-resume'));
     }
     window.dispatchEvent(new CustomEvent('attendance-change'));
   };
