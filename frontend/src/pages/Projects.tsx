@@ -6,7 +6,6 @@ import {
   Building2,
   Plus,
   Calendar,
-  DollarSign,
   Clock,
   Target,
   AlertCircle,
@@ -763,12 +762,6 @@ export function Projects() {
                         <Clock className="h-3.5 w-3.5" />
                         {project.hoursLogged}h
                       </span>
-                      {project.budget && project.budget > 0 && (
-                        <span className="flex items-center gap-1 text-[12px]" style={{ color: VS.text2 }}>
-                          <DollarSign className="h-3.5 w-3.5" />
-                          {Math.round(((project.spent || 0) / project.budget) * 100)}%
-                        </span>
-                      )}
                     </div>
                     <span className="text-[12px] font-medium" style={{ color: isOver ? VS.red : VS.text2 }}>
                       {project.endDate ? (
@@ -780,24 +773,6 @@ export function Projects() {
                     </span>
                   </div>
 
-                  {project.budget && project.budget > 0 && (
-                    <div className="px-4 pb-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px]" style={{ color: VS.text2 }}>
-                          Budget ${(project.spent || 0).toLocaleString()} / ${project.budget.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="h-1 rounded-full overflow-hidden" style={{ background: VS.bg3 }}>
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.min(((project.spent || 0) / project.budget) * 100, 100)}%`,
-                            background: (project.spent || 0) > project.budget ? VS.red : VS.green,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
