@@ -787,10 +787,8 @@ export function TimeLogs() {
                   );
                 })
               }
-              {/* Leave rows from HRSense — show for date ranges outside today */}
-              {isPrivileged && filteredLeaves
-                .filter(lv => !onLeaveToday.has(lv.userId) || lv.startDate.slice(0,10) !== today || lv.endDate.slice(0,10) !== today)
-                .map(lv => {
+              {/* Leave rows from HRSense — all leaves in the filtered date range */}
+              {filteredLeaves.map(lv => {
                   const isSick = lv.type?.toLowerCase().includes('sick');
                   const label  = isSick ? 'Sick Leave' : 'On Leave';
                   const color  = isSick ? VS.orange : VS.yellow;
@@ -832,8 +830,7 @@ export function TimeLogs() {
                       </td>
                     </tr>
                   );
-                })
-              }
+                })}
               {filteredLogs.map((log: AttendanceLog) => {
                 const isOwnActive = log.isActive && log.memberId === session?.user?.id;
                 return (
