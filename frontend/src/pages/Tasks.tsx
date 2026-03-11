@@ -184,7 +184,6 @@ export function Tasks() {
   const [timerAccum, setTimerAccum] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
   });
-  const [timerPaused, setTimerPaused] = useState<boolean>(() => !!localStorage.getItem('task_timer_paused'));
   const [, setTick] = useState(0); // drives live display
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -277,7 +276,7 @@ export function Tasks() {
       })();
       setTimerAccum(accum);
       setTimerStart(null);
-      setTimerPaused(true);
+
     };
 
     const onResume = () => {
@@ -287,7 +286,7 @@ export function Tasks() {
       if (!active?.taskId) return;
       setTimerTaskId(active.taskId);
       setTimerStart(active.startTime);
-      setTimerPaused(false);
+
       if (timerInterval.current) clearInterval(timerInterval.current);
       timerInterval.current = setInterval(() => setTick(t => t + 1), 1000);
     };
@@ -300,7 +299,7 @@ export function Tasks() {
       setTimerAccum(accum);
       setTimerTaskId(null);
       setTimerStart(null);
-      setTimerPaused(false);
+
     };
 
     window.addEventListener('task-timer-pause',  onPause);
