@@ -264,10 +264,46 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
       } catch { /* non-fatal */ }
     }
 
+    // Fetch approved leaves for the same scope
+    let leaves = [];
+    try {
+      const leaveUserIds = isPrivileged
+        ? null // all org members — filter by orgId only
+        : clientStaffIds || [userId];
+      let leaveSql, leaveParams;
+      if (isPrivileged) {
+        leaveSql = 'SELECT id, userId, orgId, type, status, startDate, endDate, days, reason FROM leaves WHERE orgId = ? AND status = ? ORDER BY startDate DESC LIMIT 500';
+        leaveParams = [orgId, 'APPROVED'];
+      } else {
+        const ph = leaveUserIds.map(() => '?').join(',');
+        leaveSql = `SELECT id, userId, orgId, type, status, startDate, endDate, days, reason FROM leaves WHERE orgId = ? AND userId IN (${ph}) AND status = ? ORDER BY startDate DESC LIMIT 500`;
+        leaveParams = [orgId, ...leaveUserIds, 'APPROVED'];
+      }
+      const rawLeaves = await prisma.$queryRawUnsafe(leaveSql, ...leaveParams);
+      leaves = rawLeaves.map(l => {
+        const u = usersMap[l.userId];
+        return {
+          id:          l.id,
+          userId:      l.userId,
+          type:        l.type,
+          status:      l.status,
+          startDate:   l.startDate instanceof Date ? l.startDate.toISOString() : l.startDate,
+          endDate:     l.endDate   instanceof Date ? l.endDate.toISOString()   : l.endDate,
+          days:        l.days,
+          reason:      l.reason || null,
+          memberName:  u?.name || u?.email || 'Unknown',
+          memberEmail: u?.email || '',
+          memberImage: u?.image || null,
+          memberRole:  roleMap[l.userId] || role,
+        };
+      });
+    } catch (e) { console.warn('[Attendance] leaves fetch failed:', e.message); }
+
     return res.json({
       role,
       isPrivileged: showTeamView,
       allMembers,
+      leaves,
       logs: logs.map(l => formatLog(l, usersMap[l.userId], roleMap[l.userId] || role)),
     });
   } catch (err) {

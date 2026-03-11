@@ -13,6 +13,21 @@ import { VS } from '../lib/theme';
 const BREAK_LIMIT = 1800; // 30 minutes in seconds
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
+interface LeaveRecord {
+  id: string;
+  userId: string;
+  type: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason: string | null;
+  memberName: string;
+  memberEmail: string;
+  memberImage: string | null;
+  memberRole: string;
+}
+
 interface AttendanceLog {
   id: string;
   date: string;
@@ -115,6 +130,7 @@ export function TimeLogs() {
   const [isPrivileged, setIsPrivileged] = useState(false);
   const [userRole, setUserRole]     = useState('STAFF');
   const [isClient, setIsClient]     = useState(false);
+  const [leaves, setLeaves]         = useState<LeaveRecord[]>([]);
 
   // Clock state
   const [clockedIn, setClockedIn]   = useState(false);
@@ -175,6 +191,7 @@ export function TimeLogs() {
         setUserRole(data.role ?? 'STAFF');
         setLogs(data.logs || []);
         setAllMembers(data.allMembers || []);
+        setLeaves(data.leaves || []);
       }
     } catch (err) {
       console.error('Failed to fetch attendance logs:', err);
@@ -337,6 +354,24 @@ export function TimeLogs() {
     const matchStatus = filterStatus === 'all' || (filterStatus === 'active' ? log.isActive : !log.isActive);
     return matchSearch && matchMember && matchDate && matchStatus;
   });
+
+  const filteredLeaves = leaves.filter((lv: LeaveRecord) => {
+    const start = lv.startDate.slice(0, 10);
+    const end   = lv.endDate.slice(0, 10);
+    const overlaps = (!dateFrom || end >= dateFrom) && (!dateTo || start <= dateTo);
+    const matchSearch = !searchTerm || lv.memberName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchMember = filterMember === 'all' || lv.userId === filterMember;
+    const matchStatus = filterStatus === 'all' || filterStatus === 'completed';
+    return overlaps && matchSearch && matchMember && matchStatus;
+  });
+
+  // Members on leave today (used to replace "Not clocked in" with leave status)
+  const today = new Date().toLocaleDateString('en-CA');
+  const onLeaveToday = new Map<string, LeaveRecord>(
+    leaves
+      .filter(lv => lv.startDate.slice(0, 10) <= today && lv.endDate.slice(0, 10) >= today)
+      .map(lv => [lv.userId, lv])
+  );
 
   const completedLogs   = filteredLogs.filter(l => !l.isActive);
   const totalSeconds    = completedLogs.reduce((s, l) => s + (l.duration || 0), 0);
@@ -709,39 +744,95 @@ export function TimeLogs() {
                 .filter(m => filterMember === 'all' || filterMember === m.id)
                 .filter(m => !searchTerm || m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.email.toLowerCase().includes(searchTerm.toLowerCase()))
                 .filter(() => filterStatus === 'all' || filterStatus === 'completed')
-                .map(m => (
-                  <tr key={`absent-${m.id}`}
-                    className="transition-colors hover:bg-white/[0.02]"
-                    style={{ borderBottom: `1px solid ${VS.border}`, opacity: 0.55 }}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <MemberAvatar name={m.name} image={m.image} />
-                        <div>
-                          <p className="font-medium leading-tight" style={{ color: VS.text0 }}>{m.name}</p>
-                          <p className="text-[10px] leading-tight" style={{ color: VS.text2 }}>{m.email}</p>
-                          <span className="text-[10px] font-semibold capitalize"
-                            style={{ color: (ROLE_STYLE[m.role] ?? ROLE_STYLE.STAFF).color }}>
-                            {m.role.toLowerCase()}
-                          </span>
+                .map(m => {
+                  const leaveToday = onLeaveToday.get(m.id);
+                  const leaveLabel = leaveToday
+                    ? (leaveToday.type?.toLowerCase().includes('sick') ? 'Sick Leave' : 'On Leave')
+                    : 'Not clocked in';
+                  const leaveColor = leaveToday ? VS.yellow : VS.text2;
+                  return (
+                    <tr key={`absent-${m.id}`}
+                      className="transition-colors hover:bg-white/[0.02]"
+                      style={{ borderBottom: `1px solid ${VS.border}`, opacity: 0.55 }}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <MemberAvatar name={m.name} image={m.image} />
+                          <div>
+                            <p className="font-medium leading-tight" style={{ color: VS.text0 }}>{m.name}</p>
+                            <p className="text-[10px] leading-tight" style={{ color: VS.text2 }}>{m.email}</p>
+                            <span className="text-[10px] font-semibold capitalize"
+                              style={{ color: (ROLE_STYLE[m.role] ?? ROLE_STYLE.STAFF).color }}>
+                              {m.role.toLowerCase()}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
-                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
-                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
-                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
-                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
-                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
-                    <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
-                        style={{ background: `${VS.text2}10`, color: VS.text2, border: `1px solid ${VS.border}` }}>
-                        Not clocked in
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>
+                        {leaveToday ? `${new Date(leaveToday.startDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${new Date(leaveToday.endDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : '—'}
+                      </td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                          style={{ background: `${leaveColor}18`, color: leaveColor, border: `1px solid ${leaveColor}30` }}>
+                          {leaveLabel}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              }
+              {/* Leave rows from HRSense — show for date ranges outside today */}
+              {isPrivileged && filteredLeaves
+                .filter(lv => !onLeaveToday.has(lv.userId) || lv.startDate.slice(0,10) !== today || lv.endDate.slice(0,10) !== today)
+                .map(lv => {
+                  const isSick = lv.type?.toLowerCase().includes('sick');
+                  const label  = isSick ? 'Sick Leave' : 'On Leave';
+                  const color  = isSick ? VS.orange : VS.yellow;
+                  return (
+                    <tr key={`leave-${lv.id}`}
+                      className="transition-colors hover:bg-white/[0.02]"
+                      style={{ borderBottom: `1px solid ${VS.border}` }}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <MemberAvatar name={lv.memberName} image={lv.memberImage} />
+                          <div>
+                            <p className="font-medium leading-tight" style={{ color: VS.text0 }}>{lv.memberName}</p>
+                            <p className="text-[10px] leading-tight" style={{ color: VS.text2 }}>{lv.memberEmail}</p>
+                            <span className="text-[10px] font-semibold capitalize"
+                              style={{ color: (ROLE_STYLE[lv.memberRole] ?? ROLE_STYLE.STAFF).color }}>
+                              {lv.memberRole.toLowerCase()}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3" style={{ color: VS.text1 }}>
+                        {new Date(lv.startDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                        {lv.days > 1 && ` – ${new Date(lv.endDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`}
+                      </td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3">
+                        <span style={{ color: color }}>{lv.days}d</span>
+                      </td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3" style={{ color: VS.text2 }}>—</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                          style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+                          {label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               }
               {filteredLogs.map((log: AttendanceLog) => {
                 const isOwnActive = log.isActive && log.memberId === session?.user?.id;
