@@ -264,7 +264,7 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         if (userIds.length) {
           const uph = userIds.map(() => '?').join(',');
           const users = await prisma.$queryRawUnsafe(
-            `SELECT id, name, email FROM \`user\` WHERE id IN (${uph})`, ...userIds
+            `SELECT id, name, email FROM User WHERE id IN (${uph})`, ...userIds
           );
           const uMap = {};
           for (const u of users) uMap[u.id] = u;
@@ -296,7 +296,7 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       try {
         await ensureAssigneesTable();
         const rows = await prisma.$queryRawUnsafe(
-          `SELECT ta.taskId, ta.userId, u.name, u.email FROM task_assignees ta JOIN \`user\` u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
+          `SELECT ta.taskId, ta.userId, u.name, u.email FROM task_assignees ta JOIN User u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
           ...taskIds
         );
         const aMap = {};
