@@ -1090,9 +1090,11 @@ export function Tasks() {
                               <Paperclip className="h-3.5 w-3.5" />
                               {taskCounts[task.id]?.attachments ?? 0}
                             </span>
-                            <span className="flex items-center gap-1.5 text-[12px]" style={{ color: VS.text2 }}>
+                            <span className="flex items-center gap-1.5 text-[12px]" style={{ color: timerTaskId === task.id ? VS.teal : VS.text2 }}>
                               <Clock className="h-3.5 w-3.5" />
-                              {formatActualHours(task.actualHours || 0)}
+                              {timerTaskId === task.id
+                                ? formatTimer(getTimerSeconds(task.id))
+                                : formatActualHours(task.actualHours || 0)}
                             </span>
                           </div>
                           <span

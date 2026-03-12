@@ -448,13 +448,14 @@ router.post('/', requireAuth, withOrgScope, validateBody(taskSchemas.create), as
       userId,
       orgId,
       priority = 'Medium',
+      status = 'not_started',
       estimatedHours = 0,
       category = 'General',
       projectId,
       dueDate,
       tags
     } = req.body;
-    
+
     if (!title || !userId || !orgId) {
       return res.status(400).json({ error: 'title, userId, and orgId are required' });
     }
@@ -483,6 +484,7 @@ router.post('/', requireAuth, withOrgScope, validateBody(taskSchemas.create), as
         orgId,
         createdBy: userId,
         priority,
+        status,
         estimatedHours: parseFloat(estimatedHours),
         category: taskCategory,
         projectId: projectId || null,
