@@ -217,23 +217,6 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
 
     const tasks = await prisma.macroTask.findMany({
       where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        },
-        project: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            status: true
-          }
-        }
-      },
       orderBy: [
         { priority: 'desc' },
         { dueDate: 'asc' },
@@ -247,7 +230,7 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
 
     console.log(`✅ Found ${tasks.length} tasks for orgId: ${orgId}`);
 
-    // Format tasks for frontend compatibility
+    // Format tasks (no include: — enrich user/project separately to avoid collation issues)
     const formattedTasks = tasks.map(task => ({
       id: task.id,
       title: task.title,
@@ -257,27 +240,63 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       estimatedHours: task.estimatedHours,
       actualHours: task.actualHours || 0,
       dueDate: task.dueDate,
-      assignee: task.user?.name,
-      project: task.project?.name || null,
+      assignee: null,
+      project: null,
       projectId: task.projectId,
-      projectColor: task.project?.color,
-      projectStatus: task.project?.status,
-      isBillable: false, // Default for now
+      projectColor: null,
+      projectStatus: null,
+      isBillable: false,
       hourlyRate: 0,
       tags: task.tags ? (Array.isArray(task.tags) ? task.tags : []) : [],
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
+      userId: task.userId,
       assignees: [],
     }));
 
-    // Batch-fetch multi-assignees and attach to tasks
     if (formattedTasks.length > 0) {
+      const taskIds = formattedTasks.map(t => t.id);
+      const ph = taskIds.map(() => '?').join(',');
+
+      // Enrich primary assignee names via raw SQL (avoids collation JOIN issues)
+      try {
+        const userIds = [...new Set(formattedTasks.map(t => t.userId).filter(Boolean))];
+        if (userIds.length) {
+          const uph = userIds.map(() => '?').join(',');
+          const users = await prisma.$queryRawUnsafe(
+            `SELECT id, name, email FROM \`user\` WHERE id IN (${uph})`, ...userIds
+          );
+          const uMap = {};
+          for (const u of users) uMap[u.id] = u;
+          for (const t of formattedTasks) {
+            const u = uMap[t.userId];
+            if (u) t.assignee = u.name;
+          }
+        }
+      } catch (_) {}
+
+      // Enrich project names via raw SQL
+      try {
+        const projectIds = [...new Set(formattedTasks.map(t => t.projectId).filter(Boolean))];
+        if (projectIds.length) {
+          const pph = projectIds.map(() => '?').join(',');
+          const projects = await prisma.$queryRawUnsafe(
+            `SELECT id, name, color, status FROM projects WHERE id IN (${pph})`, ...projectIds
+          );
+          const pMap = {};
+          for (const p of projects) pMap[p.id] = p;
+          for (const t of formattedTasks) {
+            const p = pMap[t.projectId];
+            if (p) { t.project = p.name; t.projectColor = p.color; t.projectStatus = p.status; }
+          }
+        }
+      } catch (_) {}
+
+      // Batch-fetch multi-assignees
       try {
         await ensureAssigneesTable();
-        const taskIds = formattedTasks.map(t => t.id);
-        const ph = taskIds.map(() => '?').join(',');
         const rows = await prisma.$queryRawUnsafe(
-          `SELECT ta.taskId, ta.userId, u.name, u.email FROM task_assignees ta JOIN User u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
+          `SELECT ta.taskId, ta.userId, u.name, u.email FROM task_assignees ta JOIN \`user\` u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
           ...taskIds
         );
         const aMap = {};

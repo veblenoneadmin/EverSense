@@ -224,7 +224,7 @@ export function Tasks() {
         }
         setTaskCounts(mapped);
       }
-    } catch { /* ignore */ }
+    } catch (err) { console.error('[Tasks] fetchTasks error:', err); }
     finally { setLoading(false); }
   };
 
