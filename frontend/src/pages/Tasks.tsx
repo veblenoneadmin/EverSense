@@ -208,8 +208,8 @@ export function Tasks() {
       if (showLoader) setLoading(true);
       const isAdmin = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
       const taskUrl = (isAdmin && !showAllTasks)
-        ? `/api/tasks?userId=${session.user.id}`
-        : '/api/tasks';
+        ? `/api/tasks?userId=${session.user.id}&limit=200`
+        : '/api/tasks?limit=500';
       const [data, countsData] = await Promise.all([
         apiClient.fetch(taskUrl, { method: 'GET' }),
         apiClient.fetch('/api/tasks/counts', { method: 'GET' }).catch(() => ({ counts: {} })),

@@ -133,7 +133,7 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
 // Get tasks (main endpoint)
 router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.pagination), async (req, res) => {
   try {
-    const { orgId, userId, status, priority, projectId, limit = 50, offset = 0 } = req.query;
+    const { orgId, userId, status, priority, projectId, limit = 200, offset = 0 } = req.query;
 
     if (!orgId) {
       return res.status(400).json({ error: 'orgId is required' });
