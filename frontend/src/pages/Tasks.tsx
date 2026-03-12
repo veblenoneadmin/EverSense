@@ -255,14 +255,20 @@ export function Tasks() {
       .catch(() => {});
   }, [session?.user?.id, currentOrg?.id]);
 
-  // ── timer: resume interval on mount if a timer was running ─────────────────
+  // ── tick interval — always running so own timer + other users' timers update live ──
   useEffect(() => {
     const active = (() => {
       try { return JSON.parse(localStorage.getItem('task_timer_active') || 'null'); } catch { return null; }
     })();
     const paused = !!localStorage.getItem('task_timer_paused');
-    if (active?.taskId && active?.startTime && !paused) {
+    // Start interval unconditionally — drives both own timer display and
+    // admin view of other users' live timers (orange strips on cards)
+    if (!paused) {
       timerInterval.current = setInterval(() => setTick(t => t + 1), 1000);
+    }
+    // If own timer was running, restore timerStart from localStorage
+    if (active?.taskId && active?.startTime && !paused) {
+      // already set via useState initialiser — interval above handles ticking
     }
     return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
   }, []);
