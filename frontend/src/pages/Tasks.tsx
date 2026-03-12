@@ -186,6 +186,8 @@ export function Tasks() {
   });
   const [, setTick] = useState(0); // drives live display
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Active timers from other users (admin view)
+  const [activeTimers, setActiveTimers] = useState<{ userId: string; taskId: string; startedAt: number; name: string }[]>([]);
 
   // ── fetch user role ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -264,6 +266,19 @@ export function Tasks() {
     }
     return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
   }, []);
+
+  // ── poll org-wide active timers (admin only, every 5s) ────────────────────
+  useEffect(() => {
+    if (!isAdminOrOwner || !session?.user?.id || !currentOrg?.id) return;
+    const poll = () => {
+      apiClient.fetch('/api/tasks/active-timers')
+        .then(d => { if (d.timers) setActiveTimers(d.timers); })
+        .catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [isAdminOrOwner, session?.user?.id, currentOrg?.id]);
 
   // ── timer: respond to attendance break/resume/clock-out ────────────────────
   useEffect(() => {
@@ -351,6 +366,11 @@ export function Tasks() {
     localStorage.setItem('task_timer_active', JSON.stringify({ taskId, startTime }));
     localStorage.setItem('task_timer_start', String(startTime));
     timerInterval.current = setInterval(() => setTick(t => t + 1), 1000);
+    // Notify backend so admins can see this timer
+    apiClient.fetch('/api/tasks/timer/start', {
+      method: 'POST',
+      body: JSON.stringify({ taskId, startedAt: startTime }),
+    }).catch(() => {});
   };
 
   const handleMoveToInProgress = async (taskId: string) => {
@@ -390,10 +410,13 @@ export function Tasks() {
     setTimerTaskId(null);
     setTimerStart(null);
     try {
-      await apiClient.fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ actualHours: parseFloat((newAccum[taskId] / 3600).toFixed(2)) }),
-      });
+      await Promise.all([
+        apiClient.fetch(`/api/tasks/${taskId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ actualHours: parseFloat((newAccum[taskId] / 3600).toFixed(2)) }),
+        }),
+        apiClient.fetch('/api/tasks/timer/stop', { method: 'POST', body: JSON.stringify({}) }).catch(() => {}),
+      ]);
       await fetchTasks(false);
     } catch { /* silent */ }
   };
@@ -1052,7 +1075,7 @@ export function Tasks() {
                           </div>
                         )}
 
-                        {/* ── Live timer strip (only when running) ── */}
+                        {/* ── Live timer strip — own timer ── */}
                         {timerTaskId === task.id && (
                           <div
                             className="mx-4 mb-2 rounded-lg flex items-center justify-between px-3 py-1.5"
@@ -1075,6 +1098,27 @@ export function Tasks() {
                             </span>
                           </div>
                         )}
+                        {/* ── Live timer strips — other users (admin view) ── */}
+                        {isAdminOrOwner && activeTimers
+                          .filter(at => at.taskId === task.id && at.userId !== session?.user?.id)
+                          .map(at => (
+                            <div
+                              key={at.userId}
+                              className="mx-4 mb-2 rounded-lg flex items-center justify-between px-3 py-1.5"
+                              style={{ background: `${VS.orange}15`, border: `1px solid ${VS.orange}44` }}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: VS.orange }} />
+                                <span className="text-[10px] uppercase tracking-wider truncate max-w-[80px]" style={{ color: VS.orange }}>
+                                  {at.name.split(' ')[0]}
+                                </span>
+                              </div>
+                              <span className="text-[13px] font-mono font-bold tabular-nums" style={{ color: VS.orange }}>
+                                {formatTimer(Math.floor((Date.now() - at.startedAt) / 1000))}
+                              </span>
+                            </div>
+                          ))
+                        }
 
                         {/* ── Dashed separator ── */}
                         <div style={{ borderTop: `1px dashed ${VS.border}` }} />

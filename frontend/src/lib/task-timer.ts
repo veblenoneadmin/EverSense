@@ -6,6 +6,14 @@ function safeParse<T>(key: string): T | null {
   try { return JSON.parse(localStorage.getItem(key) || 'null') as T; } catch { return null; }
 }
 
+function clearBackendTimer() {
+  fetch('/api/tasks/timer/stop', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
+}
+
+function notifyBackendTimerStart(taskId: string, startedAt: number) {
+  fetch('/api/tasks/timer/start', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId, startedAt }) }).catch(() => {});
+}
+
 export function pauseTaskTimer() {
   const active = safeParse<{ taskId: string; startTime: number }>('task_timer_active');
   if (!active?.taskId || localStorage.getItem('task_timer_paused')) return;
@@ -18,6 +26,7 @@ export function pauseTaskTimer() {
   localStorage.removeItem('task_timer_start');
   localStorage.setItem('task_timer_paused', active.taskId);
 
+  clearBackendTimer();
   window.dispatchEvent(new CustomEvent('task-timer-pause'));
 }
 
@@ -30,6 +39,7 @@ export function resumeTaskTimer() {
   localStorage.setItem('task_timer_start', String(startTime));
   localStorage.removeItem('task_timer_paused');
 
+  notifyBackendTimerStart(pausedTaskId, startTime);
   window.dispatchEvent(new CustomEvent('task-timer-resume'));
 }
 
@@ -50,5 +60,6 @@ export function stopTaskTimer() {
   localStorage.removeItem('task_timer_start');
   localStorage.removeItem('task_timer_paused');
 
+  clearBackendTimer();
   window.dispatchEvent(new CustomEvent('task-timer-stop'));
 }

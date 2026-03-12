@@ -7,6 +7,25 @@ import { validateBody, validateQuery, commonSchemas, taskSchemas } from '../lib/
 import { createNotification } from './notifications.js';
 const router = express.Router();
 
+// ── Lazy active_timers table init ─────────────────────────────────────────────
+let activeTimersTableReady = false;
+async function ensureActiveTimersTable() {
+  if (activeTimersTableReady) return;
+  try {
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `active_timers` (' +
+      '  `id` VARCHAR(191) NOT NULL, `userId` VARCHAR(36) NOT NULL,' +
+      '  `taskId` VARCHAR(50) NOT NULL, `orgId` VARCHAR(191) NOT NULL,' +
+      '  `startedAt` DATETIME(3) NOT NULL,' +
+      '  PRIMARY KEY (`id`),' +
+      '  UNIQUE KEY `at_user_org_key` (`userId`,`orgId`),' +
+      '  KEY `at_orgId_idx` (`orgId`), KEY `at_taskId_idx` (`taskId`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+    activeTimersTableReady = true;
+  } catch (_) { activeTimersTableReady = true; }
+}
+
 // ── Lazy task_assignees table init ────────────────────────────────────────────
 let assigneesTableReady = false;
 async function ensureAssigneesTable() {
@@ -59,6 +78,55 @@ router.get('/members', requireAuth, withOrgScope, async (req, res) => {
   } catch (err) {
     console.error('[Tasks] members error:', err);
     res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+// ── GET /api/tasks/active-timers — org-wide active timers for admin ──────────
+router.get('/active-timers', requireAuth, withOrgScope, async (req, res) => {
+  await ensureActiveTimersTable();
+  try {
+    const timers = await prisma.$queryRawUnsafe(
+      'SELECT at.userId, at.taskId, UNIX_TIMESTAMP(at.startedAt)*1000 AS startedAt, u.name ' +
+      'FROM active_timers at JOIN `user` u ON u.id = at.userId WHERE at.orgId = ?',
+      req.orgId
+    );
+    res.json({ timers: timers.map(t => ({ ...t, startedAt: Number(t.startedAt) })) });
+  } catch (e) {
+    console.error('[Tasks] active-timers error:', e);
+    res.status(500).json({ error: 'Failed to fetch active timers' });
+  }
+});
+
+// ── POST /api/tasks/timer/start — record that current user started a timer ───
+router.post('/timer/start', requireAuth, withOrgScope, async (req, res) => {
+  const { taskId, startedAt } = req.body;
+  if (!taskId) return res.status(400).json({ error: 'taskId required' });
+  await ensureActiveTimersTable();
+  try {
+    await prisma.$executeRawUnsafe(
+      'INSERT INTO active_timers (id, userId, taskId, orgId, startedAt) VALUES (?, ?, ?, ?, ?) ' +
+      'ON DUPLICATE KEY UPDATE taskId = VALUES(taskId), startedAt = VALUES(startedAt)',
+      randomUUID(), req.user.id, taskId, req.orgId, new Date(startedAt || Date.now())
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Tasks] timer/start error:', e);
+    res.status(500).json({ error: 'Failed to save timer' });
+  }
+});
+
+// ── POST /api/tasks/timer/stop — clear current user's active timer ────────────
+router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
+  await ensureActiveTimersTable();
+  try {
+    await prisma.$executeRawUnsafe(
+      'DELETE FROM active_timers WHERE userId = ? AND orgId = ?',
+      req.user.id, req.orgId
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Tasks] timer/stop error:', e);
+    res.status(500).json({ error: 'Failed to clear timer' });
   }
 });
 
