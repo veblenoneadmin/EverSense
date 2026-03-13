@@ -10,22 +10,22 @@ let tableReady = false;
 async function ensureApiKeysTable() {
   if (tableReady) return;
   try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id          VARCHAR(191) NOT NULL,
-        key         VARCHAR(128) NOT NULL,
-        name        VARCHAR(255) NOT NULL,
-        orgId       VARCHAR(191) NOT NULL,
-        userId      VARCHAR(36)  NOT NULL,
-        lastUsedAt  DATETIME(3)  NULL,
-        revokedAt   DATETIME(3)  NULL,
-        createdAt   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-        PRIMARY KEY (id),
-        UNIQUE KEY api_keys_key_unique (`key`),
-        KEY api_keys_orgId_idx (orgId),
-        KEY api_keys_userId_idx (userId)
-      ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-    `);
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS api_keys (' +
+      '  id          VARCHAR(191) NOT NULL,' +
+      '  `key`       VARCHAR(128) NOT NULL,' +
+      '  name        VARCHAR(255) NOT NULL,' +
+      '  orgId       VARCHAR(191) NOT NULL,' +
+      '  userId      VARCHAR(36)  NOT NULL,' +
+      '  lastUsedAt  DATETIME(3)  NULL,' +
+      '  revokedAt   DATETIME(3)  NULL,' +
+      '  createdAt   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  PRIMARY KEY (id),' +
+      '  UNIQUE KEY api_keys_key_unique (`key`),' +
+      '  KEY api_keys_orgId_idx (orgId),' +
+      '  KEY api_keys_userId_idx (userId)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
     tableReady = true;
   } catch (_) {
     tableReady = true;
