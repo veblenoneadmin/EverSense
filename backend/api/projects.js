@@ -98,10 +98,46 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       console.log(`[Projects] CLIENT query returned ${projects.length} projects for clientId=${where.clientId}`);
     }
 
+    // Enrich projects with task stats and actual time spent
+    const enrichedProjects = [...projects];
+    if (projects.length) {
+      try {
+        const projectIds = projects.map(p => p.id);
+        const ph = projectIds.map(() => '?').join(',');
+        const taskStats = await prisma.$queryRawUnsafe(
+          `SELECT projectId,
+                  COUNT(*) AS total,
+                  SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                  SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS inProgress,
+                  SUM(COALESCE(actualHours, 0)) AS timeSpent
+           FROM macro_tasks
+           WHERE projectId IN (${ph})
+           GROUP BY projectId`,
+          ...projectIds
+        );
+        const statsMap = {};
+        for (const row of taskStats) {
+          statsMap[row.projectId] = {
+            total:      Number(row.total),
+            completed:  Number(row.completed),
+            inProgress: Number(row.inProgress),
+            pending:    Number(row.total) - Number(row.completed) - Number(row.inProgress),
+            timeSpent:  Number(row.timeSpent),
+          };
+        }
+        for (const p of enrichedProjects) {
+          p.tasks = statsMap[p.id] || { total: 0, completed: 0, inProgress: 0, pending: 0, timeSpent: 0 };
+          p.hoursLogged = statsMap[p.id]?.timeSpent ?? p.hoursLogged;
+        }
+      } catch (statsErr) {
+        console.warn('[Projects] task stats enrichment failed:', statsErr.message);
+      }
+    }
+
     res.json({
       success: true,
-      projects,
-      total: projects.length
+      projects: enrichedProjects,
+      total: enrichedProjects.length
     });
     
   } catch (error) {

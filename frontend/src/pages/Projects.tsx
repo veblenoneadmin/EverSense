@@ -779,7 +779,7 @@ export function Projects() {
                       </span>
                       <span className="flex items-center gap-1 text-[12px]" style={{ color: VS.text2 }}>
                         <Clock className="h-3.5 w-3.5" />
-                        {project.hoursLogged}h
+                        {Number(project.hoursLogged) % 1 === 0 ? project.hoursLogged : Number(project.hoursLogged).toFixed(1)}h
                       </span>
                     </div>
                     <span className="text-[12px] font-medium" style={{ color: isOver ? VS.red : VS.text2 }}>
