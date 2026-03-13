@@ -191,6 +191,107 @@ function CreateModal({ projects, onClose, onCreated }: {
   );
 }
 
+// ── Report Detail Modal ───────────────────────────────────────────────────────
+function DetailModal({ report, isPrivileged, onClose, onDelete, session }: {
+  report: Report;
+  isPrivileged: boolean;
+  onClose: () => void;
+  onDelete: (id: string) => void;
+  session: any;
+}) {
+  const pColor   = projectColor(report.project?.color);
+  const dispName = report.user?.name || report.userName;
+  const isOwn    = report.user?.id === session?.user?.id;
+
+  return createPortal(
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: VS.bg1, border: `1px solid ${VS.border}`, borderRadius: 12, width: '95%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+        {/* Left accent */}
+        <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: pColor, borderRadius: '12px 0 0 12px' }} />
+
+        {/* Header */}
+        <div style={{ padding: '16px 20px 14px 24px', borderBottom: `1px solid ${VS.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {report.project && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: pColor }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: pColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {report.project.name}
+                </span>
+              </div>
+            )}
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: VS.text0 }}>
+              {report.title || 'Report'}
+            </h2>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {(isPrivileged || isOwn) && (
+              <button
+                onClick={() => { onDelete(report.id); onClose(); }}
+                style={{ background: 'transparent', border: `1px solid ${VS.border}`, color: VS.text2, cursor: 'pointer', padding: '5px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = VS.red; (e.currentTarget as HTMLButtonElement).style.borderColor = VS.red; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = VS.text2; (e.currentTarget as HTMLButtonElement).style.borderColor = VS.border; }}
+              >
+                <Trash2 size={13} />Delete
+              </button>
+            )}
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: VS.text2, cursor: 'pointer', padding: 4, display: 'flex' }}>
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '18px 20px 20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Author + date */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Avatar name={dispName} image={report.user?.image} size={28} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: VS.text0 }}>
+                {dispName}
+                {isPrivileged && !isOwn && (
+                  <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 5px', borderRadius: 3, background: `${VS.blue}18`, color: VS.blue, border: `1px solid ${VS.blue}25` }}>team</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: VS.text2, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Calendar size={10} />
+                {fmtDate(report.createdAt)}
+                <span style={{ opacity: 0.5 }}>·</span>
+                {fmtRelative(report.createdAt)}
+              </div>
+            </div>
+          </div>
+
+          {/* Full description */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: VS.text2, marginBottom: 8 }}>Description</div>
+            <div style={{ fontSize: 14, color: VS.text1, lineHeight: 1.65, background: VS.bg2, borderRadius: 8, padding: '12px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {report.description}
+            </div>
+          </div>
+
+          {/* Image */}
+          {report.image && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: VS.text2, marginBottom: 8 }}>Attachment</div>
+              <img
+                src={report.image}
+                alt="Attachment"
+                onClick={() => window.open(report.image!, '_blank')}
+                style={{ width: '100%', maxHeight: 380, objectFit: 'contain', borderRadius: 8, border: `1px solid ${VS.border}`, cursor: 'zoom-in' }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export function Reports() {
   const { data: session } = useSession();
@@ -204,7 +305,8 @@ export function Reports() {
   const [analytics, setAnalytics] = useState({ total: 0, thisWeek: 0, uniqueProjects: 0, uniqueMembers: 0 });
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal]           = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
   // Filters
   const [search, setSearch]           = useState('');
@@ -378,7 +480,7 @@ export function Reports() {
             const isOwn    = report.user?.id === session?.user?.id;
 
             return (
-              <div key={report.id} style={{ background: VS.bg1, border: `1px solid ${VS.border}`, borderRadius: 10, overflow: 'hidden', position: 'relative' }}>
+              <div key={report.id} onClick={() => setSelectedReport(report)} style={{ background: VS.bg1, border: `1px solid ${VS.border}`, borderRadius: 10, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
                 {/* Left accent */}
                 <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 3, background: pColor }} />
 
@@ -398,7 +500,7 @@ export function Reports() {
                     </div>
                   </div>
                   {(isPrivileged || isOwn) && (
-                    <button onClick={() => handleDelete(report.id)}
+                    <button onClick={e => { e.stopPropagation(); handleDelete(report.id); }}
                       style={{ background: 'transparent', border: 'none', color: VS.text2, cursor: 'pointer', padding: 4, borderRadius: 4, display: 'flex', flexShrink: 0 }}
                       onMouseEnter={e => (e.currentTarget.style.color = VS.red)}
                       onMouseLeave={e => (e.currentTarget.style.color = VS.text2)}>
@@ -427,7 +529,7 @@ export function Reports() {
                   {/* Image */}
                   {report.image && (
                     <div style={{ marginTop: 8 }}>
-                      <img src={report.image} alt="Attachment" onClick={() => window.open(report.image!, '_blank')}
+                      <img src={report.image} alt="Attachment" onClick={e => { e.stopPropagation(); window.open(report.image!, '_blank'); }}
                         style={{ width: '100%', maxHeight: 160, objectFit: 'contain', borderRadius: 5, border: `1px solid ${VS.border}`, cursor: 'zoom-in' }} />
                     </div>
                   )}
@@ -449,6 +551,16 @@ export function Reports() {
           projects={projects}
           onClose={() => setShowModal(false)}
           onCreated={fetchReports}
+        />
+      )}
+
+      {selectedReport && (
+        <DetailModal
+          report={selectedReport}
+          isPrivileged={isPrivileged}
+          session={session}
+          onClose={() => setSelectedReport(null)}
+          onDelete={id => { handleDelete(id); setSelectedReport(null); }}
         />
       )}
     </div>
