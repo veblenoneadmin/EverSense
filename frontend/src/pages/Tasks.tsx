@@ -650,7 +650,7 @@ export function Tasks() {
             const staffMember = orgMembers.find(m => m.id === filterStaffId);
             return staffMember ? (
               <button
-                onClick={() => setFilterStaffId('')}
+                onClick={() => { setFilterStaffId(''); setShowAllTasks(false); }}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all hover:opacity-80"
                 style={{ background: `${VS.accent}22`, border: `1px solid ${VS.accent}55`, color: VS.accent }}
                 title="Clear staff filter"
@@ -770,8 +770,8 @@ export function Tasks() {
                     </div>
                   )}
 
-                  {/* Staff (admin/owner only, when viewing all tasks) */}
-                  {isAdminOrOwner && showAllTasks && orgMembers.length > 0 && (
+                  {/* Staff (admin/owner only) */}
+                  {isAdminOrOwner && orgMembers.length > 0 && (
                     <div>
                       <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: VS.text2 }}>Staff Member</p>
                       <div
@@ -780,7 +780,7 @@ export function Tasks() {
                       >
                         {/* "All staff" option */}
                         <button
-                          onClick={() => setFilterStaffId('')}
+                          onClick={() => { setFilterStaffId(''); setShowAllTasks(false); }}
                           className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
                           style={{
                             background: !filterStaffId ? `${VS.accent}22` : 'transparent',
@@ -803,7 +803,15 @@ export function Tasks() {
                           return (
                             <button
                               key={m.id}
-                              onClick={() => setFilterStaffId(selected ? '' : m.id)}
+                              onClick={() => {
+                                if (selected) {
+                                  setFilterStaffId('');
+                                  setShowAllTasks(false);
+                                } else {
+                                  setFilterStaffId(m.id);
+                                  setShowAllTasks(true); // ensure all tasks are loaded so we can filter by this staff
+                                }
+                              }}
                               className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
                               style={{
                                 background: selected ? `${VS.accent}22` : 'transparent',
