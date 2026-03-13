@@ -576,7 +576,7 @@ export function Tasks() {
         const over = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'completed' && t.status !== 'cancelled';
         if (!over) return false;
       }
-      if (filterStaffId && !task.assignees?.some(a => a.id === filterStaffId)) return false;
+      if (filterStaffId && !t.assignees?.some((a: { id: string }) => a.id === filterStaffId)) return false;
       return true;
     })
     .sort((a, b) => {
