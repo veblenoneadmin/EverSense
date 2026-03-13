@@ -3,6 +3,7 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth, withOrgScope, requireTaskOwnership } from '../lib/rbac.js';
+import { requireAuthOrApiKey } from '../middleware/apiKeyAuth.js';
 import { validateBody, validateQuery, commonSchemas, taskSchemas } from '../lib/validation.js';
 import { createNotification } from './notifications.js';
 const router = express.Router();
@@ -527,7 +528,7 @@ router.get('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
 });
 
 // Create new task
-router.post('/', requireAuth, withOrgScope, validateBody(taskSchemas.create), async (req, res) => {
+router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.create), async (req, res) => {
   try {
     const {
       title,
