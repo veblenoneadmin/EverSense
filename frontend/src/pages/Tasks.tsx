@@ -167,6 +167,7 @@ export function Tasks() {
   const [filterPriorities, setFilterPriorities] = useState<string[]>([]);
   const [filterProject, setFilterProject] = useState('');
   const [filterOverdueOnly, setFilterOverdueOnly] = useState(false);
+  const [filterStaffId, setFilterStaffId] = useState('');
 
   // Sort
   const [showSort, setShowSort] = useState(false);
@@ -575,6 +576,7 @@ export function Tasks() {
         const over = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'completed' && t.status !== 'cancelled';
         if (!over) return false;
       }
+      if (filterStaffId && !task.assignees?.some(a => a.id === filterStaffId)) return false;
       return true;
     })
     .sort((a, b) => {
@@ -590,7 +592,7 @@ export function Tasks() {
       }
     });
 
-  const activeFilterCount = filterPriorities.length + (filterProject ? 1 : 0) + (filterOverdueOnly ? 1 : 0);
+  const activeFilterCount = filterPriorities.length + (filterProject ? 1 : 0) + (filterOverdueOnly ? 1 : 0) + (filterStaffId ? 1 : 0);
 
   const tasksForCol = (colId: string) => filtered.filter(t => t.status === colId);
 
@@ -643,9 +645,30 @@ export function Tasks() {
               {filtered.length}{filtered.length !== tasks.length ? ` / ${tasks.length}` : ''} tasks · {COLUMNS.length} stages
             </p>
           </div>
+          {/* Active staff filter chip */}
+          {filterStaffId && (() => {
+            const staffMember = orgMembers.find(m => m.id === filterStaffId);
+            return staffMember ? (
+              <button
+                onClick={() => setFilterStaffId('')}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all hover:opacity-80"
+                style={{ background: `${VS.accent}22`, border: `1px solid ${VS.accent}55`, color: VS.accent }}
+                title="Clear staff filter"
+              >
+                <div
+                  className="h-4 w-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0"
+                  style={{ background: avatarGradient(staffMember.name || staffMember.email) }}
+                >
+                  {getInitials(staffMember.name || staffMember.email)}
+                </div>
+                {staffMember.name || staffMember.email}
+                <X className="h-3 w-3" />
+              </button>
+            ) : null;
+          })()}
           {isAdminOrOwner && (
             <button
-              onClick={() => setShowAllTasks(v => !v)}
+              onClick={() => { setShowAllTasks(v => !v); setFilterStaffId(''); }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 active:scale-95"
               style={showAllTasks
                 ? { background: VS.blue, border: `1px solid ${VS.blue}`, color: '#fff', boxShadow: `0 0 0 2px ${VS.blue}33` }
@@ -747,6 +770,62 @@ export function Tasks() {
                     </div>
                   )}
 
+                  {/* Staff (admin/owner only, when viewing all tasks) */}
+                  {isAdminOrOwner && showAllTasks && orgMembers.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: VS.text2 }}>Staff Member</p>
+                      <div
+                        className="rounded-lg overflow-hidden"
+                        style={{ border: `1px solid ${VS.border}`, maxHeight: '160px', overflowY: 'auto' }}
+                      >
+                        {/* "All staff" option */}
+                        <button
+                          onClick={() => setFilterStaffId('')}
+                          className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
+                          style={{
+                            background: !filterStaffId ? `${VS.accent}22` : 'transparent',
+                            borderBottom: `1px solid ${VS.border}`,
+                            color: !filterStaffId ? VS.text0 : VS.text2,
+                          }}
+                        >
+                          <div
+                            className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{ background: VS.bg3, border: `1px dashed ${VS.border2}` }}
+                          >
+                            <Users className="h-3 w-3" style={{ color: VS.text2 }} />
+                          </div>
+                          <span className="flex-1 text-xs">All staff</span>
+                          {!filterStaffId && <Check className="h-3.5 w-3.5 flex-shrink-0" style={{ color: VS.accent }} />}
+                        </button>
+
+                        {orgMembers.map((m, i) => {
+                          const selected = filterStaffId === m.id;
+                          return (
+                            <button
+                              key={m.id}
+                              onClick={() => setFilterStaffId(selected ? '' : m.id)}
+                              className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
+                              style={{
+                                background: selected ? `${VS.accent}22` : 'transparent',
+                                borderBottom: i < orgMembers.length - 1 ? `1px solid ${VS.border}` : 'none',
+                                color: selected ? VS.text0 : VS.text1,
+                              }}
+                            >
+                              <div
+                                className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                                style={{ background: avatarGradient(m.name || m.email) }}
+                              >
+                                {getInitials(m.name || m.email)}
+                              </div>
+                              <span className="flex-1 text-xs truncate">{m.name || m.email}</span>
+                              {selected && <Check className="h-3.5 w-3.5 flex-shrink-0" style={{ color: VS.accent }} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Overdue only */}
                   <button
                     onClick={() => setFilterOverdueOnly(v => !v)}
@@ -769,7 +848,7 @@ export function Tasks() {
                   {/* Clear */}
                   {activeFilterCount > 0 && (
                     <button
-                      onClick={() => { setFilterPriorities([]); setFilterProject(''); setFilterOverdueOnly(false); }}
+                      onClick={() => { setFilterPriorities([]); setFilterProject(''); setFilterOverdueOnly(false); setFilterStaffId(''); }}
                       className="w-full text-[11px] py-1.5 rounded-lg text-center transition-colors hover:opacity-80"
                       style={{ color: VS.text1, background: VS.bg3, border: `1px solid ${VS.border}` }}
                     >
