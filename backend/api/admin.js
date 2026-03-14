@@ -38,18 +38,18 @@ const router = express.Router();
 // Validation schemas
 const inviteUserSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT'])
+  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE'])
 });
 
 const updateRoleSchema = z.object({
-  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT'])
+  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE'])
 });
 
 const createUserSchema = z.object({
   name:     z.string().min(1).max(255),
   email:    z.string().email(),
   password: z.string().min(6).max(128),
-  role:     z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT']),
+  role:     z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE']),
 });
 
 /**
@@ -309,7 +309,7 @@ router.patch('/users/:userId/role', requireAuth, withOrgScope, requireRole('ADMI
     if (!membership) {
       return res.status(404).json({ error: 'User not found in this organization', code: 'USER_NOT_FOUND' });
     }
-    if (membership.role === 'OWNER') {
+    if (membership.role === 'OWNER' || membership.role === 'HALL_OF_JUSTICE') {
       return res.status(403).json({ error: 'Cannot change owner role', code: 'CANNOT_CHANGE_OWNER' });
     }
     if (membership.user?.email === 'admin@eversense.ai') {
@@ -402,8 +402,8 @@ router.delete('/users/:userId', requireAuth, withOrgScope, requireRole('ADMIN'),
       return res.status(404).json({ error: 'User not found in this organization', code: 'USER_NOT_FOUND' });
     }
 
-    // Only admin@eversense.ai can remove OWNERs
-    if (membership.role === 'OWNER' && !isSuperAdmin) {
+    // Only admin@eversense.ai can remove OWNERs or HALL_OF_JUSTICE members
+    if ((membership.role === 'OWNER' || membership.role === 'HALL_OF_JUSTICE') && !isSuperAdmin) {
       return res.status(403).json({ error: 'Cannot remove organization owner', code: 'CANNOT_REMOVE_OWNER' });
     }
 
@@ -412,8 +412,8 @@ router.delete('/users/:userId', requireAuth, withOrgScope, requireRole('ADMIN'),
       return res.status(403).json({ error: 'Cannot remove this protected account', code: 'PROTECTED_ACCOUNT' });
     }
 
-    // Regular admins (not super admin, not owner) can only delete STAFF
-    if (!isSuperAdmin && callerRole !== 'OWNER' && membership.role !== 'STAFF') {
+    // Regular admins (not super admin, not owner/hall_of_justice) can only delete STAFF
+    if (!isSuperAdmin && callerRole !== 'OWNER' && callerRole !== 'HALL_OF_JUSTICE' && membership.role !== 'STAFF') {
       return res.status(403).json({ error: 'You can only remove Staff members', code: 'INSUFFICIENT_PERMISSIONS' });
     }
 
@@ -499,7 +499,7 @@ router.post('/users/bulk-delete', requireAuth, withOrgScope, requireRole('ADMIN'
       where: { userId_orgId: { userId: req.user.id, orgId: req.orgId } },
       select: { role: true },
     });
-    if (callerUser?.email !== 'admin@eversense.ai' && callerMembership?.role !== 'OWNER') {
+    if (callerUser?.email !== 'admin@eversense.ai' && callerMembership?.role !== 'OWNER' && callerMembership?.role !== 'HALL_OF_JUSTICE') {
       return res.status(403).json({ error: 'Only the super admin or owner can perform bulk delete', code: 'INSUFFICIENT_PERMISSIONS' });
     }
 
@@ -509,7 +509,7 @@ router.post('/users/bulk-delete', requireAuth, withOrgScope, requireRole('ADMIN'
     const result = await prisma.membership.deleteMany({
       where: {
         orgId: req.orgId,
-        role: { not: 'OWNER' },
+        role: { notIn: ['OWNER', 'HALL_OF_JUSTICE'] },
         userId: {
           notIn: [req.user.id, ...(protectedUser ? [protectedUser.id] : [])],
         },
@@ -536,7 +536,7 @@ router.post('/timelogs/reset', requireAuth, withOrgScope, requireRole('ADMIN'), 
       where: { userId_orgId: { userId: req.user.id, orgId: req.orgId } },
       select: { role: true },
     });
-    if (callerUser?.email !== 'admin@eversense.ai' && callerMembership?.role !== 'OWNER') {
+    if (callerUser?.email !== 'admin@eversense.ai' && callerMembership?.role !== 'OWNER' && callerMembership?.role !== 'HALL_OF_JUSTICE') {
       return res.status(403).json({ error: 'Only the super admin or owner can reset time logs', code: 'INSUFFICIENT_PERMISSIONS' });
     }
 
@@ -564,7 +564,7 @@ router.post('/sync-admins', requireAuth, withOrgScope, requireRole('ADMIN'), asy
     console.log(`🔄 Syncing admin users for org ${req.orgId}...`);
 
     const adminMemberships = await prisma.membership.findMany({
-      where: { role: { in: ['ADMIN', 'OWNER'] } },
+      where: { role: { in: ['ADMIN', 'OWNER', 'HALL_OF_JUSTICE'] } },
       include: { user: { select: { id: true, email: true, name: true } } },
       distinct: ['userId']
     });

@@ -905,7 +905,7 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
     // If completed, also notify all org admins/owners (excluding the completer and assignee)
     if (status === 'completed') {
       prisma.membership.findMany({
-        where: { orgId: req.orgId, role: { in: ['OWNER', 'ADMIN'] } },
+        where: { orgId: req.orgId, role: { in: ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'] } },
         select: { userId: true },
       }).then(admins => {
         for (const { userId: adminId } of admins) {

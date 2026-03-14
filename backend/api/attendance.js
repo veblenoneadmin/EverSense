@@ -177,7 +177,7 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
       select: { role: true },
     });
     const role         = membership?.role || 'STAFF';
-    const isPrivileged = role === 'OWNER' || role === 'ADMIN';
+    const isPrivileged = role === 'OWNER' || role === 'ADMIN' || role === 'HALL_OF_JUSTICE';
     const isClient     = role === 'CLIENT';
 
     // CLIENT — build list of staff userIds assigned to their projects

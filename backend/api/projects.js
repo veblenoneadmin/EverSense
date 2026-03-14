@@ -196,7 +196,7 @@ router.post('/', requireAuth, withOrgScope, validateBody(projectSchemas.create),
     try {
       const creator = await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
       const admins = await prisma.membership.findMany({
-        where: { orgId: project.orgId, role: { in: ['OWNER', 'ADMIN'] } },
+        where: { orgId: project.orgId, role: { in: ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'] } },
         select: { userId: true },
       });
       for (const { userId: adminId } of admins) {
@@ -286,7 +286,7 @@ router.patch('/:id', requireAuth, withOrgScope, validateBody(projectSchemas.upda
       try {
         const updater = await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
         const admins = await prisma.membership.findMany({
-          where: { orgId: project.orgId, role: { in: ['OWNER', 'ADMIN'] } },
+          where: { orgId: project.orgId, role: { in: ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'] } },
           select: { userId: true },
         });
         for (const { userId: adminId } of admins) {
@@ -526,7 +526,7 @@ Rules: 4-8 tasks, 1-2 skills each (use: React, UI Design, Backend API, QA Testin
     let memberships;
     try {
       memberships = await prisma.membership.findMany({
-        where: { orgId, role: { in: ['STAFF', 'ADMIN', 'OWNER'] } },
+        where: { orgId, role: { in: ['STAFF', 'ADMIN', 'OWNER', 'HALL_OF_JUSTICE'] } },
         include: {
           user: {
             select: { id: true, name: true, email: true, image: true },
@@ -542,7 +542,7 @@ Rules: 4-8 tasks, 1-2 skills each (use: React, UI Design, Backend API, QA Testin
     } catch (skillsErr) {
       console.warn('[Projects] staffSkills tables not ready, skipping skills-based assignment:', skillsErr.message);
       memberships = await prisma.membership.findMany({
-        where: { orgId, role: { in: ['STAFF', 'ADMIN', 'OWNER'] } },
+        where: { orgId, role: { in: ['STAFF', 'ADMIN', 'OWNER', 'HALL_OF_JUSTICE'] } },
         include: {
           user: { select: { id: true, name: true, email: true, image: true } },
         },

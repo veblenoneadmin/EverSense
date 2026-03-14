@@ -2,6 +2,7 @@ import { prisma } from './prisma.js';
 
 // Role hierarchy for permission checking
 export const RoleOrder = {
+  HALL_OF_JUSTICE: 5,
   OWNER: 4,
   ADMIN: 3,
   STAFF: 2,
@@ -254,8 +255,8 @@ export function canAssignRole(userRole, targetRole) {
   const userLevel = RoleOrder[userRole];
   const targetLevel = RoleOrder[targetRole];
 
-  // Only OWNER can assign OWNER role
-  if (targetRole === 'OWNER' && userRole !== 'OWNER') {
+  // Only OWNER or HALL_OF_JUSTICE can assign OWNER role
+  if (targetRole === 'OWNER' && userRole !== 'OWNER' && userRole !== 'HALL_OF_JUSTICE') {
     return false;
   }
 
@@ -348,7 +349,7 @@ export function generateOrgSlug(name) {
 }
 
 /**
- * Middleware for organization owners only
+ * Middleware for organization owners only (also accepts HALL_OF_JUSTICE)
  */
 export const requireOwner = requireRole('OWNER');
 
