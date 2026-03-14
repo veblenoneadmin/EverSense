@@ -133,7 +133,6 @@ router.get('/team', requireAuth, withOrgScope, async (req, res) => {
       where: { orgId: req.orgId, role: { not: 'CLIENT' } },
       include: {
         user: {
-          select: { id: true, name: true, email: true, image: true },
           include: {
             staffSkills: {
               where: { orgId: req.orgId },
