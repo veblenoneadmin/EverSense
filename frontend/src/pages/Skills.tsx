@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import {
-  Plus, Trash2, Star, Users, Layers, ChevronDown, ChevronUp,
+  Plus, Trash2, Star, Users, Layers, ChevronDown, ChevronUp, // Star kept for tab icon
   Search, X, Check, Sparkles,
 } from 'lucide-react';
 
@@ -12,29 +12,48 @@ interface Skill { id: string; name: string; category: string; _count?: { staffSk
 interface StaffSkill { id: string; skillId: string; name: string; category: string; level: number; yearsExp: number; notes: string | null }
 interface TeamMember { userId: string; name: string; email: string; image: string | null; role: string; skills: StaffSkill[] }
 
-const LEVEL_LABELS: Record<number, string> = { 1: 'Beginner', 2: 'Basic', 3: 'Intermediate', 4: 'Advanced', 5: 'Expert' };
-const LEVEL_COLORS: Record<number, string> = {
-  1: 'rgba(144,144,144,0.15)',
-  2: 'rgba(86,156,214,0.15)',
-  3: 'rgba(220,220,170,0.15)',
-  4: 'rgba(197,134,192,0.15)',
-  5: 'rgba(78,201,176,0.15)',
+const LEVEL_LABELS: Record<number, string> = {
+  1: 'Novice', 2: 'Novice+', 3: 'Beginner', 4: 'Beginner+', 5: 'Intermediate',
+  6: 'Intermediate+', 7: 'Advanced', 8: 'Advanced+', 9: 'Expert', 10: 'Master',
 };
-const LEVEL_TEXT: Record<number, string> = { 1: '#909090', 2: '#569cd6', 3: '#dcdcaa', 4: '#c586c0', 5: '#4ec9b0' };
+function levelColor(level: number): string {
+  if (level <= 2) return '#909090';
+  if (level <= 4) return '#569cd6';
+  if (level <= 6) return '#dcdcaa';
+  if (level <= 8) return '#c586c0';
+  return '#4ec9b0';
+}
+// Keep for badge backgrounds
+const LEVEL_COLORS: Record<number, string> = Object.fromEntries(
+  Array.from({ length: 10 }, (_, i) => [i + 1, `${levelColor(i + 1)}22`])
+) as Record<number, string>;
+const LEVEL_TEXT: Record<number, string> = Object.fromEntries(
+  Array.from({ length: 10 }, (_, i) => [i + 1, levelColor(i + 1)])
+) as Record<number, string>;
 
 const SKILL_CATEGORIES = ['Technical', 'Design', 'Management', 'Communication', 'Sales', 'Operations', 'Finance', 'Other'];
 
-function LevelStars({ level, onChange }: { level: number; onChange?: (l: number) => void }) {
+function LevelPicker({ level, onChange }: { level: number; onChange?: (l: number) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
-      {[1, 2, 3, 4, 5].map(i => (
-        <button key={i} onClick={() => onChange?.(i)} type="button"
-          style={{ background: 'none', border: 'none', cursor: onChange ? 'pointer' : 'default', padding: 0, lineHeight: 1, transition: 'transform 0.1s' }}
-          onMouseEnter={e => onChange && ((e.currentTarget as HTMLElement).style.transform = 'scale(1.2)')}
-          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.transform = 'scale(1)')}>
-          <Star style={{ width: 16, height: 16 }} fill={i <= level ? LEVEL_TEXT[level] : 'none'} stroke={i <= level ? LEVEL_TEXT[level] : '#555'} />
-        </button>
-      ))}
+    <div style={{ display: 'flex', gap: 3 }}>
+      {Array.from({ length: 10 }, (_, i) => i + 1).map(i => {
+        const active = i <= level;
+        const color = levelColor(level);
+        return (
+          <button key={i} onClick={() => onChange?.(i)} type="button"
+            title={`${i} — ${LEVEL_LABELS[i]}`}
+            style={{
+              width: 22, height: 22, border: active ? `1px solid ${color}` : `1px solid #444`,
+              borderRadius: 4, background: active ? `${color}33` : 'transparent',
+              cursor: onChange ? 'pointer' : 'default', fontSize: 11, fontWeight: 600,
+              color: active ? color : '#555', transition: 'all 0.1s',
+            }}
+            onMouseEnter={e => onChange && ((e.currentTarget as HTMLElement).style.transform = 'scale(1.15)')}
+            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.transform = 'scale(1)')}>
+            {i}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -76,7 +95,7 @@ export function Skills() {
   // Add skill form
   const [showAddSkill, setShowAddSkill] = useState(false);
   const [selectedSkillId, setSelectedSkillId] = useState('');
-  const [selectedLevel, setSelectedLevel] = useState(3);
+  const [selectedLevel, setSelectedLevel] = useState(5);
   const [selectedYears, setSelectedYears] = useState('');
   const [skillNotes, setSkillNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -367,7 +386,7 @@ export function Skills() {
                           <Trash2 style={{ width: 15, height: 15 }} />
                         </button>
                       </div>
-                      <LevelStars level={s.level} />
+                      <LevelPicker level={s.level} />
                       {s.yearsExp > 0 && <p style={{ fontSize: 12, color: VS.text2, marginTop: 8 }}>{s.yearsExp} yr{s.yearsExp !== 1 ? 's' : ''} experience</p>}
                       {s.notes && <p style={{ fontSize: 12, color: VS.text2, marginTop: 4, fontStyle: 'italic' }}>{s.notes}</p>}
                     </div>
@@ -430,7 +449,7 @@ export function Skills() {
                               <p style={{ fontSize: 11, color: VS.text2, margin: '2px 0 0' }}>{s.category}</p>
                             </div>
                             <div style={{ textAlign: 'right' }}>
-                              <LevelStars level={s.level} />
+                              <LevelPicker level={s.level} />
                               <p style={{ fontSize: 11, marginTop: 4, color: LEVEL_TEXT[s.level] }}>{LEVEL_LABELS[s.level]}</p>
                             </div>
                           </div>
@@ -545,7 +564,7 @@ export function Skills() {
               <div>
                 <label style={labelStyle}>Proficiency Level</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <LevelStars level={selectedLevel} onChange={setSelectedLevel} />
+                  <LevelPicker level={selectedLevel} onChange={setSelectedLevel} />
                   <span style={{ fontSize: 13, fontWeight: 500, color: LEVEL_TEXT[selectedLevel] }}>{LEVEL_LABELS[selectedLevel]}</span>
                 </div>
               </div>

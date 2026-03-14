@@ -176,7 +176,7 @@ router.put('/staff', requireAuth, withOrgScope, async (req, res) => {
     const userId = req.user.id;
 
     if (!skillId || !level) return res.status(400).json({ error: 'skillId and level required' });
-    if (level < 1 || level > 5) return res.status(400).json({ error: 'level must be 1-5' });
+    if (level < 1 || level > 10) return res.status(400).json({ error: 'level must be 1-10' });
 
     const staffSkill = await prisma.staffSkill.upsert({
       where: { userId_skillId: { userId, skillId } },
@@ -313,7 +313,7 @@ router.post('/library/bulk', requireAuth, withOrgScope, async (req, res) => {
 // AI TASK AUTO-ASSIGN
 // ─────────────────────────────────────────────────────────────────────────────
 
-const LEVEL_LABEL = { 1: 'Beginner', 2: 'Basic', 3: 'Intermediate', 4: 'Advanced', 5: 'Expert' };
+const LEVEL_LABEL = { 1: 'Novice', 2: 'Novice+', 3: 'Beginner', 4: 'Beginner+', 5: 'Intermediate', 6: 'Intermediate+', 7: 'Advanced', 8: 'Advanced+', 9: 'Expert', 10: 'Master' };
 
 // POST /api/skills/auto-assign — given a task, AI picks the best staff member
 router.post('/auto-assign', requireAuth, withOrgScope, async (req, res) => {
