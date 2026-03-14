@@ -305,7 +305,7 @@ export function Skills() {
     (skillSearch === '' || s.name.toLowerCase().includes(skillSearch.toLowerCase()) || s.category.toLowerCase().includes(skillSearch.toLowerCase()))
   );
 
-  const isPrivileged = userRole === 'OWNER' || userRole === 'ADMIN';
+  const isPrivileged = userRole === 'OWNER' || userRole === 'ADMIN' || userRole === 'HALL_OF_JUSTICE';
 
   // ── Group my skills by category ───────────────────────────────────────────
   const grouped = mySkills.reduce((acc, s) => {
