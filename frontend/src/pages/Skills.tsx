@@ -473,16 +473,20 @@ export function Skills() {
                     {member.skills.length === 0 ? (
                       <p style={{ fontSize: 13, color: VS.text2, fontStyle: 'italic' }}>No skills added yet</p>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {member.skills.map(s => (
-                          <div key={s.skillId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: VS.bg2, borderRadius: 6, border: `1px solid ${VS.border}` }}>
-                            <div>
-                              <p style={{ fontSize: 13, fontWeight: 500, color: VS.text0, margin: 0 }}>{s.name}</p>
-                              <p style={{ fontSize: 11, color: VS.text2, margin: '2px 0 0' }}>{s.category}</p>
+                          <div key={s.skillId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: VS.bg2, borderRadius: 6, border: `1px solid ${VS.border}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: VS.text0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                              <span style={{ fontSize: 11, color: VS.text2, flexShrink: 0 }}>{s.category}</span>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <LevelPicker level={s.level} />
-                              <p style={{ fontSize: 11, marginTop: 4, color: LEVEL_TEXT[s.level] }}>{LEVEL_LABELS[s.level]}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                              <div style={{ display: 'flex', gap: 2 }}>
+                                {Array.from({ length: 10 }, (_, i) => i + 1).map(i => (
+                                  <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: i <= s.level ? `${levelColor(s.level)}88` : VS.bg3, border: `1px solid ${i <= s.level ? levelColor(s.level) : '#444'}` }} />
+                                ))}
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: LEVEL_TEXT[s.level], minWidth: 72, textAlign: 'right' }}>{s.level}/10 · {LEVEL_LABELS[s.level]}</span>
                             </div>
                           </div>
                         ))}
