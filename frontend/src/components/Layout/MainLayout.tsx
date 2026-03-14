@@ -286,6 +286,7 @@ const MainLayout: React.FC = () => {
                 <div
                   className="absolute right-0 top-full mt-2 w-[calc(100vw-1.5rem)] sm:w-80 rounded-xl z-20 overflow-hidden flex flex-col"
                   style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 16px 48px rgba(0,0,0,0.7)', maxHeight: 420 }}
+                  onClick={e => e.stopPropagation()}
                 >
                   {selectedNotif ? (
                     /* ── Detail view ── */
