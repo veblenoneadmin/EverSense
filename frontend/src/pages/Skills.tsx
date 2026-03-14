@@ -314,18 +314,14 @@ export function Skills() {
           <p style={{ color: VS.text2, marginTop: 4, fontSize: 14 }}>Manage your skillset and team capabilities</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {isPrivileged && (
-            <>
-              <button onClick={() => setShowAiGenerate(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: VS.bg2, border: `1px solid ${VS.border2}`, borderRadius: 6, color: VS.text1, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-                <Sparkles style={{ width: 15, height: 15, color: VS.yellow }} />Generate with AI
-              </button>
-              <button onClick={() => setShowAddLibrary(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: VS.bg2, border: `1px solid ${VS.border2}`, borderRadius: 6, color: VS.text1, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-                <Plus style={{ width: 15, height: 15 }} />Add to Library
-              </button>
-            </>
-          )}
+          <button onClick={() => setShowAiGenerate(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: VS.bg2, border: `1px solid ${VS.border2}`, borderRadius: 6, color: VS.text1, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+            <Sparkles style={{ width: 15, height: 15, color: VS.yellow }} />Generate with AI
+          </button>
+          <button onClick={() => setShowAddLibrary(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: VS.bg2, border: `1px solid ${VS.border2}`, borderRadius: 6, color: VS.text1, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+            <Plus style={{ width: 15, height: 15 }} />Add to Library
+          </button>
           <button onClick={() => setShowAddSkill(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: VS.accent, border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
             <Plus style={{ width: 15, height: 15 }} />Add Skill
@@ -475,12 +471,10 @@ export function Skills() {
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
               <Layers style={{ width: 40, height: 40, color: VS.text2, margin: '0 auto 12px' }} />
               <p style={{ color: VS.text2, fontSize: 14, marginBottom: 16 }}>No skills in library yet</p>
-              {isPrivileged && (
-                <button onClick={() => setShowAddLibrary(true)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: VS.accent, border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
-                  <Plus style={{ width: 14, height: 14 }} />Add First Skill
-                </button>
-              )}
+              <button onClick={() => setShowAddLibrary(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: VS.accent, border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                <Plus style={{ width: 14, height: 14 }} />Add First Skill
+              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -495,14 +489,12 @@ export function Skills() {
                         <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', background: VS.bg2, border: `1px solid ${VS.border}`, borderRadius: 6, fontSize: 13 }}>
                           <span style={{ color: VS.text1 }}>{s.name}</span>
                           <span style={{ fontSize: 11, color: VS.text2 }}>({s._count?.staffSkills || 0})</span>
-                          {isPrivileged && (
-                            <button onClick={async () => { await apiFetch(`/api/skills/library/${s.id}`, { method: 'DELETE' }); fetchAll(); }}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2, padding: 0, lineHeight: 1, transition: 'color 0.15s' }}
-                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = VS.red}
-                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = VS.text2}>
-                              <X style={{ width: 12, height: 12 }} />
-                            </button>
-                          )}
+                          <button onClick={async () => { await apiFetch(`/api/skills/library/${s.id}`, { method: 'DELETE' }); fetchAll(); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2, padding: 0, lineHeight: 1, transition: 'color 0.15s' }}
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = VS.red}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = VS.text2}>
+                            <X style={{ width: 12, height: 12 }} />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -601,7 +593,7 @@ export function Skills() {
       )}
 
       {/* ── AI GENERATE SKILLS MODAL ───────────────────────────────────────── */}
-      {showAiGenerate && isPrivileged && (
+      {showAiGenerate && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: VS.bg1, border: `1px solid ${VS.border2}`, borderRadius: 8, padding: 28, width: '100%', maxWidth: 640, boxShadow: '0 24px 64px rgba(0,0,0,0.7)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             {/* Header */}
@@ -684,7 +676,7 @@ export function Skills() {
       )}
 
       {/* ── ADD TO LIBRARY MODAL ───────────────────────────────────────────── */}
-      {showAddLibrary && isPrivileged && (
+      {showAddLibrary && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: VS.bg1, border: `1px solid ${VS.border2}`, borderRadius: 8, padding: 28, width: '100%', maxWidth: 380, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
             {/* Header */}
