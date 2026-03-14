@@ -3025,9 +3025,27 @@ async function ensureProfileColumns() {
   console.log('  ✅ profile columns ready');
 }
 
+async function ensureRoleEnumSchema() {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    // Idempotent: re-declares the ENUM with all values including HALL_OF_JUSTICE.
+    // MySQL silently no-ops if the column already has all values.
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE `memberships` MODIFY COLUMN `role` ENUM('OWNER','ADMIN','STAFF','CLIENT','HALL_OF_JUSTICE') NOT NULL DEFAULT 'STAFF'"
+    );
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE `invites` MODIFY COLUMN `role` ENUM('OWNER','ADMIN','STAFF','CLIENT','HALL_OF_JUSTICE') NOT NULL DEFAULT 'STAFF'"
+    );
+    console.log('  ✅ role enum columns ready (HALL_OF_JUSTICE included)');
+  } catch (e) {
+    console.warn('  ⚠️  ensureRoleEnumSchema:', e.message);
+  }
+}
+
 // Run migrations and start server
 async function startServer() {
   await runDatabaseMigrations();
+  await ensureRoleEnumSchema();
   await ensureTaskTablesSchema();
   await ensureTaskAssigneesSchema();
   await ensureAccountScopeText();

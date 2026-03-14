@@ -96,16 +96,35 @@ router.post('/users/create', requireAuth, withOrgScope, requireRole('ADMIN'), as
 
     // Use Better Auth's own signUpEmail API so the password is hashed
     // exactly the same way as normal signup — no custom hashing needed.
-    const signUpResult = await auth.api.signUpEmail({
-      body: { email, password, name },
-    });
-
-    if (!signUpResult?.user?.id) {
-      console.error('❌ Better Auth signUpEmail failed:', signUpResult);
-      return res.status(500).json({ error: 'Failed to create user via Better Auth' });
+    // Use asResponse:true so we can inspect the HTTP response and surface the real error.
+    let authResponse;
+    try {
+      authResponse = await auth.api.signUpEmail({
+        body: { email, password, name },
+        asResponse: true,
+      });
+    } catch (err) {
+      console.error('❌ Better Auth signUpEmail threw:', err);
+      return res.status(500).json({ error: err.message || 'Failed to create user' });
     }
 
-    const userId = signUpResult.user.id;
+    if (!authResponse.ok) {
+      const errData = await authResponse.json().catch(() => ({}));
+      const msg = errData.message || errData.error || 'Failed to create user';
+      console.error('❌ Better Auth signUpEmail HTTP error:', authResponse.status, msg);
+      if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('exist') || msg.toLowerCase().includes('already')) {
+        return res.status(409).json({ error: 'An account with this email already exists.' });
+      }
+      return res.status(authResponse.status).json({ error: msg });
+    }
+
+    const authData = await authResponse.json();
+    const userId = authData?.user?.id;
+
+    if (!userId) {
+      console.error('❌ Better Auth signUpEmail: no user id in response', authData);
+      return res.status(500).json({ error: 'Account created but user ID missing' });
+    }
 
     // Add to organization with the specified role
     await prisma.membership.create({
