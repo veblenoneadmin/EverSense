@@ -112,6 +112,14 @@ export function Skills() {
   // Team expand
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
+  // Assign skill to team member (admin)
+  const [assignTarget, setAssignTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [assignSkillId, setAssignSkillId] = useState('');
+  const [assignLevel, setAssignLevel] = useState(5);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [assignError, setAssignError] = useState('');
+
   // AI generate skills
   const [showAiGenerate, setShowAiGenerate] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -186,6 +194,28 @@ export function Skills() {
       await apiFetch(`/api/skills/staff/${skillId}`, { method: 'DELETE' });
       await fetchAll();
     } catch (err) { console.error(err); }
+  };
+
+  // ── Assign skill to a team member ─────────────────────────────────────────
+  const handleAssignSkill = async () => {
+    if (!assignTarget || !assignSkillId) return;
+    setAssignSaving(true);
+    setAssignError('');
+    try {
+      const res = await apiFetch('/api/skills/staff', {
+        method: 'PUT',
+        body: JSON.stringify({ skillId: assignSkillId, level: assignLevel, targetUserId: assignTarget.userId }),
+      });
+      if (res.ok) {
+        await fetchAll();
+        setAssignTarget(null);
+        setAssignSkillId(''); setAssignLevel(5); setAssignSearch('');
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setAssignError(d.error || `Error ${res.status}`);
+      }
+    } catch (err: any) { setAssignError(err.message || 'Failed to assign skill'); }
+    finally { setAssignSaving(false); }
   };
 
   // ── AI generate skills ────────────────────────────────────────────────────
@@ -434,6 +464,12 @@ export function Skills() {
 
                 {expandedMember === member.userId && (
                   <div style={{ borderTop: `1px solid ${VS.border}`, padding: '16px 20px 20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                      <button onClick={() => { setAssignTarget({ userId: member.userId, name: member.name }); setAssignSkillId(''); setAssignLevel(5); setAssignSearch(''); setAssignError(''); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', background: VS.accent, border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+                        <Plus style={{ width: 12, height: 12 }} />Assign Skill
+                      </button>
+                    </div>
                     {member.skills.length === 0 ? (
                       <p style={{ fontSize: 13, color: VS.text2, fontStyle: 'italic' }}>No skills added yet</p>
                     ) : (
@@ -712,6 +748,71 @@ export function Skills() {
                 <button onClick={handleAddToLibrary} disabled={!newSkillName.trim() || savingLibrary}
                   style={{ flex: 1, padding: '9px 0', background: newSkillName.trim() && !savingLibrary ? VS.accent : VS.bg3, border: 'none', borderRadius: 6, color: newSkillName.trim() && !savingLibrary ? '#fff' : VS.text2, fontSize: 13, cursor: newSkillName.trim() && !savingLibrary ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
                   {savingLibrary ? 'Adding...' : 'Add Skill'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ASSIGN SKILL TO MEMBER MODAL ───────────────────────────────────── */}
+      {assignTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: VS.bg1, border: `1px solid ${VS.border2}`, borderRadius: 8, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: VS.text0, margin: 0 }}>Assign Skill to {assignTarget.name}</h2>
+              <button onClick={() => setAssignTarget(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2, padding: 4, lineHeight: 1 }}>
+                <X style={{ width: 18, height: 18 }} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Skill search */}
+              <div>
+                <label style={labelStyle}>Select Skill</label>
+                <div style={{ position: 'relative', marginBottom: 8 }}>
+                  <Search style={{ position: 'absolute', left: 10, top: 9, width: 14, height: 14, color: VS.text2 }} />
+                  <input value={assignSearch} onChange={e => setAssignSearch(e.target.value)}
+                    placeholder="Search skills..." style={{ ...inputStyle, paddingLeft: 32 }} />
+                </div>
+                <div style={{ maxHeight: 176, overflowY: 'auto', border: `1px solid ${VS.border}`, borderRadius: 6, background: VS.bg2, padding: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {library.filter(s => assignSearch === '' || s.name.toLowerCase().includes(assignSearch.toLowerCase())).length === 0 ? (
+                    <p style={{ fontSize: 13, color: VS.text2, textAlign: 'center', padding: '16px 0' }}>No skills found</p>
+                  ) : library.filter(s => assignSearch === '' || s.name.toLowerCase().includes(assignSearch.toLowerCase())).map(s => {
+                    const selected = assignSkillId === s.id;
+                    return (
+                      <button key={s.id} onClick={() => setAssignSkillId(s.id)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: 5, border: selected ? `1px solid ${VS.accent}55` : '1px solid transparent', background: selected ? `${VS.accent}22` : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                        <span style={{ fontSize: 13, color: VS.text0 }}>{s.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 11, color: VS.text2 }}>{s.category}</span>
+                          {selected && <Check style={{ width: 13, height: 13, color: VS.accent }} />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Level */}
+              <div>
+                <label style={labelStyle}>Proficiency Level</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <LevelPicker level={assignLevel} onChange={setAssignLevel} />
+                  <span style={{ fontSize: 13, fontWeight: 500, color: LEVEL_TEXT[assignLevel] }}>{LEVEL_LABELS[assignLevel]}</span>
+                </div>
+              </div>
+
+              {assignError && <p style={{ fontSize: 13, color: VS.red }}>{assignError}</p>}
+
+              <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+                <button onClick={() => setAssignTarget(null)}
+                  style={{ flex: 1, padding: '9px 0', background: VS.bg2, border: `1px solid ${VS.border2}`, borderRadius: 6, color: VS.text1, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                  Cancel
+                </button>
+                <button onClick={handleAssignSkill} disabled={!assignSkillId || assignSaving}
+                  style={{ flex: 1, padding: '9px 0', background: assignSkillId && !assignSaving ? VS.accent : VS.bg3, border: 'none', borderRadius: 6, color: assignSkillId && !assignSaving ? '#fff' : VS.text2, fontSize: 13, cursor: assignSkillId && !assignSaving ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
+                  {assignSaving ? 'Assigning...' : 'Assign Skill'}
                 </button>
               </div>
             </div>

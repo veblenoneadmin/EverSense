@@ -169,11 +169,23 @@ router.get('/team', requireAuth, withOrgScope, async (req, res) => {
 });
 
 // PUT /api/skills/staff — upsert a skill for a user
+// Admins/owners can pass targetUserId to assign to someone else
 router.put('/staff', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureSkillsTables();
-    const { skillId, level, yearsExp, notes } = req.body;
-    const userId = req.user.id;
+    const { skillId, level, yearsExp, notes, targetUserId } = req.body;
+
+    // Allow admins/owners to assign skills to other users
+    let userId = req.user.id;
+    if (targetUserId && targetUserId !== req.user.id) {
+      const membership = await prisma.membership.findUnique({
+        where: { userId_orgId: { userId: req.user.id, orgId: req.orgId } },
+        select: { role: true },
+      });
+      const privileged = ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(membership?.role);
+      if (!privileged) return res.status(403).json({ error: 'Only admins can assign skills to other users' });
+      userId = targetUserId;
+    }
 
     if (!skillId || !level) return res.status(400).json({ error: 'skillId and level required' });
     if (level < 1 || level > 10) return res.status(400).json({ error: 'level must be 1-10' });
