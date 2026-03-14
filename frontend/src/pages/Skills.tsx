@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
+import { useOrganization } from '../contexts/OrganizationContext';
 import {
   Plus, Trash2, Star, Users, Layers, ChevronDown, ChevronUp, // Star kept for tab icon
   Search, X, Check, Sparkles,
@@ -81,10 +82,11 @@ const labelStyle: React.CSSProperties = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function Skills() {
   const { data: session } = useSession();
+  const { currentOrg } = useOrganization();
 
   const [tab, setTab] = useState<'my' | 'team' | 'library'>('my');
-  const [userRole, setUserRole] = useState('STAFF');
-  const [orgId, setOrgId] = useState('');
+  const userRole = currentOrg?.role ?? 'STAFF';
+  const orgId = currentOrg?.id ?? '';
 
   // My skills
   const [mySkills, setMySkills] = useState<StaffSkill[]>([]);
@@ -129,18 +131,6 @@ export function Skills() {
   const [aiSaving, setAiSaving] = useState(false);
   const [aiError, setAiError] = useState('');
 
-  // ── Fetch org ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    fetch(`/api/organizations?userId=${session.user.id}`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => {
-        if (d.organizations?.[0]) {
-          setOrgId(d.organizations[0].id);
-          setUserRole(d.organizations[0].role || 'STAFF');
-        }
-      }).catch(console.error);
-  }, [session]);
 
   const headers = useCallback(() => ({ 'x-org-id': orgId, 'Content-Type': 'application/json' }), [orgId]);
 
