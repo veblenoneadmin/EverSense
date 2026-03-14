@@ -339,7 +339,7 @@ const MainLayout: React.FC = () => {
                             onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
-                            Go to {selectedNotif.link.replace('/', '').replace('-', ' ') || 'page'}
+                            Go to page
                           </button>
                         )}
                       </div>
