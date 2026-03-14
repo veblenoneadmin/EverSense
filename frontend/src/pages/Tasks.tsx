@@ -121,7 +121,7 @@ export function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string>('CLIENT');
+  const userRole = currentOrg?.role ?? 'CLIENT';
   const [searchTerm, setSearchTerm] = useState('');
 
   // Org members for assignee picker
@@ -190,17 +190,6 @@ export function Tasks() {
   // Active timers from other users (admin view)
   const [activeTimers, setActiveTimers] = useState<{ userId: string; taskId: string; startedAt: number; name: string }[]>([]);
 
-  // ── fetch user role ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const go = async () => {
-      if (!session?.user?.id) return;
-      try {
-        const d = await apiClient.fetch('/api/organizations');
-        if (d.organizations?.length > 0) setUserRole(d.organizations[0].role || 'CLIENT');
-      } catch { /* ignore */ }
-    };
-    if (session) go();
-  }, [session]);
 
   // ── fetch tasks ────────────────────────────────────────────────────────────
   const fetchTasks = async (showLoader = true) => {
