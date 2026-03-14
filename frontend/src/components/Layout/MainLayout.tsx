@@ -330,18 +330,26 @@ const MainLayout: React.FC = () => {
                           </p>
                         )}
                         {/* CTA */}
-                        {selectedNotif.link && (
-                          <button
-                            onClick={() => handleNotifNavigate(selectedNotif.link!)}
-                            className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-[13px] font-semibold transition-opacity"
-                            style={{ background: VS.accent, color: '#fff', border: 'none', cursor: 'pointer' }}
-                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '0.85'}
-                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            Go to page
-                          </button>
-                        )}
+                        {(() => {
+                          const typeLinkMap: Record<string, string> = {
+                            task: '/tasks', comment: '/tasks', due_soon: '/tasks', overdue: '/tasks',
+                            project: '/projects', calendar: '/calendar', meeting: '/calendar',
+                            member: '/admin',
+                          };
+                          const dest = selectedNotif.link || typeLinkMap[selectedNotif.type] || '/dashboard';
+                          return (
+                            <button
+                              onClick={() => handleNotifNavigate(dest)}
+                              className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-[13px] font-semibold transition-opacity"
+                              style={{ background: VS.accent, color: '#fff', border: 'none', cursor: 'pointer' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '0.85'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Go to page
+                            </button>
+                          );
+                        })()}
                       </div>
                     </>
                   ) : (
