@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu } from 'lucide-react';
@@ -35,6 +35,7 @@ const pageTitles: Record<string, string> = {
 const MainLayout: React.FC = () => {
   const { data: session } = useSession();
   const location = useLocation();
+  const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
@@ -137,7 +138,8 @@ const MainLayout: React.FC = () => {
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
     }
-    if (notif.link) window.location.href = notif.link;
+    setShowNotifications(false);
+    if (notif.link) navigate(notif.link);
   };
 
   const timeAgo = (iso: string) => {

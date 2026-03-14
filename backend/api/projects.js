@@ -207,6 +207,7 @@ router.post('/', requireAuth, withOrgScope, validateBody(projectSchemas.create),
             title: `New Project: ${project.name}`,
             body: `Created by ${creator?.name || 'a team member'}.`,
             type: 'project',
+            link: '/projects',
           });
         }
       }
@@ -296,6 +297,7 @@ router.patch('/:id', requireAuth, withOrgScope, validateBody(projectSchemas.upda
               title: `Project Updated: ${project.name}`,
               body: `Status changed to "${project.status}" by ${updater?.name || 'a team member'}.`,
               type: 'project',
+              link: '/projects',
             });
           }
         }

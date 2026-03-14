@@ -617,6 +617,7 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
             title: `New Task Assigned: ${title}`,
             body: `Assigned to you by ${creator?.name || 'a team member'}${task.project ? ` in "${task.project.name}"` : ''}.`,
             type: 'task',
+            link: '/tasks',
           });
         }
       }
@@ -731,6 +732,7 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
             title: `Task Assigned to You: ${task.title}`,
             body: `Assigned by ${updater?.name || 'a team member'}${task.project ? ` (${task.project.name})` : ''}.`,
             type: 'task',
+            link: '/tasks',
           });
         }
       }
@@ -845,6 +847,7 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
             title: `Task Assigned to You: ${task.title}`,
             body: `Assigned by ${updater?.name || 'a team member'}${task.project ? ` (${task.project.name})` : ''}.`,
             type: 'task',
+            link: '/tasks',
           });
         }
       }
@@ -896,6 +899,7 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
         title: `Task Status Updated: ${task.title}`,
         body: `Status changed to "${status}" by ${updater?.name || 'a team member'}.`,
         type: 'task',
+        link: '/tasks',
       });
     }
     // If completed, also notify all org admins/owners (excluding the completer and assignee)
@@ -912,6 +916,7 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
               title: `Task Completed: ${task.title}`,
               body: `"${task.title}" has been marked as completed.`,
               type: 'task',
+              link: '/tasks',
             });
           }
         }
@@ -1148,6 +1153,7 @@ router.post('/:taskId/comments', requireAuth, withOrgScope, async (req, res) => 
             title: `New Comment on: ${taskInfo.title}`,
             body: `${commenterName}: "${preview}"`,
             type: 'comment',
+            link: '/tasks',
           });
         }
       }
