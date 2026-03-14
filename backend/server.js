@@ -35,6 +35,7 @@ import leavesRoutes from './api/leaves.js';
 import apikeysRoutes from './api/apikeys.js';
 import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
+import { startAttendanceCron } from './lib/attendance-cron.js';
 import {
   blockPublicRegistration, 
   addInternalBranding, 
@@ -3052,6 +3053,7 @@ async function startServer() {
   await ensureProfileColumns();
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
+  startAttendanceCron();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
