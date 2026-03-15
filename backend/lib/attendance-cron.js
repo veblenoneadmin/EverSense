@@ -1,12 +1,12 @@
 // backend/lib/attendance-cron.js
-// Runs every 5 minutes — auto-clocks out sessions open longer than 9h 30m
+// Checks every 5 minutes — auto-clocks out sessions open longer than 9h 30m
 // and sends notifications to the user + all ADMIN/OWNER/HALL_OF_JUSTICE members
 
-import cron from 'node-cron';
 import { prisma } from './prisma.js';
 import { createNotification } from '../api/notifications.js';
 
 const AUTO_CLOCKOUT_SECONDS = 9.5 * 3600; // 9 hours 30 minutes
+const INTERVAL_MS = 5 * 60 * 1000;        // every 5 minutes
 
 function fmtDuration(seconds) {
   const h = Math.floor(seconds / 3600);
@@ -47,7 +47,7 @@ async function runAutoClockout() {
       let userEmail = '';
       try {
         const userRows = await prisma.$queryRawUnsafe(
-          'SELECT name, email FROM User WHERE id = ? LIMIT 1',
+          'SELECT name, email FROM `User` WHERE id = ? LIMIT 1',
           row.userId
         );
         if (userRows.length) {
@@ -93,7 +93,7 @@ async function runAutoClockout() {
         console.warn('[AttendanceCron] Manager notification error:', e.message);
       }
 
-      console.log(`[AttendanceCron] Auto-clocked out ${userName} (${row.userId}) after ${durationStr}`);
+      console.log(`[AttendanceCron] ✅ Auto-clocked out ${userName} (${row.userId}) after ${durationStr}`);
     }
   } catch (err) {
     console.error('[AttendanceCron] Error:', err.message);
@@ -101,7 +101,9 @@ async function runAutoClockout() {
 }
 
 export function startAttendanceCron() {
-  // Run every 5 minutes
-  cron.schedule('*/5 * * * *', runAutoClockout);
-  console.log('  ✅ Attendance auto-clockout cron started (checks every 5 min, limit: 9h30m)');
+  // Run once immediately on startup to catch any already-overdue sessions
+  runAutoClockout();
+  // Then run every 5 minutes via native setInterval (no external deps)
+  setInterval(runAutoClockout, INTERVAL_MS);
+  console.log('  ✅ Attendance auto-clockout started (every 5 min, limit: 9h30m)');
 }
