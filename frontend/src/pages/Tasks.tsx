@@ -173,7 +173,7 @@ export function Tasks() {
   const [showSort, setShowSort] = useState(false);
   const [sortBy, setSortBy] = useState<
     'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'due_asc' | 'due_desc' | 'title_asc' | 'title_desc'
-  >('created_desc');
+  >('priority_desc');
 
   // Timer — state is hydrated from localStorage so it survives refresh/restart
   const [timerTaskId, setTimerTaskId] = useState<string | null>(() => {
@@ -1246,6 +1246,23 @@ export function Tasks() {
                       >
                         {pCfg.label}
                       </div>
+
+                      {/* ── UP NEXT badge: shown on first To Do task while dragging ── */}
+                      {col.id === 'not_started' && draggingId !== null && colTasks.filter(t => t.id !== draggingId)[0]?.id === task.id && (
+                        <div
+                          className="absolute right-3 z-30 px-3 py-[3px] rounded-full text-[10px] font-bold tracking-widest whitespace-nowrap"
+                          style={{
+                            top: 0,
+                            transform: 'translateY(-50%)',
+                            background: 'linear-gradient(135deg,#0d2a1f,#0f3324)',
+                            color: '#4ec9b0',
+                            border: '1px solid #4ec9b099',
+                            boxShadow: '0 2px 8px #4ec9b040',
+                          }}
+                        >
+                          ↑ UP NEXT
+                        </div>
+                      )}
                     </div>
                   );
                 })}
