@@ -408,7 +408,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                 {[
                   { icon: Calendar, label: 'Due Date',        value: fmtDate(task.dueDate),    color: isOverdue ? VS.red : VS.text1 },
                   { icon: Folder,   label: 'Project',         value: task.project || '—',       color: VS.text1 },
-                  { icon: Clock,    label: 'Est. Hours',      value: `${task.estimatedHours}h`, color: VS.text1 },
+                  { icon: Clock,    label: 'Est. Time',      value: (() => { const h = Math.floor(task.estimatedHours || 0); const m = Math.round(((task.estimatedHours || 0) % 1) * 60); return h && m ? `${h}h ${m}m` : h ? `${h}h` : m ? `${m}m` : '—'; })(), color: VS.text1 },
                   { icon: Clock,    label: 'Actual Hours',    value: `${task.actualHours}h`,    color: VS.text1 },
                   { icon: User,     label: 'Assignee',        value: task.assignee || '—',       color: VS.text1 },
                 ].map(({ icon: Icon, label, value, color }) => (

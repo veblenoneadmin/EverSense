@@ -1542,15 +1542,41 @@ export function Tasks() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Est. Hours</label>
-                  <input
-                    type="number"
-                    value={newTaskForm.estimatedHours}
-                    onChange={e => setNewTaskForm(p => ({ ...p, estimatedHours: parseFloat(e.target.value) || 0 }))}
-                    className={inputCls}
-                    style={inputStyle}
-                    min="0" step="0.5"
-                  />
+                  <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Est. Time</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="number"
+                        value={Math.floor(newTaskForm.estimatedHours)}
+                        onChange={e => {
+                          const h = Math.max(0, parseInt(e.target.value) || 0);
+                          const m = Math.round((newTaskForm.estimatedHours % 1) * 60);
+                          setNewTaskForm(p => ({ ...p, estimatedHours: h + m / 60 }));
+                        }}
+                        className={inputCls}
+                        style={{ ...inputStyle, paddingRight: 28 }}
+                        min="0"
+                        placeholder="0"
+                      />
+                      <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: VS.text2, pointerEvents: 'none' }}>h</span>
+                    </div>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="number"
+                        value={Math.round((newTaskForm.estimatedHours % 1) * 60)}
+                        onChange={e => {
+                          const m = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                          const h = Math.floor(newTaskForm.estimatedHours);
+                          setNewTaskForm(p => ({ ...p, estimatedHours: h + m / 60 }));
+                        }}
+                        className={inputCls}
+                        style={{ ...inputStyle, paddingRight: 28 }}
+                        min="0" max="59"
+                        placeholder="0"
+                      />
+                      <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: VS.text2, pointerEvents: 'none' }}>m</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1748,15 +1774,41 @@ export function Tasks() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Est. Hours</label>
-                  <input
-                    type="number"
-                    value={editTaskForm.estimatedHours}
-                    onChange={e => setEditTaskForm(p => ({ ...p, estimatedHours: parseFloat(e.target.value) || 0 }))}
-                    className={inputCls}
-                    style={inputStyle}
-                    min="0" step="0.5"
-                  />
+                  <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Est. Time</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="number"
+                        value={Math.floor(editTaskForm.estimatedHours)}
+                        onChange={e => {
+                          const h = Math.max(0, parseInt(e.target.value) || 0);
+                          const m = Math.round((editTaskForm.estimatedHours % 1) * 60);
+                          setEditTaskForm(p => ({ ...p, estimatedHours: h + m / 60 }));
+                        }}
+                        className={inputCls}
+                        style={{ ...inputStyle, paddingRight: 28 }}
+                        min="0"
+                        placeholder="0"
+                      />
+                      <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: VS.text2, pointerEvents: 'none' }}>h</span>
+                    </div>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="number"
+                        value={Math.round((editTaskForm.estimatedHours % 1) * 60)}
+                        onChange={e => {
+                          const m = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                          const h = Math.floor(editTaskForm.estimatedHours);
+                          setEditTaskForm(p => ({ ...p, estimatedHours: h + m / 60 }));
+                        }}
+                        className={inputCls}
+                        style={{ ...inputStyle, paddingRight: 28 }}
+                        min="0" max="59"
+                        placeholder="0"
+                      />
+                      <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: VS.text2, pointerEvents: 'none' }}>m</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
