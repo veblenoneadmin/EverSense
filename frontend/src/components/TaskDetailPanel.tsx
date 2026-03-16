@@ -154,14 +154,14 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
     finally { setAL(false); }
   };
 
-  const fetchChecklist = async () => {
+  const fetchChecklist = async (silent = false) => {
     if (!task.isTeamTask) return;
-    setCLLoading(true);
+    if (!silent) setCLLoading(true);
     try {
       const data = await api.fetch(`/api/tasks/${task.id}/checklist`);
       setChecklist(data.items ?? []);
     } catch { /* ignore */ }
-    finally { setCLLoading(false); }
+    finally { if (!silent) setCLLoading(false); }
   };
 
   useEffect(() => {
@@ -169,6 +169,14 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
       onCountsLoaded?.(task.id, cc, ac);
     });
     fetchChecklist();
+
+    // Poll checklist every 15s so completed sub-tasks auto-check
+    if (task.isTeamTask) {
+      const interval = setInterval(() => {
+        fetchChecklist(true);
+      }, 15000);
+      return () => clearInterval(interval);
+    }
   }, [task.id]);
 
   useEffect(() => {
