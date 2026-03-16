@@ -374,12 +374,13 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         for (const t of formattedTasks) t.assignees = aMap[t.id] || [];
       } catch (_) {}
 
-      // Batch-fetch sub-task progress for team tasks (sub-tasks are real MacroTask records)
+      // Batch-fetch sub-task progress + assignees for team tasks
       try {
         await ensureTeamTaskSchema();
         const teamTaskIds = formattedTasks.filter(t => t.isTeamTask).map(t => t.id);
         if (teamTaskIds.length > 0) {
           const tph = teamTaskIds.map(() => '?').join(',');
+          // Progress counts
           const subTaskRows = await prisma.$queryRawUnsafe(
             `SELECT parentTaskId, COUNT(*) as total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as done FROM macro_tasks WHERE parentTaskId IN (${tph}) GROUP BY parentTaskId`,
             ...teamTaskIds
@@ -387,6 +388,21 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
           for (const r of subTaskRows) {
             const t = formattedTasks.find(x => x.id === r.parentTaskId);
             if (t) { t.checklistTotal = Number(r.total); t.checklistDone = Number(r.done); }
+          }
+          // Sub-task assignees — replace the parent's assignees list with team members
+          const subAssigneeRows = await prisma.$queryRawUnsafe(
+            `SELECT mt.parentTaskId, mt.userId, u.name, u.email FROM macro_tasks mt JOIN \`User\` u ON u.id = mt.userId WHERE mt.parentTaskId IN (${tph})`,
+            ...teamTaskIds
+          );
+          const subAMap = {};
+          for (const r of subAssigneeRows) {
+            if (!subAMap[r.parentTaskId]) subAMap[r.parentTaskId] = [];
+            if (!subAMap[r.parentTaskId].some(x => x.id === r.userId)) {
+              subAMap[r.parentTaskId].push({ id: r.userId, name: r.name, email: r.email });
+            }
+          }
+          for (const t of formattedTasks) {
+            if (t.isTeamTask && subAMap[t.id]) t.assignees = subAMap[t.id];
           }
         }
       } catch (_) {}
