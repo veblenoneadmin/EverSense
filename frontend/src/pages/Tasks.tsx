@@ -1010,8 +1010,6 @@ export function Tasks() {
                   const isDragging = draggingId === task.id;
                   const date = formatDate(task.dueDate);
                   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'completed' && task.status !== 'cancelled';
-                  const isTeam = task.isTeamTask && (task.checklistTotal || 0) > 0;
-                  const teamProgress = isTeam ? Math.round((task.checklistDone || 0) / (task.checklistTotal || 1) * 100) : 0;
                   return (
                     /*
                      * Wrapper: draggable, position:relative (no overflow so badge can bleed above).
@@ -1267,29 +1265,6 @@ export function Tasks() {
                         {pCfg.label}
                       </div>
 
-                      {/* ── Team progress badge ── */}
-                      {task.isTeamTask && (task.checklistTotal || 0) > 0 && (
-                        <div
-                          className="absolute left-3 bottom-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-md"
-                          style={{ background: 'rgba(78,201,176,0.12)', border: '1px solid #4ec9b033' }}
-                        >
-                          <Users className="h-3 w-3" style={{ color: VS.teal }} />
-                          <span className="text-[10px] font-bold" style={{ color: VS.teal }}>
-                            {task.checklistDone || 0}/{task.checklistTotal}
-                          </span>
-                          <div className="h-1 w-12 rounded-full overflow-hidden" style={{ background: '#333' }}>
-                            <div className="h-full rounded-full" style={{ width: `${teamProgress}%`, background: VS.teal }} />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Sub-task indicator */}
-                      {task.parentTaskId && (
-                        <div className="absolute right-3 bottom-3 z-20 flex items-center gap-1 px-2 py-0.5 rounded-md"
-                          style={{ background: 'rgba(86,156,214,0.12)', border: '1px solid rgba(86,156,214,0.3)' }}>
-                          <span className="text-[10px] font-semibold" style={{ color: VS.blue }}>↳ Sub-task</span>
-                        </div>
-                      )}
 
                       {/* ── UP NEXT badge: shown on first To Do task while dragging ── */}
                       {col.id === 'not_started' && draggingId !== null && colTasks.filter(t => t.id !== draggingId)[0]?.id === task.id && (
