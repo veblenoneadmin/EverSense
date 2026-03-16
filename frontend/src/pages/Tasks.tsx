@@ -167,6 +167,16 @@ export function Tasks() {
 
   // My tasks vs all tasks toggle (OWNER/ADMIN only)
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
+
+  // Clock-in gate for STAFF
+  const [isClockedIn, setIsClockedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!currentOrg?.id || isAdminOrOwner) { setIsClockedIn(true); return; }
+    fetch(`/api/attendance/status?orgId=${currentOrg.id}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setIsClockedIn(d?.clockedIn ?? false))
+      .catch(() => setIsClockedIn(false));
+  }, [currentOrg?.id, isAdminOrOwner]);
   const [showAllTasks, setShowAllTasks] = useState(false);
 
   // Filter
@@ -618,6 +628,48 @@ export function Tasks() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: VS.accent }} />
+      </div>
+    );
+  }
+
+  // Block STAFF who haven't clocked in
+  if (isClockedIn === false && !isAdminOrOwner) {
+    return (
+      <div className="flex items-center justify-center h-full" style={{ minHeight: 'calc(100vh - 56px)' }}>
+        <div style={{
+          background: VS.bg1,
+          border: `1px solid ${VS.border}`,
+          borderRadius: 16,
+          padding: '48px 40px',
+          textAlign: 'center',
+          maxWidth: 400,
+        }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: `${VS.accent}20`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 20px',
+          }}>
+            <Clock style={{ width: 28, height: 28, color: VS.accent }} />
+          </div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: VS.text0, margin: '0 0 8px' }}>
+            Clock In Required
+          </h2>
+          <p style={{ fontSize: 13, color: VS.text2, margin: '0 0 24px', lineHeight: 1.6 }}>
+            You need to clock in before you can access the task board.
+          </p>
+          <a
+            href="/attendance"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: VS.accent, color: 'white',
+              padding: '10px 24px', borderRadius: 8,
+              fontSize: 13, fontWeight: 600, textDecoration: 'none',
+            }}
+          >
+            Go to Attendance
+          </a>
+        </div>
       </div>
     );
   }
