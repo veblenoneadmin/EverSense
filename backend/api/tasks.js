@@ -306,6 +306,25 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       const taskIds = formattedTasks.map(t => t.id);
       const ph = taskIds.map(() => '?').join(',');
 
+      // Fetch extra columns added via raw ALTER TABLE (not in Prisma schema)
+      try {
+        await ensureTeamTaskSchema();
+        const extraRows = await prisma.$queryRawUnsafe(
+          `SELECT id, isTeamTask, mainAssigneeId, parentTaskId FROM macro_tasks WHERE id IN (${ph})`,
+          ...taskIds
+        );
+        const extraMap = {};
+        for (const r of extraRows) extraMap[r.id] = r;
+        for (const t of formattedTasks) {
+          const ex = extraMap[t.id];
+          if (ex) {
+            t.isTeamTask = !!(ex.isTeamTask);
+            t.mainAssigneeId = ex.mainAssigneeId || null;
+            t.parentTaskId = ex.parentTaskId || null;
+          }
+        }
+      } catch (_) {}
+
       // Enrich primary assignee names via raw SQL (avoids collation JOIN issues)
       try {
         const userIds = [...new Set(formattedTasks.map(t => t.userId).filter(Boolean))];

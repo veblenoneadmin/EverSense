@@ -1379,18 +1379,23 @@ export function Tasks() {
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="text-sm font-bold" style={{ color: VS.text0 }}>New Task</h3>
                   {userRole !== 'STAFF' && (
-                    <button
-                      type="button"
-                      onClick={() => setNewTaskForm(p => ({ ...p, isTeamTask: !p.isTeamTask, subTasks: p.isTeamTask ? [] : [{ assigneeId: '', title: '' }], assigneeIds: [] }))}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all"
-                      style={newTaskForm.isTeamTask
-                        ? { background: `${VS.teal}22`, color: VS.teal, border: `1px solid ${VS.teal}66` }
-                        : { background: VS.bg3, color: VS.text2, border: `1px solid ${VS.border}` }
-                      }
-                    >
-                      <Users className="h-3 w-3" />
-                      Team Task
-                    </button>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <Users className="h-3 w-3" style={{ color: newTaskForm.isTeamTask ? VS.teal : VS.text2 }} />
+                      <span className="text-[11px] font-medium" style={{ color: newTaskForm.isTeamTask ? VS.teal : VS.text2 }}>Switch to Team Task</span>
+                      <div
+                        onClick={() => setNewTaskForm(p => ({ ...p, isTeamTask: !p.isTeamTask, subTasks: p.isTeamTask ? [] : [{ assigneeId: '', title: '' }], assigneeIds: [] }))}
+                        className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 cursor-pointer"
+                        style={{ background: newTaskForm.isTeamTask ? VS.teal : VS.bg3, border: `1px solid ${newTaskForm.isTeamTask ? VS.teal : VS.border}` }}
+                      >
+                        <span
+                          className="inline-block h-3 w-3 rounded-full transition-transform duration-200"
+                          style={{
+                            background: newTaskForm.isTeamTask ? '#fff' : VS.text2,
+                            transform: newTaskForm.isTeamTask ? 'translateX(14px)' : 'translateX(1px)',
+                          }}
+                        />
+                      </div>
+                    </label>
                   )}
                 </div>
                 <p className="text-[11px]" style={{ color: VS.text2 }}>
