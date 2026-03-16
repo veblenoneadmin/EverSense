@@ -1268,20 +1268,18 @@ export function Tasks() {
                       </div>
 
                       {/* ── Team progress badge ── */}
-                      {task.isTeamTask && (
+                      {task.isTeamTask && (task.checklistTotal || 0) > 0 && (
                         <div
                           className="absolute left-3 bottom-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-md"
                           style={{ background: 'rgba(78,201,176,0.12)', border: '1px solid #4ec9b033' }}
                         >
                           <Users className="h-3 w-3" style={{ color: VS.teal }} />
                           <span className="text-[10px] font-bold" style={{ color: VS.teal }}>
-                            {task.checklistDone || 0}/{task.checklistTotal || 0}
+                            {task.checklistDone || 0}/{task.checklistTotal}
                           </span>
-                          {(task.checklistTotal || 0) > 0 && (
-                            <div className="h-1 w-12 rounded-full overflow-hidden" style={{ background: '#333' }}>
-                              <div className="h-full rounded-full" style={{ width: `${teamProgress}%`, background: VS.teal }} />
-                            </div>
-                          )}
+                          <div className="h-1 w-12 rounded-full overflow-hidden" style={{ background: '#333' }}>
+                            <div className="h-full rounded-full" style={{ width: `${teamProgress}%`, background: VS.teal }} />
+                          </div>
                         </div>
                       )}
 
