@@ -76,7 +76,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; bg: string; text: string;
 };
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  not_started: { label: 'Pending',     bg: 'rgba(86,156,214,0.15)',  text: VS.blue   },
+  not_started: { label: 'Not Started', bg: 'rgba(86,156,214,0.15)',  text: VS.blue   },
   in_progress: { label: 'In Progress', bg: 'rgba(220,220,170,0.15)', text: VS.yellow },
   on_hold:     { label: 'On Hold',     bg: 'rgba(244,71,71,0.15)',   text: VS.red    },
   completed:   { label: 'Done',        bg: 'rgba(78,201,176,0.15)',  text: VS.teal   },
@@ -1125,12 +1125,21 @@ export function Tasks() {
                               })()}
                             </div>
 
-                            <span
-                              className="text-[11px] font-semibold px-3 py-1 rounded-full"
-                              style={{ background: sCfg.bg, color: sCfg.text, border: `1px solid ${sCfg.text}44` }}
-                            >
-                              {sCfg.label}
-                            </span>
+                            {col.id === 'not_started' && colTasks[0]?.id === task.id ? (
+                              <span
+                                className="text-[11px] font-semibold px-3 py-1 rounded-full"
+                                style={{ background: 'rgba(78,201,176,0.15)', color: '#4ec9b0', border: '1px solid #4ec9b044' }}
+                              >
+                                Up Next
+                              </span>
+                            ) : (
+                              <span
+                                className="text-[11px] font-semibold px-3 py-1 rounded-full"
+                                style={{ background: sCfg.bg, color: sCfg.text, border: `1px solid ${sCfg.text}44` }}
+                              >
+                                {sCfg.label}
+                              </span>
+                            )}
                           </div>
                         </div>
 
