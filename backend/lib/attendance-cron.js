@@ -4,6 +4,7 @@
 
 import { prisma } from './prisma.js';
 import { createNotification } from '../api/notifications.js';
+import { broadcast } from './sse.js';
 
 const AUTO_CLOCKOUT_SECONDS = 9.5 * 3600; // 9 hours 30 minutes
 const INTERVAL_MS = 60 * 1000;             // every 1 minute
@@ -41,6 +42,9 @@ async function runAutoClockout() {
          WHERE id = ? AND timeOut IS NULL`,
         now, grossSeconds, row.id
       );
+
+      // Broadcast SSE so all connected clients (admin view) refresh immediately
+      try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch { /* non-fatal */ }
 
       // Fetch user info
       let userName = 'Unknown';
