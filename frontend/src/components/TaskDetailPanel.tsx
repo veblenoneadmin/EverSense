@@ -3,7 +3,7 @@ import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
 import {
   X, MessageSquare, Paperclip, Send, Trash2, Download,
-  Calendar, Clock, Tag, Folder, User, AlertTriangle,
+  Calendar, Clock, Tag, Folder, User, Users, AlertTriangle,
   FileText, Image, File, ChevronRight, Upload, CheckSquare, Check,
 } from 'lucide-react';
 
@@ -25,6 +25,9 @@ interface Task {
   isBillable: boolean;
   tags: string[];
   createdAt: string;
+  isTeamTask?: boolean;
+  mainAssigneeId?: string | null;
+  assignees?: { id: string; name: string; email: string }[];
 }
 
 interface Comment {
@@ -119,6 +122,13 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
   const [reportSuccess, setReportSuccess] = useState(false);
   const reportFileRef = useRef<HTMLInputElement>(null);
 
+  // Team task checklist
+  const [checklist, setChecklist] = useState<{
+    id: string; assigneeId: string; assigneeName: string; assigneeEmail: string;
+    title: string; completed: boolean; completedAt?: string;
+  }[]>([]);
+  const [checklistLoading, setCLLoading] = useState(false);
+
   // ── Fetch comments ────────────────────────────────────────────────────────
   const fetchComments = async (): Promise<number> => {
     setCL(true);
@@ -143,10 +153,21 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
     finally { setAL(false); }
   };
 
+  const fetchChecklist = async () => {
+    if (!task.isTeamTask) return;
+    setCLLoading(true);
+    try {
+      const data = await api.fetch(`/api/tasks/${task.id}/checklist`);
+      setChecklist(data.items ?? []);
+    } catch { /* ignore */ }
+    finally { setCLLoading(false); }
+  };
+
   useEffect(() => {
     Promise.all([fetchComments(), fetchAttachments()]).then(([cc, ac]) => {
       onCountsLoaded?.(task.id, cc, ac);
     });
+    fetchChecklist();
   }, [task.id]);
 
   useEffect(() => {
@@ -212,6 +233,20 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
       await api.fetch(`/api/tasks/${task.id}/attachments/${id}`, { method: 'DELETE' });
       setAttachments(a => a.filter(x => x.id !== id));
     } catch { /* ignore */ }
+  };
+
+  // ── Toggle checklist item ─────────────────────────────────────────────────
+  const handleToggleChecklist = async (itemId: string, completed: boolean) => {
+    setChecklist(prev => prev.map(i => i.id === itemId ? { ...i, completed } : i));
+    try {
+      await api.fetch(`/api/tasks/${task.id}/checklist/${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ completed }),
+      });
+    } catch {
+      // revert on error
+      setChecklist(prev => prev.map(i => i.id === itemId ? { ...i, completed: !completed } : i));
+    }
   };
 
   // ── Submit report ─────────────────────────────────────────────────────────
@@ -371,6 +406,99 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                   </div>
                 ))}
               </div>
+
+              {/* ── Team Task section ── */}
+              {task.isTeamTask && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: VS.text2 }}>
+                      <Users className="h-3.5 w-3.5" />
+                      Team Task
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold" style={{ color: VS.teal }}>
+                        {checklist.filter(i => i.completed).length}/{checklist.length} done
+                      </span>
+                      {checklist.length > 0 && (
+                        <div className="h-1.5 w-24 rounded-full overflow-hidden" style={{ background: VS.bg3 }}>
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.round(checklist.filter(i => i.completed).length / checklist.length * 100)}%`,
+                              background: VS.teal,
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Main assignee */}
+                  {task.mainAssigneeId && (() => {
+                    const lead = task.assignees?.find(a => a.id === task.mainAssigneeId)
+                      || (task.assignee ? { id: task.mainAssigneeId, name: task.assignee, email: '' } : null);
+                    return lead ? (
+                      <div className="flex items-center gap-2.5 p-2.5 rounded-lg mb-3" style={{ background: `${VS.accent}11`, border: `1px solid ${VS.accent}33` }}>
+                        <div className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+                          style={{ background: `${VS.accent}33`, color: VS.accent }}>
+                          {getInitials(lead.name, lead.email)}
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: VS.accent }}>Lead</div>
+                          <div className="text-[12px] font-semibold" style={{ color: VS.text0 }}>{lead.name || lead.email}</div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Checklist */}
+                  {checklistLoading ? (
+                    <div className="text-[12px] py-2" style={{ color: VS.text2 }}>Loading checklist…</div>
+                  ) : checklist.length === 0 ? (
+                    <div className="text-[12px] py-2 italic" style={{ color: VS.text2 }}>No checklist items yet</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {checklist.map(item => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3 p-3 rounded-lg transition-all"
+                          style={{
+                            background: item.completed ? 'rgba(78,201,176,0.07)' : VS.bg1,
+                            border: `1px solid ${item.completed ? '#4ec9b033' : VS.border}`,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleToggleChecklist(item.id, !item.completed)}
+                            className="h-5 w-5 rounded flex items-center justify-center shrink-0 transition-all"
+                            style={{
+                              background: item.completed ? VS.teal : 'transparent',
+                              border: `2px solid ${item.completed ? VS.teal : '#555'}`,
+                            }}
+                          >
+                            {item.completed && <Check className="h-3 w-3 text-white" />}
+                          </button>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                              style={{ background: `${VS.blue}22`, color: VS.blue }}>
+                              {getInitials(item.assigneeName, item.assigneeEmail)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11px] font-semibold truncate" style={{ color: item.completed ? VS.text2 : VS.text0, textDecoration: item.completed ? 'line-through' : 'none' }}>
+                                {item.title}
+                              </div>
+                              <div className="text-[10px]" style={{ color: VS.text2 }}>{item.assigneeName || item.assigneeEmail}</div>
+                            </div>
+                          </div>
+                          {item.completed && (
+                            <span className="text-[10px] shrink-0 font-semibold" style={{ color: VS.teal }}>✓ Done</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Description */}
               {task.description && (

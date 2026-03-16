@@ -42,6 +42,10 @@ interface Task {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  isTeamTask?: boolean;
+  mainAssigneeId?: string | null;
+  checklistTotal?: number;
+  checklistDone?: number;
 }
 
 interface Project {
@@ -133,6 +137,7 @@ export function Tasks() {
   const [newTaskForm, setNewTaskForm] = useState({
     title: '', description: '', priority: 'Medium' as Task['priority'],
     projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
+    isTeamTask: false, mainAssigneeId: '', checklistItems: [] as { assigneeId: string; title: string }[],
   });
   const [taskFormLoading, setTaskFormLoading] = useState(false);
 
@@ -488,11 +493,14 @@ export function Tasks() {
           estimatedHours: newTaskForm.estimatedHours,
           dueDate: newTaskForm.dueDate ? new Date(newTaskForm.dueDate + 'T00:00:00.000Z').toISOString() : undefined,
           tags: newTaskForm.tags ? newTaskForm.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+          isTeamTask: newTaskForm.isTeamTask || undefined,
+          mainAssigneeId: newTaskForm.isTeamTask ? (newTaskForm.mainAssigneeId || undefined) : undefined,
+          checklistItems: newTaskForm.isTeamTask ? newTaskForm.checklistItems : undefined,
         }),
       });
       if (data.task) {
         await fetchTasks(false);
-        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] });
+        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [], isTeamTask: false, mainAssigneeId: '', checklistItems: [] });
         setShowNewTaskForm(false);
       }
     } catch { alert('Failed to create task.'); }
@@ -1001,6 +1009,8 @@ export function Tasks() {
                   const isDragging = draggingId === task.id;
                   const date = formatDate(task.dueDate);
                   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'completed' && task.status !== 'cancelled';
+                  const isTeam = task.isTeamTask && (task.checklistTotal || 0) > 0;
+                  const teamProgress = isTeam ? Math.round((task.checklistDone || 0) / (task.checklistTotal || 1) * 100) : 0;
                   return (
                     /*
                      * Wrapper: draggable, position:relative (no overflow so badge can bleed above).
@@ -1256,6 +1266,24 @@ export function Tasks() {
                         {pCfg.label}
                       </div>
 
+                      {/* ── Team progress badge ── */}
+                      {task.isTeamTask && (
+                        <div
+                          className="absolute left-3 bottom-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-md"
+                          style={{ background: 'rgba(78,201,176,0.12)', border: '1px solid #4ec9b033' }}
+                        >
+                          <Users className="h-3 w-3" style={{ color: VS.teal }} />
+                          <span className="text-[10px] font-bold" style={{ color: VS.teal }}>
+                            {task.checklistDone || 0}/{task.checklistTotal || 0}
+                          </span>
+                          {(task.checklistTotal || 0) > 0 && (
+                            <div className="h-1 w-12 rounded-full overflow-hidden" style={{ background: '#333' }}>
+                              <div className="h-full rounded-full" style={{ width: `${teamProgress}%`, background: VS.teal }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* ── UP NEXT badge: shown on first To Do task while dragging ── */}
                       {col.id === 'not_started' && draggingId !== null && colTasks.filter(t => t.id !== draggingId)[0]?.id === task.id && (
                         <div
@@ -1429,6 +1457,76 @@ export function Tasks() {
                   })}
                 </div>
               </div>
+              )}
+
+              {/* ── Team Task toggle (only when 1+ assignees selected) ── */}
+              {userRole !== 'STAFF' && newTaskForm.assigneeIds.length >= 1 && (
+                <div>
+                  <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
+                    <div>
+                      <div className="text-[12px] font-semibold" style={{ color: VS.text0 }}>Team Task</div>
+                      <div className="text-[10px]" style={{ color: VS.text2 }}>Assign a sub-task to each member</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewTaskForm(p => ({ ...p, isTeamTask: !p.isTeamTask, mainAssigneeId: '', checklistItems: [] }))}
+                      className="h-5 w-9 rounded-full transition-all relative"
+                      style={{ background: newTaskForm.isTeamTask ? VS.accent : '#555' }}
+                    >
+                      <div className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all"
+                        style={{ left: newTaskForm.isTeamTask ? '18px' : '2px' }} />
+                    </button>
+                  </div>
+
+                  {newTaskForm.isTeamTask && (
+                    <div className="mt-2 space-y-2">
+                      {/* Main assignee picker */}
+                      <div>
+                        <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Lead / Main Assignee</label>
+                        <select
+                          value={newTaskForm.mainAssigneeId}
+                          onChange={e => setNewTaskForm(p => ({ ...p, mainAssigneeId: e.target.value }))}
+                          className={inputCls}
+                          style={inputStyle}
+                        >
+                          <option value="">Select lead...</option>
+                          {newTaskForm.assigneeIds.map(id => {
+                            const m = orgMembers.find(x => x.id === id);
+                            return m ? <option key={id} value={id}>{m.name || m.email}</option> : null;
+                          })}
+                        </select>
+                      </div>
+
+                      {/* Per-member sub-task titles */}
+                      <div>
+                        <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Sub-tasks per member</label>
+                        {newTaskForm.assigneeIds.map(id => {
+                          const m = orgMembers.find(x => x.id === id);
+                          const existing = newTaskForm.checklistItems.find(c => c.assigneeId === id);
+                          return (
+                            <div key={id} className="flex items-center gap-2 mb-1.5">
+                              <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                                style={{ background: `${VS.blue}22`, color: VS.blue }}>
+                                {getInitials((m?.name || m?.email) ?? '')}
+                              </div>
+                              <input
+                                type="text"
+                                placeholder={`${m?.name?.split(' ')[0] || 'Member'}'s task...`}
+                                value={existing?.title || ''}
+                                onChange={e => setNewTaskForm(p => {
+                                  const rest = p.checklistItems.filter(c => c.assigneeId !== id);
+                                  return { ...p, checklistItems: e.target.value ? [...rest, { assigneeId: id, title: e.target.value }] : rest };
+                                })}
+                                className={inputCls}
+                                style={{ ...inputStyle, fontSize: 11, padding: '4px 8px' }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
