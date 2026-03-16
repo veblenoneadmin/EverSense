@@ -44,6 +44,7 @@ interface Task {
   updatedAt: string;
   isTeamTask?: boolean;
   mainAssigneeId?: string | null;
+  parentTaskId?: string | null;
   checklistTotal?: number;
   checklistDone?: number;
 }
@@ -137,7 +138,8 @@ export function Tasks() {
   const [newTaskForm, setNewTaskForm] = useState({
     title: '', description: '', priority: 'Medium' as Task['priority'],
     projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
-    isTeamTask: false, mainAssigneeId: '', checklistItems: [] as { assigneeId: string; title: string }[],
+    isTeamTask: false,
+    subTasks: [] as { assigneeId: string; title: string }[],
   });
   const [taskFormLoading, setTaskFormLoading] = useState(false);
 
@@ -494,13 +496,12 @@ export function Tasks() {
           dueDate: newTaskForm.dueDate ? new Date(newTaskForm.dueDate + 'T00:00:00.000Z').toISOString() : undefined,
           tags: newTaskForm.tags ? newTaskForm.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
           isTeamTask: newTaskForm.isTeamTask || undefined,
-          mainAssigneeId: newTaskForm.isTeamTask ? (newTaskForm.mainAssigneeId || undefined) : undefined,
-          checklistItems: newTaskForm.isTeamTask ? newTaskForm.checklistItems : undefined,
+          subTasks: newTaskForm.isTeamTask ? newTaskForm.subTasks.filter(s => s.title && s.assigneeId) : undefined,
         }),
       });
       if (data.task) {
         await fetchTasks(false);
-        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [], isTeamTask: false, mainAssigneeId: '', checklistItems: [] });
+        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [], isTeamTask: false, subTasks: [] });
         setShowNewTaskForm(false);
       }
     } catch { alert('Failed to create task.'); }
@@ -1284,6 +1285,14 @@ export function Tasks() {
                         </div>
                       )}
 
+                      {/* Sub-task indicator */}
+                      {task.parentTaskId && (
+                        <div className="absolute right-3 bottom-3 z-20 flex items-center gap-1 px-2 py-0.5 rounded-md"
+                          style={{ background: 'rgba(86,156,214,0.12)', border: '1px solid rgba(86,156,214,0.3)' }}>
+                          <span className="text-[10px] font-semibold" style={{ color: VS.blue }}>↳ Sub-task</span>
+                        </div>
+                      )}
+
                       {/* ── UP NEXT badge: shown on first To Do task while dragging ── */}
                       {col.id === 'not_started' && draggingId !== null && colTasks.filter(t => t.id !== draggingId)[0]?.id === task.id && (
                         <div
@@ -1367,8 +1376,24 @@ export function Tasks() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold" style={{ color: VS.text0 }}>New Task</h3>
-                <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-sm font-bold" style={{ color: VS.text0 }}>New Task</h3>
+                  {userRole !== 'STAFF' && (
+                    <button
+                      type="button"
+                      onClick={() => setNewTaskForm(p => ({ ...p, isTeamTask: !p.isTeamTask, subTasks: p.isTeamTask ? [] : [{ assigneeId: '', title: '' }], assigneeIds: [] }))}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all"
+                      style={newTaskForm.isTeamTask
+                        ? { background: `${VS.teal}22`, color: VS.teal, border: `1px solid ${VS.teal}66` }
+                        : { background: VS.bg3, color: VS.text2, border: `1px solid ${VS.border}` }
+                      }
+                    >
+                      <Users className="h-3 w-3" />
+                      Team Task
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px]" style={{ color: VS.text2 }}>
                   Adding to{' '}
                   <span style={{ color: COLUMNS.find(c => c.id === newTaskColumnStatus)?.accent }}>
                     {COLUMNS.find(c => c.id === newTaskColumnStatus)?.label}
@@ -1409,7 +1434,7 @@ export function Tasks() {
                 />
               </div>
 
-              {userRole !== 'STAFF' && (
+              {userRole !== 'STAFF' && !newTaskForm.isTeamTask && (
               <div>
                 <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>
                   Assignees
@@ -1459,73 +1484,65 @@ export function Tasks() {
               </div>
               )}
 
-              {/* ── Team Task toggle (only when 1+ assignees selected) ── */}
-              {userRole !== 'STAFF' && newTaskForm.assigneeIds.length >= 1 && (
-                <div>
-                  <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
-                    <div>
-                      <div className="text-[12px] font-semibold" style={{ color: VS.text0 }}>Team Task</div>
-                      <div className="text-[10px]" style={{ color: VS.text2 }}>Assign a sub-task to each member</div>
-                    </div>
+              {/* ── Team Task sub-tasks builder ── */}
+              {newTaskForm.isTeamTask && (
+                <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${VS.accent}44`, background: `${VS.accent}08` }}>
+                  <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: `1px solid ${VS.accent}33` }}>
+                    <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: VS.accent }}>Sub-tasks</span>
+                    <span className="text-[10px]" style={{ color: VS.text2 }}>Each member gets this on their board</span>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    {newTaskForm.subTasks.map((sub, idx) => {
+                      const m = orgMembers.find(x => x.id === sub.assigneeId);
+                      return (
+                        <div key={idx} className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                            style={{ background: m ? `${VS.blue}22` : VS.bg3, color: VS.blue }}>
+                            {m ? getInitials(m.name || m.email) : '?'}
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Sub-task title..."
+                            value={sub.title}
+                            onChange={e => setNewTaskForm(p => {
+                              const updated = [...p.subTasks];
+                              updated[idx] = { ...updated[idx], title: e.target.value };
+                              return { ...p, subTasks: updated };
+                            })}
+                            className={inputCls}
+                            style={{ ...inputStyle, flex: 1, fontSize: 12, padding: '5px 8px' }}
+                          />
+                          <select
+                            value={sub.assigneeId}
+                            onChange={e => setNewTaskForm(p => {
+                              const updated = [...p.subTasks];
+                              updated[idx] = { ...updated[idx], assigneeId: e.target.value };
+                              return { ...p, subTasks: updated };
+                            })}
+                            className={inputCls}
+                            style={{ ...inputStyle, width: 120, fontSize: 11, padding: '5px 6px' }}
+                          >
+                            <option value="">Assign...</option>
+                            {orgMembers.map(m2 => (
+                              <option key={m2.id} value={m2.id}>{m2.name || m2.email}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => setNewTaskForm(p => ({ ...p, subTasks: p.subTasks.filter((_, i) => i !== idx) }))}
+                            style={{ color: VS.text2, background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
                     <button
                       type="button"
-                      onClick={() => setNewTaskForm(p => ({ ...p, isTeamTask: !p.isTeamTask, mainAssigneeId: '', checklistItems: [] }))}
-                      className="h-5 w-9 rounded-full transition-all relative"
-                      style={{ background: newTaskForm.isTeamTask ? VS.accent : '#555' }}
+                      onClick={() => setNewTaskForm(p => ({ ...p, subTasks: [...p.subTasks, { assigneeId: '', title: '' }] }))}
+                      className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg transition-colors"
+                      style={{ color: VS.accent, border: `1px dashed ${VS.accent}55`, background: 'transparent', width: '100%', justifyContent: 'center' }}
                     >
-                      <div className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all"
-                        style={{ left: newTaskForm.isTeamTask ? '18px' : '2px' }} />
+                      <Plus className="h-3 w-3" /> Add sub-task
                     </button>
                   </div>
-
-                  {newTaskForm.isTeamTask && (
-                    <div className="mt-2 space-y-2">
-                      {/* Main assignee picker */}
-                      <div>
-                        <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Lead / Main Assignee</label>
-                        <select
-                          value={newTaskForm.mainAssigneeId}
-                          onChange={e => setNewTaskForm(p => ({ ...p, mainAssigneeId: e.target.value }))}
-                          className={inputCls}
-                          style={inputStyle}
-                        >
-                          <option value="">Select lead...</option>
-                          {newTaskForm.assigneeIds.map(id => {
-                            const m = orgMembers.find(x => x.id === id);
-                            return m ? <option key={id} value={id}>{m.name || m.email}</option> : null;
-                          })}
-                        </select>
-                      </div>
-
-                      {/* Per-member sub-task titles */}
-                      <div>
-                        <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Sub-tasks per member</label>
-                        {newTaskForm.assigneeIds.map(id => {
-                          const m = orgMembers.find(x => x.id === id);
-                          const existing = newTaskForm.checklistItems.find(c => c.assigneeId === id);
-                          return (
-                            <div key={id} className="flex items-center gap-2 mb-1.5">
-                              <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-                                style={{ background: `${VS.blue}22`, color: VS.blue }}>
-                                {getInitials((m?.name || m?.email) ?? '')}
-                              </div>
-                              <input
-                                type="text"
-                                placeholder={`${m?.name?.split(' ')[0] || 'Member'}'s task...`}
-                                value={existing?.title || ''}
-                                onChange={e => setNewTaskForm(p => {
-                                  const rest = p.checklistItems.filter(c => c.assigneeId !== id);
-                                  return { ...p, checklistItems: e.target.value ? [...rest, { assigneeId: id, title: e.target.value }] : rest };
-                                })}
-                                className={inputCls}
-                                style={{ ...inputStyle, fontSize: 11, padding: '4px 8px' }}
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 

@@ -27,6 +27,7 @@ interface Task {
   createdAt: string;
   isTeamTask?: boolean;
   mainAssigneeId?: string | null;
+  parentTaskId?: string | null;
   assignees?: { id: string; name: string; email: string }[];
 }
 
