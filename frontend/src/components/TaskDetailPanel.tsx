@@ -347,6 +347,12 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                 className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
                 style={{ background: pCfg.bg, color: pCfg.color }}
               >{(task.priority ?? 'Medium').toUpperCase()}</span>
+              {task.parentTaskId && (
+                <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: `${VS.blue}18`, color: VS.blue }}>
+                  ↳ Sub-task
+                </span>
+              )}
               {isOverdue && (
                 <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold"
                   style={{ background: `${VS.red}18`, color: VS.red }}>
@@ -510,14 +516,14 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
               )}
 
               {/* Description */}
-              {task.description && (
+              {(task.description || task.parentTaskId) && (
                 <div>
                   <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: VS.text2 }}>Description</h3>
                   <div
                     className="p-4 rounded-lg text-[13px] leading-relaxed whitespace-pre-wrap"
-                    style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1 }}
+                    style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: task.description ? VS.text1 : VS.text2 }}
                   >
-                    {task.description}
+                    {task.description || 'No description provided for this sub-task.'}
                   </div>
                 </div>
               )}
