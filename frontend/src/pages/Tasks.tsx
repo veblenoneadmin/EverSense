@@ -571,7 +571,8 @@ export function Tasks() {
       if (filterPriorities.length > 0 && !filterPriorities.includes(t.priority)) return false;
       if (filterProject && t.projectId !== filterProject) return false;
       if (filterOverdueOnly) {
-        const over = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'completed' && t.status !== 'cancelled';
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const over = t.dueDate && new Date(t.dueDate) < today && t.status !== 'completed' && t.status !== 'cancelled';
         if (!over) return false;
       }
       if (filterStaffId && !t.assignees?.some((a: { id: string }) => a.id === filterStaffId)) return false;
@@ -1009,7 +1010,8 @@ export function Tasks() {
                   const sCfg = STATUS_CONFIG[task.status] || STATUS_CONFIG.not_started;
                   const isDragging = draggingId === task.id;
                   const date = formatDate(task.dueDate);
-                  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'completed' && task.status !== 'cancelled';
+                  const _today = new Date(); _today.setHours(0, 0, 0, 0);
+                  const isOverdue = task.dueDate && new Date(task.dueDate) < _today && task.status !== 'completed' && task.status !== 'cancelled';
                   return (
                     /*
                      * Wrapper: draggable, position:relative (no overflow so badge can bleed above).

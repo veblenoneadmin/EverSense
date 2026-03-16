@@ -130,7 +130,7 @@ router.get('/active-timers', requireAuth, withOrgScope, async (req, res) => {
   try {
     const timers = await prisma.$queryRawUnsafe(
       'SELECT at.userId, at.taskId, UNIX_TIMESTAMP(at.startedAt)*1000 AS startedAt, u.name ' +
-      'FROM active_timers at JOIN `user` u ON u.id = at.userId WHERE at.orgId = ?',
+      'FROM active_timers at JOIN `User` u ON u.id = at.userId WHERE at.orgId = ?',
       req.orgId
     );
     res.json({ timers: timers.map(t => ({ ...t, startedAt: Number(t.startedAt) })) });
@@ -257,6 +257,21 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         where.OR = [{ userId }, { id: { in: assigneeTaskIds } }];
       }
     }
+
+    // Exclude completed tasks older than 7 days (expired)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    where.NOT = {
+      AND: [
+        { status: 'completed' },
+        {
+          OR: [
+            { completedAt: { lt: sevenDaysAgo } },
+            // tasks with no completedAt (completed before column existed) — fall back to updatedAt
+            { AND: [{ completedAt: null }, { updatedAt: { lt: sevenDaysAgo } }] }
+          ]
+        }
+      ]
+    };
 
     const tasks = await prisma.macroTask.findMany({
       where,

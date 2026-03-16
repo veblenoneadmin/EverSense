@@ -33,6 +33,7 @@ import firefliesRoutes, { startFirefliesPolling } from './api/fireflies.js';
 import eventsRoutes from './api/events.js';
 import leavesRoutes from './api/leaves.js';
 import apikeysRoutes from './api/apikeys.js';
+import integrationsRoutes from './api/integrations.js';
 import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
 import { startAttendanceCron } from './lib/attendance-cron.js';
@@ -282,6 +283,7 @@ app.use('/api', async (req, res, next) => {
       '/api/system/info',
       '/api/health',
       '/api/ai/',
+      '/api/integrations/google/callback',
       '/test'
     ];
 
@@ -387,6 +389,7 @@ app.use('/api/fireflies', firefliesRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/leaves', leavesRoutes);
 app.use('/api/apikeys', apikeysRoutes);
+app.use('/api/integrations', integrationsRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 
 // Test routes for debugging (NO AUTH - REMOVE IN PRODUCTION)

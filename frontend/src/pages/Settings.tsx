@@ -13,13 +13,19 @@ import {
   Eye,
   EyeOff,
   Camera,
-  Trash2
+  Trash2,
+  Plug,
+  CheckCircle,
+  Key,
+  ExternalLink
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
+import { useApiClient } from '../lib/api-client';
 
 export function Settings() {
   const { data: session } = useSession();
+  const apiClient = useApiClient();
   const [activeTab, setActiveTab] = useState('profile');
 
   // Extract real user data from session
@@ -60,6 +66,13 @@ export function Settings() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Integrations state
+  const [intStatus, setIntStatus] = useState<{ firefliesConfigured: boolean; firefliesKeyMasked: string | null; googleConnected: boolean } | null>(null);
+  const [ffKey, setFfKey] = useState('');
+  const [ffSaving, setFfSaving] = useState(false);
+  const [ffMsg, setFfMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [googleMsg, setGoogleMsg] = useState<string | null>(null);
+
   // Update profile data when session changes
   useEffect(() => {
     if (session?.user) {
@@ -77,6 +90,22 @@ export function Settings() {
     }
   }, [session]);
 
+  // Load integrations status + handle Google OAuth return
+  useEffect(() => {
+    apiClient.fetch('/api/integrations/status').then(d => setIntStatus(d)).catch(() => {});
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'integrations') {
+      setActiveTab('integrations');
+      const g = params.get('google');
+      if (g === 'connected') setGoogleMsg('Google Calendar connected successfully!');
+      else if (g === 'denied') setGoogleMsg('Google authorization was cancelled.');
+      else if (g === 'error') setGoogleMsg('Google authorization failed. Please try again.');
+      // Clean the URL
+      window.history.replaceState({}, '', '/settings');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   console.log('Settings page loaded with user:', session?.user?.name);
 
   const tabs = [
@@ -84,7 +113,8 @@ export function Settings() {
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'preferences', label: 'Preferences', icon: Palette },
     { id: 'billing', label: 'Billing', icon: DollarSign },
-    { id: 'security', label: 'Security', icon: Shield }
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'integrations', label: 'Integrations', icon: Plug },
   ];
 
   const handleSaveProfile = async () => {
@@ -603,6 +633,119 @@ export function Settings() {
               <Save style={{ width: 14, height: 14 }} />
               {passwordSaving ? 'Saving...' : 'Change Password'}
             </button>
+          </div>
+        );
+      case 'integrations':
+        return (
+          <div className="space-y-6">
+            {/* Google Calendar */}
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                <img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="Google Calendar" style={{ width: 24, height: 24 }} />
+                <p style={sectionTitleStyle}>Google Calendar</p>
+              </div>
+              <p style={{ fontSize: 12, color: VS.text2, marginBottom: 16, marginTop: 0 }}>
+                Connect your Google account to create calendar events with Google Meet links.
+              </p>
+
+              {googleMsg && (
+                <p style={{ fontSize: 13, marginBottom: 12, color: googleMsg.includes('successfully') ? VS.teal : VS.red }}>
+                  {googleMsg}
+                </p>
+              )}
+
+              {intStatus?.googleConnected ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: VS.teal, fontSize: 13 }}>
+                    <CheckCircle style={{ width: 16, height: 16 }} />
+                    Google Calendar connected
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await apiClient.fetch('/api/integrations/google', { method: 'DELETE' });
+                      setIntStatus(s => s ? { ...s, googleConnected: false } : s);
+                      setGoogleMsg('Google Calendar disconnected.');
+                    }}
+                    style={{ background: 'transparent', border: `1px solid ${VS.border}`, borderRadius: 6, color: VS.text2, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <a
+                  href="/api/integrations/google/connect"
+                  style={{ ...saveButtonStyle, textDecoration: 'none', display: 'inline-flex' }}
+                >
+                  <ExternalLink style={{ width: 14, height: 14 }} />
+                  Connect Google Calendar
+                </a>
+              )}
+            </div>
+
+            {/* Fireflies */}
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                <Key style={{ width: 18, height: 18, color: VS.accent }} />
+                <p style={sectionTitleStyle}>Fireflies API Key</p>
+              </div>
+              <p style={{ fontSize: 12, color: VS.text2, marginBottom: 16, marginTop: 0 }}>
+                Enter your Fireflies.ai API key to enable meeting transcript sync for your organization.
+              </p>
+
+              {intStatus?.firefliesConfigured && (
+                <p style={{ fontSize: 12, color: VS.teal, marginBottom: 12 }}>
+                  Current key: {intStatus.firefliesKeyMasked}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  value={ffKey}
+                  onChange={e => setFfKey(e.target.value)}
+                  placeholder={intStatus?.firefliesConfigured ? 'Enter new key to replace...' : 'Paste your Fireflies API key...'}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button
+                  disabled={ffSaving || !ffKey.trim()}
+                  onClick={async () => {
+                    setFfSaving(true); setFfMsg(null);
+                    try {
+                      await apiClient.fetch('/api/integrations/fireflies', { method: 'PUT', body: JSON.stringify({ apiKey: ffKey }) });
+                      setFfMsg({ type: 'success', text: 'API key saved.' });
+                      setFfKey('');
+                      const d = await apiClient.fetch('/api/integrations/status');
+                      setIntStatus(d);
+                    } catch (e: unknown) {
+                      setFfMsg({ type: 'error', text: e instanceof Error ? e.message : 'Failed to save key.' });
+                    } finally { setFfSaving(false); }
+                  }}
+                  style={{ ...saveButtonStyle, opacity: (ffSaving || !ffKey.trim()) ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                >
+                  <Save style={{ width: 14, height: 14 }} />
+                  {ffSaving ? 'Saving...' : 'Save Key'}
+                </button>
+              </div>
+
+              {ffMsg && (
+                <p style={{ fontSize: 13, marginTop: 10, color: ffMsg.type === 'success' ? VS.teal : VS.red }}>
+                  {ffMsg.text}
+                </p>
+              )}
+
+              {intStatus?.firefliesConfigured && (
+                <button
+                  onClick={async () => {
+                    await apiClient.fetch('/api/integrations/fireflies', { method: 'DELETE' });
+                    setIntStatus(s => s ? { ...s, firefliesConfigured: false, firefliesKeyMasked: null } : s);
+                    setFfMsg({ type: 'success', text: 'API key removed.' });
+                  }}
+                  style={{ marginTop: 10, background: 'transparent', border: `1px solid ${VS.border}`, borderRadius: 6, color: VS.red, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}
+                >
+                  Remove Key
+                </button>
+              )}
+            </div>
           </div>
         );
       default:
