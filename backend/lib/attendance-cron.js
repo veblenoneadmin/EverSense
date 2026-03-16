@@ -1,12 +1,12 @@
 // backend/lib/attendance-cron.js
-// Checks every 5 minutes — auto-clocks out sessions open longer than 9h 30m
+// Checks every 1 minute — auto-clocks out sessions open longer than 9h 30m
 // and sends notifications to the user + all ADMIN/OWNER/HALL_OF_JUSTICE members
 
 import { prisma } from './prisma.js';
 import { createNotification } from '../api/notifications.js';
 
 const AUTO_CLOCKOUT_SECONDS = 9.5 * 3600; // 9 hours 30 minutes
-const INTERVAL_MS = 5 * 60 * 1000;        // every 5 minutes
+const INTERVAL_MS = 60 * 1000;             // every 1 minute
 
 function fmtDuration(seconds) {
   const h = Math.floor(seconds / 3600);
@@ -105,5 +105,5 @@ export function startAttendanceCron() {
   runAutoClockout();
   // Then run every 5 minutes via native setInterval (no external deps)
   setInterval(runAutoClockout, INTERVAL_MS);
-  console.log('  ✅ Attendance auto-clockout started (every 5 min, limit: 9h30m)');
+  console.log('  ✅ Attendance auto-clockout started (every 1 min, limit: 9h30m)');
 }
