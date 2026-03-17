@@ -6,7 +6,7 @@ import { prisma } from './prisma.js';
 import { createNotification } from '../api/notifications.js';
 import { broadcast } from './sse.js';
 
-const AUTO_CLOCKOUT_SECONDS = 9.5 * 3600; // 9 hours 30 minutes
+const AUTO_CLOCKOUT_SECONDS = 12 * 3600; // 12 hours
 const INTERVAL_MS = 60 * 1000;             // every 1 minute
 
 function fmtDuration(seconds) {
