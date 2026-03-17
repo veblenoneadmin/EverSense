@@ -3052,27 +3052,30 @@ async function ensureAdminCredentialAccount() {
     const user = await prisma.user.findUnique({ where: { email: 'admin@eversense.ai' }, select: { id: true } });
     if (!user) return;
 
-    const existing = await prisma.account.findFirst({
-      where: { userId: user.id, providerId: { in: ['credential', 'email-password', 'email'] } },
+    // Better Auth sign-in ONLY checks providerId === 'credential'
+    const credentialAccount = await prisma.account.findFirst({
+      where: { userId: user.id, providerId: 'credential' },
       select: { id: true, password: true }
     });
 
-    // Already has a valid scrypt hash — leave it alone
-    if (existing?.password?.startsWith('$s')) return;
+    // Already has a proper Better Auth scrypt hash (format: hexsalt:hexhash)
+    if (credentialAccount?.password?.includes(':')) return;
 
     const { hashPassword } = await import('better-auth/crypto');
     const { randomUUID } = await import('crypto');
     const pw = process.env.ADMIN_SETUP_PASSWORD || 'Admin@EverSense2025!';
     const hashed = await hashPassword(pw);
 
-    if (existing) {
-      await prisma.account.update({ where: { id: existing.id }, data: { password: hashed } });
+    if (credentialAccount) {
+      await prisma.account.update({ where: { id: credentialAccount.id }, data: { password: hashed } });
     } else {
+      // Also delete any stale email-password accounts to avoid confusion
+      await prisma.account.deleteMany({ where: { userId: user.id, providerId: { in: ['email-password', 'email'] } } });
       await prisma.account.create({
         data: { id: randomUUID(), accountId: user.id, userId: user.id, providerId: 'credential', password: hashed, createdAt: new Date(), updatedAt: new Date() }
       });
     }
-    console.log('  ✅ admin@eversense.ai credential account ready');
+    console.log('  ✅ admin@eversense.ai credential account fixed');
   } catch (e) {
     console.warn('  ⚠️  ensureAdminCredentialAccount error:', e.message);
   }
