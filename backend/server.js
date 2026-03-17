@@ -181,6 +181,38 @@ app.get('/debug-attendance', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Temp: reopen a session that was incorrectly force-clocked out
+// POST /reopen-session?sessionId=xxx  OR  ?email=prans@example.com
+app.post('/reopen-session', async (req, res) => {
+  try {
+    const { sessionId, email } = req.query;
+    if (sessionId) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE attendance_logs SET timeOut = NULL, duration = 0, updatedAt = NOW(3) WHERE id = ?`,
+        sessionId
+      );
+      return res.json({ success: true, reopened: sessionId });
+    }
+    if (email) {
+      // Find the most recently closed session today for this user
+      const users = await prisma.$queryRawUnsafe(`SELECT id FROM \`User\` WHERE email = ? LIMIT 1`, email);
+      if (!users.length) return res.status(404).json({ error: 'User not found' });
+      const userId = users[0].id;
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT id FROM attendance_logs WHERE userId = ? AND DATE(timeIn) = CURDATE() ORDER BY timeIn DESC LIMIT 1`,
+        userId
+      );
+      if (!rows.length) return res.status(404).json({ error: 'No session found today for this user' });
+      await prisma.$executeRawUnsafe(
+        `UPDATE attendance_logs SET timeOut = NULL, duration = 0, updatedAt = NOW(3) WHERE id = ?`,
+        rows[0].id
+      );
+      return res.json({ success: true, reopened: rows[0].id, userId });
+    }
+    res.status(400).json({ error: 'Provide sessionId or email query param' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Temp: force clock-out all sessions open longer than X hours (default 12)
 app.post('/force-clockout', async (req, res) => {
   try {
