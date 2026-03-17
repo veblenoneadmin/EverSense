@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSSE } from '../hooks/useSSE';
 import { useNavigate } from 'react-router-dom';
 import { pauseTaskTimer, resumeTaskTimer, stopTaskTimer } from '../lib/task-timer';
 import { useSession } from '../lib/auth-client';
@@ -185,12 +186,33 @@ export function Dashboard() {
       });
 
       setTasks(rt.tasks ?? []);
-      if (att.activeLog) setAttendanceActive(att.activeLog);
+      setAttendanceActive(att.activeLog ?? null);
     } catch { /* silently ignore */ }
     finally { setLoading(false); }
   }, [session?.user?.id, currentOrg?.id]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  // ── Re-fetch attendance when cron auto-clocks out (SSE or window event) ───
+  const fetchAttendance = useCallback(async () => {
+    if (!session?.user?.id || !currentOrg?.id) return;
+    try {
+      const res = await fetch(`/api/attendance/status?userId=${session.user.id}&orgId=${currentOrg.id}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setAttendanceActive(data.activeLog ?? null);
+      }
+    } catch { /* ignore */ }
+  }, [session?.user?.id, currentOrg?.id]);
+
+  useEffect(() => {
+    window.addEventListener('attendance-change', fetchAttendance);
+    return () => window.removeEventListener('attendance-change', fetchAttendance);
+  }, [fetchAttendance]);
+
+  useSSE(currentOrg?.id || undefined, (event) => {
+    if (event === 'attendance') fetchAttendance();
+  });
 
   useEffect(() => {
     if (!currentOrg?.id) return;
