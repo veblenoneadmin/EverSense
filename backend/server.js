@@ -201,9 +201,10 @@ app.get("/api/auth", (req, res) => {
   });
 });
 
-// Password reset must be registered BEFORE the Better Auth catch-all
-// so these specific routes are not intercepted by Better Auth
+// These routes must be registered BEFORE the Better Auth catch-all
+// so they are not intercepted by Better Auth
 app.use('/api/auth', passwordResetRoutes);
+app.use('/api/auth', authRoutes);
 
 // Use a catch-all route for Better Auth sub-paths
 app.all(["/api/auth/*", "/api/auth/*splat"], (req, res) => {
@@ -396,9 +397,7 @@ app.use('/api/super-admin', superAdminRoutes);
 import testProjectsRoutes from './api/test-projects.js';
 app.use('/api/test-projects', testProjectsRoutes);
 
-// Additional custom auth routes (password reset, etc.)
-// Note: Better Auth routes are handled above
-app.use('/api/auth', authRoutes);
+// Note: authRoutes and passwordResetRoutes are mounted before the Better Auth catch-all above
 
 // ==================== TEMPORARY FIX ENDPOINT ====================
 // REMOVE THIS AFTER FIXING TONY'S MEMBERSHIP!
