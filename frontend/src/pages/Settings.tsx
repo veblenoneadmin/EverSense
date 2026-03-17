@@ -309,7 +309,7 @@ export function Settings() {
                   setAvatarMsg(null);
                   // Auto-save
                   setAvatarSaving(true);
-                  fetch('/api/users/avatar', {
+                  fetch('/api/auth/avatar', {
                     method: 'POST', credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ dataUrl }),
@@ -341,7 +341,7 @@ export function Settings() {
                 <button disabled={avatarSaving}
                   onClick={() => {
                     setAvatarSaving(true); setAvatarMsg(null);
-                    fetch('/api/users/avatar', { method: 'DELETE', credentials: 'include' })
+                    fetch('/api/auth/avatar', { method: 'DELETE', credentials: 'include' })
                       .then(r => r.json())
                       .then(d => {
                         if (d.success) { setAvatarUrl(null); setAvatarMsg({ type: 'success', text: 'Photo removed.' }); }

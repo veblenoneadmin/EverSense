@@ -34,7 +34,6 @@ import eventsRoutes from './api/events.js';
 import leavesRoutes from './api/leaves.js';
 import apikeysRoutes from './api/apikeys.js';
 import integrationsRoutes from './api/integrations.js';
-import usersRoutes from './api/users.js';
 import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
 import { startAttendanceCron } from './lib/attendance-cron.js';
@@ -202,10 +201,9 @@ app.get("/api/auth", (req, res) => {
   });
 });
 
-// These routes must be registered BEFORE the Better Auth catch-all
-// so they are not intercepted by Better Auth
+// Password reset must be registered BEFORE the Better Auth catch-all
+// so these specific routes are not intercepted by Better Auth
 app.use('/api/auth', passwordResetRoutes);
-app.use('/api/auth', authRoutes);
 
 // Use a catch-all route for Better Auth sub-paths
 app.all(["/api/auth/*", "/api/auth/*splat"], (req, res) => {
@@ -385,7 +383,6 @@ app.use('/api/invitations', invitationRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/calendar', calendarRoutes);
-app.use('/api/users', usersRoutes);
 app.use('/api/kpi-report', kpiReportRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/fireflies', firefliesRoutes);
@@ -399,7 +396,9 @@ app.use('/api/super-admin', superAdminRoutes);
 import testProjectsRoutes from './api/test-projects.js';
 app.use('/api/test-projects', testProjectsRoutes);
 
-// Note: authRoutes and passwordResetRoutes are mounted before the Better Auth catch-all above
+// Additional custom auth routes (password reset, etc.)
+// Note: Better Auth routes are handled above
+app.use('/api/auth', authRoutes);
 
 // ==================== TEMPORARY FIX ENDPOINT ====================
 // REMOVE THIS AFTER FIXING TONY'S MEMBERSHIP!
