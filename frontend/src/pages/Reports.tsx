@@ -699,7 +699,6 @@ export function Reports() {
                   {(() => {
                     const atts = parseAttachments(report.image);
                     if (!atts.length) return null;
-                    const first = atts[0];
                     return (
                       <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {atts.slice(0, 4).map((a, i) => (
