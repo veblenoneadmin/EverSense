@@ -10,7 +10,7 @@ import {
 
 import { VS } from '../lib/theme';
 
-const BREAK_LIMIT = 1800; // 30 minutes in seconds
+const DEFAULT_breakLimitSecs = 1800; // 30 minutes fallback
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 interface LeaveRecord {
@@ -131,6 +131,8 @@ export function TimeLogs() {
   const [userRole, setUserRole]     = useState('STAFF');
   const [isClient, setIsClient]     = useState(false);
   const [leaves, setLeaves]         = useState<LeaveRecord[]>([]);
+  const [breakLimitSecs, setBreakLimitSecs] = useState(DEFAULT_breakLimitSecs);
+  const [breakCountPerDay, setBreakCountPerDay] = useState(1);
 
   // Edit break modal
   const [editBreakLog, setEditBreakLog] = useState<AttendanceLog | null>(null);
@@ -148,7 +150,11 @@ export function TimeLogs() {
   const todayStr = () => new Date().toISOString().slice(0, 10);
   const [onBreak, setOnBreak]       = useState(() => !!localStorage.getItem('att_break_start'));
   const [breakAccum, setBreakAccum] = useState(() => Number(localStorage.getItem('att_break_accum') || 0));
-  const [breakUsed, setBreakUsed]   = useState(() => localStorage.getItem('att_break_used') === new Date().toISOString().slice(0, 10));
+  const [breaksTakenToday, setBreaksTakenToday] = useState(() => {
+    const stored = localStorage.getItem('att_break_used') === new Date().toISOString().slice(0, 10)
+      ? parseInt(localStorage.getItem('att_break_count') || '0') : 0;
+    return stored;
+  });
   const [breakElapsed, setBreakElapsed] = useState(0); // live seconds since break started
 
   // Filters
@@ -236,6 +242,12 @@ export function TimeLogs() {
 
   useEffect(() => {
     if (session?.user?.id) { fetchLogs(); fetchStatus(); }
+    if (orgId) {
+      fetch(`/api/attendance/policy?orgId=${orgId}`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) { setBreakLimitSecs(d.breakLimitSecs ?? DEFAULT_breakLimitSecs); setBreakCountPerDay(d.breakCountPerDay ?? 1); } })
+        .catch(() => {});
+    }
   }, [session?.user?.id, orgId, fetchLogs, fetchStatus]);
 
   // SSE — real-time push (replaces 30s polling interval), no loading spinner
@@ -313,12 +325,11 @@ export function TimeLogs() {
 
   const handleBreak = () => {
     if (!clockedIn) return;
-    if (breakUsed && !onBreak) return;
+    if (!onBreak && breaksTakenToday >= breakCountPerDay) return;
     if (!onBreak) {
       localStorage.setItem('att_break_start', String(Date.now()));
       localStorage.setItem('att_break_used', todayStr());
       setOnBreak(true);
-      setBreakUsed(true);
       pauseTaskTimer();
     } else {
       const started = Number(localStorage.getItem('att_break_start') || Date.now());
@@ -327,6 +338,9 @@ export function TimeLogs() {
       localStorage.setItem('att_break_accum', String(newAccum));
       localStorage.removeItem('att_break_start');
       setBreakAccum(newAccum);
+      const newCount = breaksTakenToday + 1;
+      localStorage.setItem('att_break_count', String(newCount));
+      setBreaksTakenToday(newCount);
       setOnBreak(false);
       setBreakElapsed(0);
       resumeTaskTimer();
@@ -347,7 +361,7 @@ export function TimeLogs() {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       const { breakDuration, duration } = await res.json();
       setLogs(prev => prev.map(l => l.id === editBreakLog.id
-        ? { ...l, breakDuration, duration, overBreak: Math.max(0, breakDuration - BREAK_LIMIT) }
+        ? { ...l, breakDuration, duration, overBreak: Math.max(0, breakDuration - breakLimitSecs) }
         : l
       ));
       setEditBreakLog(null);
@@ -411,8 +425,8 @@ export function TimeLogs() {
 
   // Live break display inside the clock card
   const liveBreakTotal = breakAccum + (onBreak ? breakElapsed : 0);
-  const isOverBreak    = liveBreakTotal > BREAK_LIMIT;
-  const breakRemaining = Math.max(0, BREAK_LIMIT - liveBreakTotal);
+  const isOverBreak    = liveBreakTotal > breakLimitSecs;
+  const breakRemaining = Math.max(0, breakLimitSecs - liveBreakTotal);
 
   if (loading) {
     return (
@@ -516,11 +530,11 @@ export function TimeLogs() {
                 <>
                   <p className="text-[11px]" style={{ color: VS.text2 }}>Break used</p>
                   <p className="text-[13px] font-mono font-semibold tabular-nums"
-                    style={{ color: liveBreakTotal > BREAK_LIMIT ? VS.red : VS.text1 }}>
+                    style={{ color: liveBreakTotal > breakLimitSecs ? VS.red : VS.text1 }}>
                     {fmtDuration(liveBreakTotal)}
-                    {liveBreakTotal > BREAK_LIMIT && (
+                    {liveBreakTotal > breakLimitSecs && (
                       <span className="ml-1 text-[10px]" style={{ color: VS.red }}>
-                        +{fmtDuration(liveBreakTotal - BREAK_LIMIT)} over
+                        +{fmtDuration(liveBreakTotal - breakLimitSecs)} over
                       </span>
                     )}
                   </p>
@@ -534,10 +548,10 @@ export function TimeLogs() {
             <div className="flex flex-col items-end gap-1">
               <button
                 onClick={handleBreak}
-                disabled={clockLoading || (breakUsed && !onBreak)}
+                disabled={clockLoading || (!onBreak && breaksTakenToday >= breakCountPerDay)}
                 title={
-                  breakUsed && !onBreak
-                    ? 'Break already used today (30-min limit)'
+                  !onBreak && breaksTakenToday >= breakCountPerDay
+                    ? `Break limit reached (${breakCountPerDay}/day)`
                     : onBreak
                       ? `Resume work${isOverBreak ? ' · You are over the 30-min limit' : ''}`
                       : 'Take a 30-min break'
@@ -551,11 +565,13 @@ export function TimeLogs() {
                 <Coffee className="h-4 w-4" />
                 {onBreak ? 'Resume' : 'Break'}
               </button>
-              {!onBreak && !breakUsed && (
-                <span className="text-[10px]" style={{ color: VS.text2 }}>30 min limit</span>
+              {!onBreak && breaksTakenToday < breakCountPerDay && (
+                <span className="text-[10px]" style={{ color: VS.text2 }}>
+                  {Math.floor(breakLimitSecs / 60)} min limit · {breaksTakenToday}/{breakCountPerDay} used
+                </span>
               )}
-              {breakUsed && !onBreak && (
-                <span className="text-[10px]" style={{ color: VS.red }}>Break used today</span>
+              {!onBreak && breaksTakenToday >= breakCountPerDay && (
+                <span className="text-[10px]" style={{ color: VS.red }}>Break limit reached today</span>
               )}
               {onBreak && !isOverBreak && (
                 <span className="text-[10px]" style={{ color: VS.text2 }}>

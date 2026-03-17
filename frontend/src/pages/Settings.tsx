@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSession, authClient } from '../lib/auth-client';
+import { useOrganization } from '../contexts/OrganizationContext';
+
 import {
   User,
   Bell,
@@ -17,7 +19,8 @@ import {
   Plug,
   CheckCircle,
   Key,
-  ExternalLink
+  ExternalLink,
+  Coffee,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -26,6 +29,8 @@ import { useApiClient } from '../lib/api-client';
 export function Settings() {
   const { data: session } = useSession();
   const apiClient = useApiClient();
+  const { currentOrg } = useOrganization();
+  const [userRole, setUserRole] = useState<string>('');
   const [activeTab, setActiveTab] = useState('profile');
 
   // Extract real user data from session
@@ -73,6 +78,12 @@ export function Settings() {
   const [ffMsg, setFfMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [googleMsg, setGoogleMsg] = useState<string | null>(null);
 
+  // Attendance policy state (admin/owner only)
+  const isPrivileged = ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(userRole || '');
+  const [attPolicy, setAttPolicy] = useState({ breakLimitH: 0, breakLimitM: 30, breakCountPerDay: 1 });
+  const [attSaving, setAttSaving] = useState(false);
+  const [attMsg, setAttMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Update profile data when session changes
   useEffect(() => {
     if (session?.user) {
@@ -89,6 +100,32 @@ export function Settings() {
       }));
     }
   }, [session]);
+
+  // Load role + attendance policy when org changes
+  useEffect(() => {
+    if (!currentOrg?.id) return;
+    // Fetch role via attendance logs endpoint (returns role)
+    fetch(`/api/attendance/logs?orgId=${currentOrg.id}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.role) setUserRole(d.role); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrg?.id]);
+
+  useEffect(() => {
+    if (!currentOrg?.id || !isPrivileged) return;
+    apiClient.fetch(`/api/attendance/policy?orgId=${currentOrg.id}`)
+      .then(d => {
+        const secs = d.breakLimitSecs ?? 1800;
+        setAttPolicy({
+          breakLimitH: Math.floor(secs / 3600),
+          breakLimitM: Math.round((secs % 3600) / 60),
+          breakCountPerDay: d.breakCountPerDay ?? 1,
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrg?.id, isPrivileged]);
 
   // Load integrations status + handle Google OAuth return
   useEffect(() => {
@@ -115,6 +152,7 @@ export function Settings() {
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'integrations', label: 'Integrations', icon: Plug },
+    ...(isPrivileged ? [{ id: 'attendance', label: 'Attendance', icon: Coffee }] : []),
   ];
 
   const handleSaveProfile = async () => {
@@ -748,6 +786,90 @@ export function Settings() {
             </div>
           </div>
         );
+      case 'attendance':
+        return (
+          <div style={cardStyle}>
+            <p style={sectionTitleStyle}>Break Policy</p>
+            <p style={{ fontSize: 12, color: VS.text2, marginBottom: 20, marginTop: 0 }}>
+              Set the maximum break duration and how many breaks staff can take per day.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Max break duration */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: VS.text2, marginBottom: 8 }}>
+                  Max Break Duration
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ position: 'relative', width: 100 }}>
+                    <input
+                      type="number" min={0} max={9} value={attPolicy.breakLimitH}
+                      onChange={e => setAttPolicy(p => ({ ...p, breakLimitH: Math.max(0, Math.min(9, parseInt(e.target.value) || 0)) }))}
+                      style={{ width: '100%', background: VS.bg3, border: `1px solid ${VS.border2}`, borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: VS.text0, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: VS.text2, pointerEvents: 'none' }}>h</span>
+                  </div>
+                  <div style={{ position: 'relative', width: 100 }}>
+                    <input
+                      type="number" min={0} max={59} value={attPolicy.breakLimitM}
+                      onChange={e => setAttPolicy(p => ({ ...p, breakLimitM: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) }))}
+                      style={{ width: '100%', background: VS.bg3, border: `1px solid ${VS.border2}`, borderRadius: 8, padding: '8px 32px 8px 12px', fontSize: 13, color: VS.text0, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: VS.text2, pointerEvents: 'none' }}>m</span>
+                  </div>
+                </div>
+                <p style={{ fontSize: 11, color: VS.text2, marginTop: 6 }}>
+                  Break time beyond this limit will be shown as "Over Break" in the time logs.
+                </p>
+              </div>
+
+              {/* Breaks per day */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: VS.text2, marginBottom: 8 }}>
+                  Breaks Allowed Per Day
+                </label>
+                <input
+                  type="number" min={1} max={10} value={attPolicy.breakCountPerDay}
+                  onChange={e => setAttPolicy(p => ({ ...p, breakCountPerDay: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) }))}
+                  style={{ width: 100, background: VS.bg3, border: `1px solid ${VS.border2}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, color: VS.text0, outline: 'none' }}
+                />
+                <p style={{ fontSize: 11, color: VS.text2, marginTop: 6 }}>
+                  Staff can take this many breaks per day before the Break button is disabled.
+                </p>
+              </div>
+
+              {attMsg && (
+                <p style={{ fontSize: 13, color: attMsg.type === 'success' ? VS.teal : VS.red }}>{attMsg.text}</p>
+              )}
+
+              <div>
+                <button
+                  onClick={async () => {
+                    if (!currentOrg?.id) return;
+                    setAttSaving(true); setAttMsg(null);
+                    try {
+                      const breakLimitSecs = attPolicy.breakLimitH * 3600 + attPolicy.breakLimitM * 60;
+                      await apiClient.fetch(`/api/attendance/policy?orgId=${currentOrg.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ breakLimitSecs, breakCountPerDay: attPolicy.breakCountPerDay }),
+                      });
+                      setAttMsg({ type: 'success', text: 'Break policy saved.' });
+                    } catch (e: any) {
+                      setAttMsg({ type: 'error', text: e.message || 'Failed to save.' });
+                    } finally {
+                      setAttSaving(false);
+                    }
+                  }}
+                  disabled={attSaving}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 20px', background: VS.accent, border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: attSaving ? 'not-allowed' : 'pointer', opacity: attSaving ? 0.7 : 1 }}
+                >
+                  <Save size={14} /> {attSaving ? 'Saving…' : 'Save Policy'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }

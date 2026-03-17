@@ -466,4 +466,56 @@ router.patch('/logs/:id/break', requireAuth, withOrgScope, async (req, res) => {
   }
 });
 
+// ── GET /api/attendance/policy — get org break policy ────────────────────────
+router.get('/policy', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT `key`, `value` FROM `org_integrations` WHERE orgId = ? AND `key` IN (?, ?)',
+      req.orgId, 'break_limit_secs', 'break_count_per_day'
+    );
+    const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    res.json({
+      breakLimitSecs:    parseInt(map.break_limit_secs   ?? '1800'),
+      breakCountPerDay:  parseInt(map.break_count_per_day ?? '1'),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── PUT /api/attendance/policy — admin saves org break policy ─────────────────
+router.put('/policy', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const membership = await prisma.$queryRawUnsafe(
+      'SELECT role FROM memberships WHERE userId = ? AND orgId = ? LIMIT 1',
+      req.user.id, req.orgId
+    );
+    const role = membership[0]?.role || 'STAFF';
+    if (!['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(role)) {
+      return res.status(403).json({ error: 'Not authorised' });
+    }
+
+    const { breakLimitSecs, breakCountPerDay } = req.body;
+    const limitSecs = Math.max(0, parseInt(breakLimitSecs) || 1800);
+    const countDay  = Math.max(1, parseInt(breakCountPerDay) || 1);
+
+    const upsert = async (key, value) => {
+      const { randomBytes } = await import('crypto');
+      const id = randomBytes(8).toString('hex');
+      await prisma.$executeRawUnsafe(
+        'INSERT INTO `org_integrations` (id, orgId, `key`, `value`) VALUES (?, ?, ?, ?) ' +
+        'ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updatedAt = NOW(3)',
+        id, req.orgId, key, String(value)
+      );
+    };
+
+    await upsert('break_limit_secs',    limitSecs);
+    await upsert('break_count_per_day', countDay);
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;
