@@ -167,6 +167,38 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Server is working!' });
 });
 
+// Temp: diagnose + fix admin account directly via raw SQL
+app.get('/fix-admin', async (req, res) => {
+  try {
+    const { hashPassword } = await import('better-auth/crypto');
+    const { randomUUID } = await import('crypto');
+
+    const users = await prisma.$queryRawUnsafe(`SELECT id, email FROM \`user\` WHERE email = 'admin@eversense.ai' LIMIT 1`);
+    if (!users.length) return res.json({ error: 'User not found' });
+    const userId = users[0].id;
+
+    const accounts = await prisma.$queryRawUnsafe(`SELECT id, providerId, password FROM Account WHERE userId = ?`, userId);
+
+    const pw = process.env.ADMIN_SETUP_PASSWORD || 'Admin@EverSense2025!';
+    const hashed = await hashPassword(pw);
+
+    const credential = accounts.find(a => a.providerId === 'credential');
+    if (credential) {
+      await prisma.$executeRawUnsafe(`UPDATE Account SET password = ? WHERE id = ?`, hashed, credential.id);
+    } else {
+      const newId = randomUUID();
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO Account (id, accountId, userId, providerId, password, createdAt, updatedAt) VALUES (?, ?, ?, 'credential', ?, NOW(), NOW())`,
+        newId, userId, userId, hashed
+      );
+    }
+
+    res.json({ ok: true, userId, accounts: accounts.map(a => ({ id: a.id, providerId: a.providerId, hasPassword: !!a.password })), action: credential ? 'updated' : 'created' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Add logging middleware for auth routes
 app.use('/api/auth', (req, res, next) => {
   console.log(`🔐 Auth ${req.method} ${req.originalUrl}`, {
