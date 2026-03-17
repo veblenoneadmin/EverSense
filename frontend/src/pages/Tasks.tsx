@@ -577,7 +577,7 @@ export function Tasks() {
 
   const filtered = tasks
     .filter(t => {
-      if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase()) && !t.description.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+      if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase()) && !(t.description ?? '').toLowerCase().includes(searchTerm.toLowerCase())) return false;
       if (filterPriorities.length > 0 && !filterPriorities.includes(t.priority)) return false;
       if (filterProject && t.projectId !== filterProject) return false;
       if (filterOverdueOnly) {
