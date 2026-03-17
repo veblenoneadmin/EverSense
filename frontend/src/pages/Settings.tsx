@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession, authClient } from '../lib/auth-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 
@@ -78,11 +78,22 @@ export function Settings() {
   const [ffMsg, setFfMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [googleMsg, setGoogleMsg] = useState<string | null>(null);
 
+  // Avatar state
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(session?.user?.image ?? null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Attendance policy state (admin/owner only)
   const isPrivileged = ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(userRole || '');
   const [attPolicy, setAttPolicy] = useState({ breakLimitH: 0, breakLimitM: 30, breakCountPerDay: 1 });
   const [attSaving, setAttSaving] = useState(false);
   const [attMsg, setAttMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Sync avatar from session
+  useEffect(() => {
+    if (session?.user?.image) setAvatarUrl(session.user.image);
+  }, [session?.user?.image]);
 
   // Update profile data when session changes
   useEffect(() => {
@@ -262,57 +273,96 @@ export function Settings() {
       <div style={cardStyle}>
         <p style={sectionTitleStyle}>Profile Picture</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <div
-            style={{
-              height: 72,
-              width: 72,
-              borderRadius: '50%',
-              background: `linear-gradient(135deg, ${VS.accent}, ${VS.purple})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ fontSize: 24, fontWeight: 700, color: 'white' }}>
-              {profile.firstName[0]}{profile.lastName[0]}
-            </span>
+          {/* Avatar preview */}
+          <div style={{ height: 72, width: 72, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+            background: `linear-gradient(135deg, ${VS.accent}, ${VS.purple})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {avatarUrl
+              ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontSize: 24, fontWeight: 700, color: 'white' }}>
+                  {profile.firstName[0]}{profile.lastName[0]}
+                </span>
+            }
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              style={{
-                background: VS.bg3,
-                border: `1px solid ${VS.border}`,
-                borderRadius: 8,
-                color: VS.text0,
-                padding: '7px 14px',
-                fontSize: 12,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <Camera style={{ width: 14, height: 14 }} />
-              Upload Photo
-            </button>
-            <button
-              style={{
-                background: 'transparent',
-                border: `1px solid ${VS.border}`,
-                borderRadius: 8,
-                color: VS.text2,
-                padding: '7px 14px',
-                fontSize: 12,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <Trash2 style={{ width: 14, height: 14 }} />
-              Remove
-            </button>
+
+          {/* Hidden file input */}
+          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (avatarInputRef.current) avatarInputRef.current.value = '';
+              const reader = new FileReader();
+              reader.onload = ev => {
+                const original = ev.target?.result as string;
+                // Resize to 128×128 on a canvas to keep payload small
+                const img = new Image();
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 128; canvas.height = 128;
+                  const ctx = canvas.getContext('2d')!;
+                  // Cover-crop: centre the image
+                  const scale = Math.max(128 / img.width, 128 / img.height);
+                  const w = img.width * scale, h = img.height * scale;
+                  ctx.drawImage(img, (128 - w) / 2, (128 - h) / 2, w, h);
+                  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                  setAvatarUrl(dataUrl);
+                  setAvatarMsg(null);
+                  // Auto-save
+                  setAvatarSaving(true);
+                  fetch('/api/auth/avatar', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dataUrl }),
+                  })
+                    .then(r => r.json())
+                    .then(d => {
+                      if (d.success) setAvatarMsg({ type: 'success', text: 'Photo updated.' });
+                      else setAvatarMsg({ type: 'error', text: d.error || 'Failed to save.' });
+                    })
+                    .catch(() => setAvatarMsg({ type: 'error', text: 'Upload failed.' }))
+                    .finally(() => setAvatarSaving(false));
+                };
+                img.src = original;
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+
+          <div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => avatarInputRef.current?.click()} disabled={avatarSaving}
+                style={{ background: VS.bg3, border: `1px solid ${VS.border}`, borderRadius: 8,
+                  color: VS.text0, padding: '7px 14px', fontSize: 12, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6, opacity: avatarSaving ? 0.6 : 1 }}>
+                <Camera style={{ width: 14, height: 14 }} />
+                {avatarSaving ? 'Uploading…' : 'Upload Photo'}
+              </button>
+              {avatarUrl && (
+                <button disabled={avatarSaving}
+                  onClick={() => {
+                    setAvatarSaving(true); setAvatarMsg(null);
+                    fetch('/api/auth/avatar', { method: 'DELETE', credentials: 'include' })
+                      .then(r => r.json())
+                      .then(d => {
+                        if (d.success) { setAvatarUrl(null); setAvatarMsg({ type: 'success', text: 'Photo removed.' }); }
+                        else setAvatarMsg({ type: 'error', text: d.error || 'Failed.' });
+                      })
+                      .catch(() => setAvatarMsg({ type: 'error', text: 'Failed to remove.' }))
+                      .finally(() => setAvatarSaving(false));
+                  }}
+                  style={{ background: 'transparent', border: `1px solid ${VS.border}`, borderRadius: 8,
+                    color: VS.text2, padding: '7px 14px', fontSize: 12, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Trash2 style={{ width: 14, height: 14 }} />
+                  Remove
+                </button>
+              )}
+            </div>
+            {avatarMsg && (
+              <p style={{ fontSize: 12, marginTop: 8, color: avatarMsg.type === 'success' ? VS.teal : VS.red }}>
+                {avatarMsg.text}
+              </p>
+            )}
           </div>
         </div>
       </div>
