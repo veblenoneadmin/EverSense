@@ -317,8 +317,8 @@ export function Settings() {
                     .then(r => r.json())
                     .then(d => {
                       if (d.success) {
-                        setAvatarMsg({ type: 'success', text: 'Photo updated.' });
-                        authClient.getSession({ fetchOptions: { cache: 'no-store' } });
+                        setAvatarMsg({ type: 'success', text: 'Photo updated. Refreshing…' });
+                        setTimeout(() => window.location.reload(), 800);
                       } else {
                         setAvatarMsg({ type: 'error', text: d.error || 'Failed to save.' });
                       }
@@ -349,9 +349,8 @@ export function Settings() {
                       .then(r => r.json())
                       .then(d => {
                         if (d.success) {
-                          setAvatarUrl(null);
-                          setAvatarMsg({ type: 'success', text: 'Photo removed.' });
-                          authClient.getSession({ fetchOptions: { cache: 'no-store' } });
+                          setAvatarMsg({ type: 'success', text: 'Photo removed. Refreshing…' });
+                          setTimeout(() => window.location.reload(), 800);
                         } else {
                           setAvatarMsg({ type: 'error', text: d.error || 'Failed.' });
                         }
