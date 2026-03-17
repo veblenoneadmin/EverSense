@@ -104,11 +104,12 @@ function StatCard({
 
 // ── MemberAvatar ──────────────────────────────────────────────────────────────
 function MemberAvatar({ name, image, size = 26 }: { name: string; image?: string | null; size?: number }) {
+  const [imgError, setImgError] = useState(false);
   const initials = name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
   const colors   = [VS.blue, VS.purple, VS.teal, VS.yellow, VS.orange, VS.accent];
   const color    = colors[(name?.charCodeAt(0) ?? 0) % colors.length];
-  return image
-    ? <img src={image} alt={name}
+  return image && !imgError
+    ? <img src={image} alt={name} onError={() => setImgError(true)}
         style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
     : <div style={{
         width: size, height: size, borderRadius: '50%', background: `${color}28`,

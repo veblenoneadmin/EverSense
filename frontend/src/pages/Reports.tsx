@@ -66,10 +66,11 @@ function initials(name?: string | null, email?: string | null) {
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({ name, image, size = 26 }: { name: string; image?: string | null; size?: number }) {
+  const [imgError, setImgError] = useState(false);
   const pal   = [VS.blue, VS.purple, VS.teal, VS.yellow, VS.orange];
   const color = pal[(name?.charCodeAt(0) ?? 0) % pal.length];
-  return image
-    ? <img src={image} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+  return image && !imgError
+    ? <img src={image} alt={name} onError={() => setImgError(true)} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
     : <div style={{ width: size, height: size, borderRadius: '50%', background: `${color}28`, border: `1px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.36, fontWeight: 700, color, flexShrink: 0 }}>
         {initials(name)}
       </div>;
