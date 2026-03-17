@@ -3048,39 +3048,31 @@ async function ensureRoleEnumSchema() {
 
 // Ensure admin@eversense.ai has a valid scrypt credential account
 async function ensureAdminCredentialAccount() {
-  const adminEmail = 'admin@eversense.ai';
-  const defaultPassword = process.env.ADMIN_SETUP_PASSWORD;
-  if (!defaultPassword) return; // Only runs when env var is set
-
   try {
-    const { hashPassword } = await import('better-auth/crypto');
-    const user = await prisma.user.findUnique({ where: { email: adminEmail }, select: { id: true, email: true } });
-    if (!user) { console.warn(`  ⚠️  ensureAdminCredentialAccount: user ${adminEmail} not found`); return; }
+    const user = await prisma.user.findUnique({ where: { email: 'admin@eversense.ai' }, select: { id: true } });
+    if (!user) return;
 
-    // Check if credential account already exists
     const existing = await prisma.account.findFirst({
-      where: { userId: user.id, providerId: { in: ['credential', 'email-password', 'email'] } }
+      where: { userId: user.id, providerId: { in: ['credential', 'email-password', 'email'] } },
+      select: { id: true, password: true }
     });
 
-    const hashed = await hashPassword(defaultPassword);
+    // Already has a valid scrypt hash — leave it alone
+    if (existing?.password?.startsWith('$s')) return;
+
+    const { hashPassword } = await import('better-auth/crypto');
+    const { randomUUID } = await import('crypto');
+    const pw = process.env.ADMIN_SETUP_PASSWORD || 'Admin@EverSense2025!';
+    const hashed = await hashPassword(pw);
+
     if (existing) {
       await prisma.account.update({ where: { id: existing.id }, data: { password: hashed } });
-      console.log(`  ✅ Updated credential account for ${adminEmail}`);
     } else {
-      const { randomUUID } = await import('crypto');
       await prisma.account.create({
-        data: {
-          id: randomUUID(),
-          accountId: user.id,
-          userId: user.id,
-          providerId: 'credential',
-          password: hashed,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }
+        data: { id: randomUUID(), accountId: user.id, userId: user.id, providerId: 'credential', password: hashed, createdAt: new Date(), updatedAt: new Date() }
       });
-      console.log(`  ✅ Created credential account for ${adminEmail}`);
     }
+    console.log('  ✅ admin@eversense.ai credential account ready');
   } catch (e) {
     console.warn('  ⚠️  ensureAdminCredentialAccount error:', e.message);
   }
