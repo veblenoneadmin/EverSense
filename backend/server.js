@@ -3046,6 +3046,46 @@ async function ensureRoleEnumSchema() {
   }
 }
 
+// Ensure admin@eversense.ai has a valid scrypt credential account
+async function ensureAdminCredentialAccount() {
+  const adminEmail = 'admin@eversense.ai';
+  const defaultPassword = process.env.ADMIN_SETUP_PASSWORD;
+  if (!defaultPassword) return; // Only runs when env var is set
+
+  try {
+    const { hashPassword } = await import('better-auth/crypto');
+    const user = await prisma.user.findUnique({ where: { email: adminEmail }, select: { id: true, email: true } });
+    if (!user) { console.warn(`  ⚠️  ensureAdminCredentialAccount: user ${adminEmail} not found`); return; }
+
+    // Check if credential account already exists
+    const existing = await prisma.account.findFirst({
+      where: { userId: user.id, providerId: { in: ['credential', 'email-password', 'email'] } }
+    });
+
+    const hashed = await hashPassword(defaultPassword);
+    if (existing) {
+      await prisma.account.update({ where: { id: existing.id }, data: { password: hashed } });
+      console.log(`  ✅ Updated credential account for ${adminEmail}`);
+    } else {
+      const { randomUUID } = await import('crypto');
+      await prisma.account.create({
+        data: {
+          id: randomUUID(),
+          accountId: user.id,
+          userId: user.id,
+          providerId: 'credential',
+          password: hashed,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      });
+      console.log(`  ✅ Created credential account for ${adminEmail}`);
+    }
+  } catch (e) {
+    console.warn('  ⚠️  ensureAdminCredentialAccount error:', e.message);
+  }
+}
+
 // Run migrations and start server
 async function startServer() {
   await runDatabaseMigrations();
@@ -3054,6 +3094,7 @@ async function startServer() {
   await ensureTaskAssigneesSchema();
   await ensureAccountScopeText();
   await ensureProfileColumns();
+  await ensureAdminCredentialAccount();
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
   startAttendanceCron();
