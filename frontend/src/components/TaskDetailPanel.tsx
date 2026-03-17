@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
 import {
@@ -927,35 +928,6 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                       })}
                     </div>
                   )}
-                  {/* Lightbox */}
-                  {reportLightbox !== null && (() => {
-                    const imgIndexes = reportFiles.map((rf, i) => rf.type.startsWith('image/') ? i : -1).filter(i => i >= 0);
-                    const pos = imgIndexes.indexOf(reportLightbox);
-                    return (
-                      <div onClick={() => setReportLightbox(null)}
-                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <img src={reportFiles[reportLightbox].dataUrl} alt={reportFiles[reportLightbox].name}
-                          style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8 }}
-                          onClick={e => e.stopPropagation()} />
-                        {pos > 0 && (
-                          <button onClick={e => { e.stopPropagation(); setReportLightbox(imgIndexes[pos - 1]); }}
-                            style={{ position: 'fixed', left: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                        )}
-                        {pos < imgIndexes.length - 1 && (
-                          <button onClick={e => { e.stopPropagation(); setReportLightbox(imgIndexes[pos + 1]); }}
-                            style={{ position: 'fixed', right: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                        )}
-                        <button onClick={() => setReportLightbox(null)}
-                          style={{ position: 'fixed', top: 16, right: 16, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    );
-                  })()}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-1">
@@ -976,6 +948,36 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
           </div>
         </div>
       )}
+
+      {/* Lightbox — rendered at body level via portal to escape modal stacking context */}
+      {reportLightbox !== null && createPortal((() => {
+        const imgIndexes = reportFiles.map((rf, i) => rf.type.startsWith('image/') ? i : -1).filter(i => i >= 0);
+        const pos = imgIndexes.indexOf(reportLightbox);
+        return (
+          <div onClick={() => setReportLightbox(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={reportFiles[reportLightbox].dataUrl} alt={reportFiles[reportLightbox].name}
+              style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8 }}
+              onClick={e => e.stopPropagation()} />
+            {pos > 0 && (
+              <button onClick={e => { e.stopPropagation(); setReportLightbox(imgIndexes[pos - 1]); }}
+                style={{ position: 'fixed', left: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            )}
+            {pos < imgIndexes.length - 1 && (
+              <button onClick={e => { e.stopPropagation(); setReportLightbox(imgIndexes[pos + 1]); }}
+                style={{ position: 'fixed', right: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            )}
+            <button onClick={() => setReportLightbox(null)}
+              style={{ position: 'fixed', top: 16, right: 16, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        );
+      })(), document.body)}
     </>
   );
 }
