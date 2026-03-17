@@ -34,7 +34,7 @@ interface Task {
   actualHours: number;
   dueDate?: string;
   assignee?: string;
-  assignees?: { id: string; name: string; email: string }[];
+  assignees?: { id: string; name: string; email: string; image?: string | null }[];
   project?: string;
   projectId?: string;
   isBillable: boolean;
