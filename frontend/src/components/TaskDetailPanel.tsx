@@ -120,6 +120,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
   const [reportDesc, setReportDesc]       = useState('');
   const [reportFiles, setReportFiles]     = useState<{ name: string; type: string; dataUrl: string; file: File }[]>([]);
   const [reportLightbox, setReportLightbox] = useState<number | null>(null);
+  const [reportDragOver, setReportDragOver] = useState(false);
   const [submittingReport, setSubmitting] = useState(false);
   const [reportSuccess, setReportSuccess] = useState(false);
   const reportFileRef = useRef<HTMLInputElement>(null);
@@ -826,7 +827,19 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                 <p className="text-[15px] font-semibold" style={{ color: VS.teal }}>Report submitted!</p>
               </div>
             ) : (
-              <form onSubmit={handleSubmitReport} className="p-5 space-y-4">
+              <form onSubmit={handleSubmitReport} className="p-5 space-y-4"
+                onDragOver={e => { e.preventDefault(); setReportDragOver(true); }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setReportDragOver(false); }}
+                onDrop={e => {
+                  e.preventDefault(); setReportDragOver(false);
+                  Array.from(e.dataTransfer.files).forEach(f => {
+                    const reader = new FileReader();
+                    reader.onload = ev => setReportFiles(prev => [...prev, { name: f.name, type: f.type, dataUrl: ev.target?.result as string, file: f }]);
+                    reader.readAsDataURL(f);
+                  });
+                }}
+                style={{ outline: reportDragOver ? `2px dashed ${VS.accent}` : 'none', outlineOffset: -4 }}
+              >
                 <p className="text-[12px]" style={{ color: VS.text2 }}>
                   Summarise what you accomplished on this task. Attach screenshots, documents, or any supporting files.
                 </p>
@@ -914,7 +927,6 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                       })}
                     </div>
                   )}
-
                   {/* Lightbox */}
                   {reportLightbox !== null && (() => {
                     const imgIndexes = reportFiles.map((rf, i) => rf.type.startsWith('image/') ? i : -1).filter(i => i >= 0);

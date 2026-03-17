@@ -91,9 +91,9 @@ function CreateModal({ projects, onClose, onCreated }: {
   const [saving, setSaving]   = useState(false);
   const [err, setErr]         = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
 
-  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  const addFiles = (files: File[]) => {
     files.forEach(f => {
       const reader = new FileReader();
       reader.onload = ev => {
@@ -101,7 +101,10 @@ function CreateModal({ projects, onClose, onCreated }: {
       };
       reader.readAsDataURL(f);
     });
-    // Reset input so same file can be re-added
+  };
+
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(e.target.files || []));
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -191,7 +194,13 @@ function CreateModal({ projects, onClose, onCreated }: {
               onChange={handleFiles}
               style={{ display: 'none' }}
             />
-            {/* Attach button */}
+            {/* Drop zone wrapping button + thumbnails */}
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(Array.from(e.dataTransfer.files)); }}
+              style={{ border: `1px dashed ${dragOver ? VS.accent : VS.border}`, borderRadius: 8, padding: 10, background: dragOver ? 'rgba(0,122,204,0.06)' : 'transparent', transition: 'border-color 0.15s, background 0.15s' }}
+            >
             <button type="button" onClick={() => fileInputRef.current?.click()}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: VS.bg3, border: `1px solid ${VS.border}`, borderRadius: 8, padding: '7px 14px', fontSize: 12, color: VS.text1, cursor: 'pointer' }}>
               <Paperclip size={13} /> Attach Files
@@ -238,6 +247,7 @@ function CreateModal({ projects, onClose, onCreated }: {
                 })}
               </div>
             )}
+            </div>{/* end drop zone */}
 
             {/* Lightbox */}
             {lightbox !== null && (
