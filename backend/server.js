@@ -167,6 +167,35 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Server is working!' });
 });
 
+// Temp: diagnose admin login
+app.get('/debug-admin', async (req, res) => {
+  try {
+    const { verifyPassword } = await import('better-auth/crypto');
+    const user = await prisma.user.findUnique({ where: { email: 'admin@eversense.ai' }, select: { id: true, email: true } });
+    if (!user) return res.json({ step: 'user_not_found' });
+
+    const accounts = await prisma.account.findMany({ where: { userId: user.id }, select: { id: true, providerId: true, password: true } });
+    const credential = accounts.find(a => a.providerId === 'credential');
+
+    if (!credential) return res.json({ step: 'no_credential_account', accounts: accounts.map(a => a.providerId) });
+    if (!credential.password) return res.json({ step: 'no_password', providerId: credential.providerId });
+
+    const testPassword = process.env.ADMIN_SETUP_PASSWORD || 'Admin@EverSense2025!';
+    const valid = await verifyPassword({ hash: credential.password, password: testPassword });
+
+    res.json({
+      step: 'done',
+      userId: user.id,
+      accounts: accounts.map(a => a.providerId),
+      hashFormat: credential.password.includes(':') ? 'scrypt(ok)' : 'unknown(bad)',
+      passwordVerifies: valid,
+      testPassword
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // Add logging middleware for auth routes
 app.use('/api/auth', (req, res, next) => {
