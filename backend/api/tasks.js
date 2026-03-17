@@ -378,13 +378,13 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       try {
         await ensureAssigneesTable();
         const rows = await prisma.$queryRawUnsafe(
-          `SELECT ta.taskId, ta.userId, u.name, u.email FROM task_assignees ta JOIN User u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
+          `SELECT ta.taskId, ta.userId, u.name, u.email, u.image FROM task_assignees ta JOIN User u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
           ...taskIds
         );
         const aMap = {};
         for (const r of rows) {
           if (!aMap[r.taskId]) aMap[r.taskId] = [];
-          aMap[r.taskId].push({ id: r.userId, name: r.name, email: r.email });
+          aMap[r.taskId].push({ id: r.userId, name: r.name, email: r.email, image: r.image || null });
         }
         for (const t of formattedTasks) t.assignees = aMap[t.id] || [];
       } catch (_) {}
@@ -406,14 +406,14 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
           }
           // Sub-task assignees — replace the parent's assignees list with team members
           const subAssigneeRows = await prisma.$queryRawUnsafe(
-            `SELECT mt.parentTaskId, mt.userId, u.name, u.email FROM macro_tasks mt JOIN \`User\` u ON u.id = mt.userId WHERE mt.parentTaskId IN (${tph})`,
+            `SELECT mt.parentTaskId, mt.userId, u.name, u.email, u.image FROM macro_tasks mt JOIN \`User\` u ON u.id = mt.userId WHERE mt.parentTaskId IN (${tph})`,
             ...teamTaskIds
           );
           const subAMap = {};
           for (const r of subAssigneeRows) {
             if (!subAMap[r.parentTaskId]) subAMap[r.parentTaskId] = [];
             if (!subAMap[r.parentTaskId].some(x => x.id === r.userId)) {
-              subAMap[r.parentTaskId].push({ id: r.userId, name: r.name, email: r.email });
+              subAMap[r.parentTaskId].push({ id: r.userId, name: r.name, email: r.email, image: r.image || null });
             }
           }
           for (const t of formattedTasks) {

@@ -114,6 +114,22 @@ function avatarGradient(name?: string) {
   return AVATAR_COLORS[idx];
 }
 
+function TaskAvatar({ name, email, image, size = 32 }: { name?: string; email?: string; image?: string | null; size?: number }) {
+  const [imgError, setImgError] = useState(false);
+  const label = name || email || '?';
+  if (image && !imgError) {
+    return <img src={image} alt={label} onError={() => setImgError(true)}
+      className="rounded-full ring-2 ring-[#2d2d2d] object-cover"
+      style={{ width: size, height: size, flexShrink: 0 }} />;
+  }
+  return (
+    <div className="rounded-full flex items-center justify-center font-bold text-white ring-2 ring-[#2d2d2d]"
+      style={{ width: size, height: size, fontSize: size * 0.31, background: avatarGradient(label), flexShrink: 0 }}>
+      {getInitials(label)}
+    </div>
+  );
+}
+
 // ── Input style shared ────────────────────────────────────────────────────────
 const inputCls = 'w-full px-3 py-2 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
 const inputStyle: React.CSSProperties = { background: '#3c3c3c', border: '1px solid #454545', color: '#d4d4d4' };
@@ -1161,12 +1177,7 @@ export function Tasks() {
                                   <>
                                     {people.slice(0, 4).map((a, i) => (
                                       <div key={a.id || i} className="relative group/avatar">
-                                        <div
-                                          className="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white ring-2 ring-[#2d2d2d]"
-                                          style={{ background: avatarGradient(a.name || a.email) }}
-                                        >
-                                          {getInitials(a.name || a.email)}
-                                        </div>
+                                        <TaskAvatar name={a.name} email={a.email} image={a.image} size={32} />
                                         <div
                                           className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md text-[11px] whitespace-nowrap pointer-events-none opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-150 z-50"
                                           style={{ background: VS.bg1, color: VS.text0, border: `1px solid ${VS.border}`, boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}
