@@ -12,16 +12,18 @@ router.post('/avatar', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid image data' });
     }
 
-    await prisma.$executeRawUnsafe(
+    console.log(`[avatar] saving for userId=${req.user.id} size=${dataUrl.length}`);
+    const result = await prisma.$executeRawUnsafe(
       'UPDATE `User` SET `image` = ?, `updatedAt` = NOW() WHERE `id` = ?',
       dataUrl,
       req.user.id
     );
+    console.log(`[avatar] rows affected=${result}`);
 
-    res.json({ success: true });
+    res.json({ success: true, userId: req.user.id });
   } catch (e) {
-    console.error('Avatar upload error:', e.message);
-    res.status(500).json({ error: 'Failed to save avatar' });
+    console.error('[avatar] upload error:', e.message);
+    res.status(500).json({ error: 'Failed to save avatar', detail: e.message });
   }
 });
 
