@@ -116,7 +116,12 @@ export function Dashboard() {
   const [onBreak, setOnBreak] = useState(() => !!localStorage.getItem('att_break_start'));
   const [breakAccum, setBreakAccum] = useState(() => Number(localStorage.getItem('att_break_accum') || 0));
   const todayStr = () => new Date().toISOString().slice(0, 10);
-  const [breakUsed, setBreakUsed] = useState(() => localStorage.getItem('att_break_used') === new Date().toISOString().slice(0, 10));
+  const [_breakUsed, setBreakUsed] = useState(() => localStorage.getItem('att_break_used') === new Date().toISOString().slice(0, 10));
+  const [breaksTakenToday, setBreaksTakenToday] = useState(() => {
+    const valid = localStorage.getItem('att_break_used') === new Date().toISOString().slice(0, 10);
+    return valid ? parseInt(localStorage.getItem('att_break_count') || '0') : 0;
+  });
+  const [breakCountPerDay, setBreakCountPerDay] = useState(1);
 
   // ── Fetch everything in parallel ──────────────────────────────────────────
   const fetchDashboard = useCallback(async () => {
@@ -187,6 +192,14 @@ export function Dashboard() {
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
+  useEffect(() => {
+    if (!currentOrg?.id) return;
+    fetch(`/api/attendance/policy?orgId=${currentOrg.id}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setBreakCountPerDay(d.breakCountPerDay ?? 1); })
+      .catch(() => {});
+  }, [currentOrg?.id]);
+
   // ── Attendance tick (subtracts break time, pauses on break) ───────────────
   useEffect(() => {
     if (!attendanceActive) { setAttendanceElapsed(0); return; }
@@ -249,7 +262,7 @@ export function Dashboard() {
 
   const handleBreak = () => {
     if (!attendanceActive) return;
-    if (breakUsed && !onBreak) return; // already used today
+    if (!onBreak && breaksTakenToday >= breakCountPerDay) return;
     if (!onBreak) {
       localStorage.setItem('att_break_start', String(Date.now()));
       localStorage.setItem('att_break_used', todayStr());
@@ -263,6 +276,9 @@ export function Dashboard() {
       localStorage.setItem('att_break_accum', String(newAccum));
       localStorage.removeItem('att_break_start');
       setBreakAccum(newAccum);
+      const newCount = breaksTakenToday + 1;
+      localStorage.setItem('att_break_count', String(newCount));
+      setBreaksTakenToday(newCount);
       setOnBreak(false);
       resumeTaskTimer();
     }
@@ -404,8 +420,8 @@ export function Dashboard() {
             <div className="flex flex-col items-end gap-1">
               <button
                 onClick={handleBreak}
-                disabled={attendanceLoading || (breakUsed && !onBreak)}
-                title={breakUsed && !onBreak ? 'You can only take 1 break per day' : undefined}
+                disabled={attendanceLoading || (!onBreak && breaksTakenToday >= breakCountPerDay)}
+                title={!onBreak && breaksTakenToday >= breakCountPerDay ? `Break limit reached (${breakCountPerDay}/day)` : undefined}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={onBreak
                   ? { background: 'rgba(78,201,176,0.12)', color: VS.teal, border: `1px solid rgba(78,201,176,0.25)` }
@@ -414,8 +430,8 @@ export function Dashboard() {
               >
                 {onBreak ? '▶ Resume' : '⏸ Break'}
               </button>
-              {breakUsed && !onBreak && (
-                <span className="text-[10px]" style={{ color: VS.red }}>1 break per day limit reached</span>
+              {!onBreak && breaksTakenToday >= breakCountPerDay && (
+                <span className="text-[10px]" style={{ color: VS.red }}>Break limit reached ({breakCountPerDay}/day)</span>
               )}
             </div>
           )}
