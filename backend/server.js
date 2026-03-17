@@ -175,8 +175,33 @@ app.get('/debug-attendance', async (req, res) => {
       `SELECT id, userId, orgId, timeIn, TIMESTAMPDIFF(SECOND, timeIn, NOW()) as elapsedSeconds
        FROM attendance_logs WHERE timeOut IS NULL ORDER BY timeIn ASC`
     );
-    const overdue = open.filter(r => Number(r.elapsedSeconds) >= 12 * 3600);
-    res.json({ openSessions: open.length, overdueSessions: overdue.length, open, serverNow: new Date() });
+    const sessions = open.map(r => ({ ...r, elapsedSeconds: Number(r.elapsedSeconds), elapsedHours: (Number(r.elapsedSeconds) / 3600).toFixed(1) }));
+    const overdue = sessions.filter(r => r.elapsedSeconds >= 12 * 3600);
+    res.json({ openSessions: sessions.length, overdueSessions: overdue.length, sessions, serverNow: new Date() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Temp: force clock-out all sessions open longer than X hours (default 12)
+app.post('/force-clockout', async (req, res) => {
+  try {
+    const hours = Number(req.query.hours) || 12;
+    const thresholdSeconds = hours * 3600;
+    const open = await prisma.$queryRawUnsafe(
+      `SELECT id, userId, orgId, timeIn, TIMESTAMPDIFF(SECOND, timeIn, NOW()) as elapsedSeconds
+       FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ?`,
+      thresholdSeconds
+    );
+    const results = [];
+    for (const row of open) {
+      const now = new Date();
+      const elapsed = Number(row.elapsedSeconds);
+      await prisma.$executeRawUnsafe(
+        `UPDATE attendance_logs SET timeOut = ?, duration = ?, updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
+        now, elapsed, row.id
+      );
+      results.push({ id: row.id, userId: row.userId, timeIn: row.timeIn, elapsedHours: (elapsed / 3600).toFixed(1) });
+    }
+    res.json({ clocked_out: results.length, sessions: results });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
