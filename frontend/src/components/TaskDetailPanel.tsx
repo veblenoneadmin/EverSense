@@ -4,7 +4,7 @@ import { useApiClient } from '../lib/api-client';
 import {
   X, MessageSquare, Paperclip, Send, Trash2, Download,
   Calendar, Clock, Tag, Folder, User, Users, AlertTriangle,
-  FileText, Image, File, ChevronRight, Upload, CheckSquare, Check,
+  FileText, Image, File, ChevronRight, ChevronLeft, Upload, CheckSquare, Check,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -118,7 +118,8 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
   const [showReport, setShowReport]       = useState(false);
   const [reportTitle, setReportTitle]     = useState('');
   const [reportDesc, setReportDesc]       = useState('');
-  const [reportFiles, setReportFiles]     = useState<File[]>([]);
+  const [reportFiles, setReportFiles]     = useState<{ name: string; type: string; dataUrl: string; file: File }[]>([]);
+  const [reportLightbox, setReportLightbox] = useState<number | null>(null);
   const [submittingReport, setSubmitting] = useState(false);
   const [reportSuccess, setReportSuccess] = useState(false);
   const reportFileRef = useRef<HTMLInputElement>(null);
@@ -272,22 +273,19 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
           mimeType: 'text/plain', size: reportDesc.length, data: descData, category: 'report',
         }),
       });
-      for (const file of reportFiles) {
-        const data = await toBase64(file);
+      for (const rf of reportFiles) {
+        const data = await toBase64(rf.file);
         await api.fetch(`/api/tasks/${task.id}/attachments`, {
           method: 'POST',
-          body: JSON.stringify({ name: file.name, mimeType: file.type, size: file.size, data, category: 'report' }),
+          body: JSON.stringify({ name: rf.name, mimeType: rf.type, size: rf.file.size, data, category: 'report' }),
         });
       }
 
       // Also create a user-report entry so it appears on the Reports page
       try {
-        const firstImg = reportFiles.find(f => f.type.startsWith('image/'));
-        let imageData: string | undefined;
-        if (firstImg) {
-          const b64 = await toBase64(firstImg);
-          imageData = `data:${firstImg.type};base64,${b64}`;
-        }
+        const attachmentsPayload = reportFiles.length > 0
+          ? JSON.stringify(reportFiles.map(rf => ({ name: rf.name, type: rf.type, dataUrl: rf.dataUrl })))
+          : undefined;
         const userName = session?.user?.name || (session?.user as any)?.email || 'Unknown';
         await api.fetch('/api/user-reports', {
           method: 'POST',
@@ -296,7 +294,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
             description: reportDesc,
             userName,
             projectId: task.projectId || undefined,
-            image: imageData,
+            image: attachmentsPayload,
           }),
         });
       } catch (err) {
@@ -305,7 +303,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
 
       await fetchAttachments();
       setReportSuccess(true);
-      setTimeout(() => { setShowReport(false); setReportSuccess(false); setReportTitle(''); setReportDesc(''); setReportFiles([]); }, 1500);
+      setTimeout(() => { setShowReport(false); setReportSuccess(false); setReportTitle(''); setReportDesc(''); setReportFiles([]); setReportLightbox(null); }, 1500);
     } catch { /* ignore */ }
     finally { setSubmitting(false); }
   };
@@ -860,34 +858,92 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
 
                 <div>
                   <label className="block text-[12px] font-semibold mb-1.5" style={{ color: VS.text2 }}>Attachments (optional)</label>
-                  <div
-                    className="rounded-lg p-4 text-center cursor-pointer transition-colors hover:bg-white/[0.03]"
-                    style={{ border: `2px dashed ${VS.border2}` }}
-                    onClick={() => reportFileRef.current?.click()}
-                  >
-                    <Upload className="h-6 w-6 mx-auto mb-1.5" style={{ color: VS.text2 }} />
-                    <p className="text-[12px]" style={{ color: VS.text2 }}>
-                      Click to add files, or drag and drop
-                    </p>
-                    {reportFiles.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {reportFiles.map((f, i) => (
-                          <div key={i} className="flex items-center justify-between px-2 py-1 rounded text-[11px]"
-                            style={{ background: VS.bg2, color: VS.text1 }}>
-                            <span>{f.name}</span>
-                            <span style={{ color: VS.text2 }}>{fmtSize(f.size)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                   <input
                     ref={reportFileRef}
                     type="file"
                     multiple
+                    accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
                     className="hidden"
-                    onChange={e => setReportFiles(Array.from(e.target.files ?? []))}
+                    onChange={e => {
+                      const files = Array.from(e.target.files ?? []);
+                      files.forEach(f => {
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                          setReportFiles(prev => [...prev, { name: f.name, type: f.type, dataUrl: ev.target?.result as string, file: f }]);
+                        };
+                        reader.readAsDataURL(f);
+                      });
+                      if (reportFileRef.current) reportFileRef.current.value = '';
+                    }}
                   />
+                  <button type="button" onClick={() => reportFileRef.current?.click()}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] hover:opacity-80"
+                    style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}>
+                    <Paperclip className="h-3.5 w-3.5" /> Attach Files
+                  </button>
+
+                  {/* Thumbnail grid */}
+                  {reportFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {reportFiles.map((rf, i) => {
+                        const isImg = rf.type.startsWith('image/');
+                        return (
+                          <div key={i} style={{ position: 'relative', width: 72, height: 72 }}>
+                            <div
+                              onClick={() => isImg && setReportLightbox(i)}
+                              style={{ width: 72, height: 72, borderRadius: 8, border: `1px solid ${VS.border}`, background: VS.bg2, overflow: 'hidden', cursor: isImg ? 'zoom-in' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              {isImg
+                                ? <img src={rf.dataUrl} alt={rf.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: 6 }}>
+                                    <File className="h-5 w-5" style={{ color: VS.accent }} />
+                                    <span style={{ fontSize: 9, color: VS.text2, textAlign: 'center', wordBreak: 'break-all', lineHeight: 1.2 }}>
+                                      {rf.name.length > 10 ? rf.name.slice(0, 9) + '…' : rf.name}
+                                    </span>
+                                  </div>
+                                )
+                              }
+                            </div>
+                            <button type="button" onClick={() => setReportFiles(prev => prev.filter((_, idx) => idx !== i))}
+                              style={{ position: 'absolute', top: -6, right: -6, background: VS.red, border: 'none', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', padding: 0 }}>
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Lightbox */}
+                  {reportLightbox !== null && (() => {
+                    const imgIndexes = reportFiles.map((rf, i) => rf.type.startsWith('image/') ? i : -1).filter(i => i >= 0);
+                    const pos = imgIndexes.indexOf(reportLightbox);
+                    return (
+                      <div onClick={() => setReportLightbox(null)}
+                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img src={reportFiles[reportLightbox].dataUrl} alt={reportFiles[reportLightbox].name}
+                          style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8 }}
+                          onClick={e => e.stopPropagation()} />
+                        {pos > 0 && (
+                          <button onClick={e => { e.stopPropagation(); setReportLightbox(imgIndexes[pos - 1]); }}
+                            style={{ position: 'fixed', left: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                        )}
+                        {pos < imgIndexes.length - 1 && (
+                          <button onClick={e => { e.stopPropagation(); setReportLightbox(imgIndexes[pos + 1]); }}
+                            style={{ position: 'fixed', right: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                        )}
+                        <button onClick={() => setReportLightbox(null)}
+                          style={{ position: 'fixed', top: 16, right: 16, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-1">
