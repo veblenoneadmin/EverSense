@@ -436,12 +436,16 @@ const MainLayout: React.FC = () => {
               onMouseLeave={e => { if (!showDropdown) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
               {/* Avatar */}
-              <div
-                className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-                style={{ background: 'linear-gradient(135deg, hsl(252 87% 62%), hsl(260 80% 70%))' }}
-              >
-                {getInitials(displayName)}
-              </div>
+              {session?.user?.image
+                ? <img src={session.user.image} alt={displayName}
+                    className="h-7 w-7 rounded-full object-cover shrink-0 ring-1 ring-white/20" />
+                : <div
+                    className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                    style={{ background: 'linear-gradient(135deg, hsl(252 87% 62%), hsl(260 80% 70%))' }}
+                  >
+                    {getInitials(displayName)}
+                  </div>
+              }
               <div className="text-left leading-tight hidden sm:block">
                 <p className="text-[12px] font-medium capitalize" style={{ color: VS.text0 }}>{displayName}</p>
                 {userRole && (
