@@ -168,6 +168,18 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Server is working!' });
 });
 
+// Temp: diagnose attendance cron
+app.get('/debug-attendance', async (req, res) => {
+  try {
+    const open = await prisma.$queryRawUnsafe(
+      `SELECT id, userId, orgId, timeIn, TIMESTAMPDIFF(SECOND, timeIn, NOW()) as elapsedSeconds
+       FROM attendance_logs WHERE timeOut IS NULL ORDER BY timeIn ASC`
+    );
+    const overdue = open.filter(r => Number(r.elapsedSeconds) >= 12 * 3600);
+    res.json({ openSessions: open.length, overdueSessions: overdue.length, open, serverNow: new Date() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Temp: diagnose admin login
 app.get('/debug-admin', async (req, res) => {
   try {
