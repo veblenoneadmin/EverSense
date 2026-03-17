@@ -19,14 +19,17 @@ router.post('/avatar', requireAuth, async (req, res) => {
 
   if (!avatarColumnReady) {
     try {
-      await prisma.$executeRawUnsafe('ALTER TABLE `User` MODIFY `image` TEXT NULL');
-    } catch { /* column already TEXT — ignore */ }
+      await prisma.$executeRawUnsafe('ALTER TABLE `user` MODIFY `image` MEDIUMTEXT NULL');
+      console.log('✅ user.image column widened to MEDIUMTEXT');
+    } catch (e) {
+      console.warn('⚠️  ALTER TABLE user.image failed (may already be wide enough):', e.message);
+    }
     avatarColumnReady = true;
   }
 
   try {
     await prisma.$executeRawUnsafe(
-      'UPDATE `User` SET image = ?, updatedAt = NOW() WHERE id = ?',
+      'UPDATE `user` SET `image` = ?, `updatedAt` = NOW() WHERE `id` = ?',
       dataUrl, req.user.id
     );
     res.json({ success: true, image: dataUrl });
@@ -39,7 +42,7 @@ router.post('/avatar', requireAuth, async (req, res) => {
 router.delete('/avatar', requireAuth, async (req, res) => {
   try {
     await prisma.$executeRawUnsafe(
-      'UPDATE `User` SET image = NULL, updatedAt = NOW() WHERE id = ?',
+      'UPDATE `user` SET `image` = NULL, `updatedAt` = NOW() WHERE `id` = ?',
       req.user.id
     );
     res.json({ success: true });
