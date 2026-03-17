@@ -187,19 +187,21 @@ app.post('/force-clockout', async (req, res) => {
     const hours = Number(req.query.hours) || 12;
     const thresholdSeconds = hours * 3600;
     const open = await prisma.$queryRawUnsafe(
-      `SELECT id, userId, orgId, timeIn, TIMESTAMPDIFF(SECOND, timeIn, NOW()) as elapsedSeconds
-       FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ?`,
-      thresholdSeconds
+      `SELECT id, userId, orgId, timeIn,
+              TIMESTAMPDIFF(SECOND, timeIn, NOW()) as elapsedSeconds
+       FROM attendance_logs
+       WHERE timeOut IS NULL
+         AND timeIn <= DATE_SUB(NOW(), INTERVAL ${thresholdSeconds} SECOND)`
     );
     const results = [];
     for (const row of open) {
       const now = new Date();
       const elapsed = Number(row.elapsedSeconds);
-      await prisma.$executeRawUnsafe(
+      const affected = await prisma.$executeRawUnsafe(
         `UPDATE attendance_logs SET timeOut = ?, duration = ?, updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
         now, elapsed, row.id
       );
-      results.push({ id: row.id, userId: row.userId, timeIn: row.timeIn, elapsedHours: (elapsed / 3600).toFixed(1) });
+      results.push({ id: row.id, userId: row.userId, timeIn: row.timeIn, elapsedHours: (elapsed / 3600).toFixed(1), rowsAffected: Number(affected) });
     }
     res.json({ clocked_out: results.length, sessions: results });
   } catch (e) { res.status(500).json({ error: e.message }); }
