@@ -27,6 +27,7 @@ import invitationRoutes from './api/invitations.js';
 import skillsRoutes from './api/skills.js';
 import attendanceRoutes from './api/attendance.js';
 import calendarRoutes from './api/calendar.js';
+import usersRoutes from './api/users.js';
 import kpiReportRoutes from './api/kpi-report.js';
 import notificationsRoutes from './api/notifications.js';
 import firefliesRoutes, { startFirefliesPolling } from './api/fireflies.js';
@@ -413,6 +414,7 @@ app.use('/api/invitations', invitationRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/users', usersRoutes);
 app.use('/api/kpi-report', kpiReportRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/fireflies', firefliesRoutes);
@@ -3056,6 +3058,10 @@ async function ensureProfileColumns() {
       if (!rows.length) await prisma.$executeRawUnsafe(`ALTER TABLE \`${tbl}\` ADD COLUMN \`${col}\` ${def}`);
     } catch { /* column already exists or table not ready */ }
   }
+  // Widen User.image to MEDIUMTEXT so base64 avatars fit
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE `User` MODIFY COLUMN `image` MEDIUMTEXT NULL');
+  } catch { /* already widened or table not ready */ }
   console.log('  ✅ profile columns ready');
 }
 

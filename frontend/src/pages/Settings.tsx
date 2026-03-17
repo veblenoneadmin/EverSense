@@ -309,15 +309,19 @@ export function Settings() {
                   setAvatarMsg(null);
                   // Auto-save
                   setAvatarSaving(true);
-                  fetch('/api/auth/avatar', {
+                  fetch('/api/users/avatar', {
                     method: 'POST', credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ dataUrl }),
                   })
                     .then(r => r.json())
                     .then(d => {
-                      if (d.success) setAvatarMsg({ type: 'success', text: 'Photo updated.' });
-                      else setAvatarMsg({ type: 'error', text: d.error || 'Failed to save.' });
+                      if (d.success) {
+                        setAvatarMsg({ type: 'success', text: 'Photo updated.' });
+                        authClient.getSession({ fetchOptions: { cache: 'no-store' } });
+                      } else {
+                        setAvatarMsg({ type: 'error', text: d.error || 'Failed to save.' });
+                      }
                     })
                     .catch(() => setAvatarMsg({ type: 'error', text: 'Upload failed.' }))
                     .finally(() => setAvatarSaving(false));
@@ -341,11 +345,16 @@ export function Settings() {
                 <button disabled={avatarSaving}
                   onClick={() => {
                     setAvatarSaving(true); setAvatarMsg(null);
-                    fetch('/api/auth/avatar', { method: 'DELETE', credentials: 'include' })
+                    fetch('/api/users/avatar', { method: 'DELETE', credentials: 'include' })
                       .then(r => r.json())
                       .then(d => {
-                        if (d.success) { setAvatarUrl(null); setAvatarMsg({ type: 'success', text: 'Photo removed.' }); }
-                        else setAvatarMsg({ type: 'error', text: d.error || 'Failed.' });
+                        if (d.success) {
+                          setAvatarUrl(null);
+                          setAvatarMsg({ type: 'success', text: 'Photo removed.' });
+                          authClient.getSession({ fetchOptions: { cache: 'no-store' } });
+                        } else {
+                          setAvatarMsg({ type: 'error', text: d.error || 'Failed.' });
+                        }
                       })
                       .catch(() => setAvatarMsg({ type: 'error', text: 'Failed to remove.' }))
                       .finally(() => setAvatarSaving(false));
