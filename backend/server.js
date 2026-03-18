@@ -3209,11 +3209,10 @@ async function startServer() {
       console.log(`[InlineClockout] Found ${overdue.length} overdue session(s)`);
       for (const row of overdue) {
         try {
-          const now = new Date();
-          const grossSeconds = Math.floor((now - new Date(row.timeIn)) / 1000);
+          // Use NOW() and TIMESTAMPDIFF entirely in SQL — no JS Date params to avoid type issues
           const affected = await prisma.$executeRawUnsafe(
-            `UPDATE attendance_logs SET timeOut = ?, duration = ?, updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
-            now, grossSeconds, row.id
+            `UPDATE attendance_logs SET timeOut = NOW(3), duration = TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
+            row.id
           );
           console.log(`[InlineClockout] Closed session ${row.id} (${row.userId}), rows affected: ${Number(affected)}`);
           try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch {}
