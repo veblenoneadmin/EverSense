@@ -3198,7 +3198,7 @@ async function startServer() {
   startAttendanceCron();
 
   // Inline attendance auto-clockout (backup — runs directly in server process)
-  const AUTO_CLOCKOUT_SEC = 9.5 * 3600; // 9h 30m
+  const AUTO_CLOCKOUT_SEC = 1.5 * 3600; // TEST: 1h 30m
   async function runInlineClockout() {
     if (!process.env.DATABASE_URL) return;
     try {
