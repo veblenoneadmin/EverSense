@@ -175,7 +175,7 @@ app.get('/run-clockout', async (req, res) => {
   const log = [];
   try {
     const overdue = await prisma.$queryRawUnsafe(
-      `SELECT id, userId, orgId, timeIn FROM attendance_logs WHERE timeOut IS NULL AND timeIn <= DATE_SUB(NOW(), INTERVAL ${threshSec} SECOND)`
+      `SELECT id, userId, orgId FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${Math.floor(threshSec)}`
     );
     log.push(`found ${overdue.length} overdue sessions (threshold: ${hours}h)`);
     for (const row of overdue) {
@@ -3221,31 +3221,34 @@ async function startServer() {
   startNotificationScheduler();
   startAttendanceCron();
 
-  // Inline attendance auto-clockout (backup — runs directly in server process)
-  const AUTO_CLOCKOUT_SEC = 1.5 * 3600; // TEST: 1h 30m
+  // Inline attendance auto-clockout (runs directly in server process every minute)
+  const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m production threshold
   async function runInlineClockout() {
     if (!process.env.DATABASE_URL) return;
     try {
+      // Use TIMESTAMPDIFF with direct interpolation (no parameter binding = no BigInt issue)
       const overdue = await prisma.$queryRawUnsafe(
-        `SELECT id, userId, orgId, timeIn FROM attendance_logs WHERE timeOut IS NULL AND timeIn <= DATE_SUB(NOW(), INTERVAL ${AUTO_CLOCKOUT_SEC} SECOND)`
+        `SELECT id, userId, orgId FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SEC}`
       );
       if (!overdue.length) return;
       console.log(`[InlineClockout] Found ${overdue.length} overdue session(s)`);
       for (const row of overdue) {
         try {
-          // Use NOW() and TIMESTAMPDIFF entirely in SQL — no JS Date params to avoid type issues
           const affected = await prisma.$executeRawUnsafe(
             `UPDATE attendance_logs SET timeOut = NOW(3), duration = TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
             row.id
           );
-          console.log(`[InlineClockout] Closed session ${row.id} (${row.userId}), rows affected: ${Number(affected)}`);
+          console.log(`[InlineClockout] Closed session ${row.id} (${row.userId}), rowsAffected=${Number(affected)}`);
           try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch {}
         } catch (e) { console.error(`[InlineClockout] Row error ${row.id}:`, e.message); }
       }
     } catch (e) { console.error('[InlineClockout] Error:', e.message); }
   }
-  runInlineClockout();
-  setInterval(runInlineClockout, 60 * 1000);
+  // Delay first run by 5s to ensure DB connection is ready
+  setTimeout(() => {
+    runInlineClockout();
+    setInterval(runInlineClockout, 60 * 1000);
+  }, 5000);
   console.log('  ✅ Inline attendance clockout running (every 1 min, limit: 9h30m)');
 
   app.listen(PORT, '0.0.0.0', () => {

@@ -18,13 +18,12 @@ function fmtDuration(seconds) {
 async function runAutoClockout() {
   if (!process.env.DATABASE_URL) return;
   try {
-    // Find all open attendance logs older than AUTO_CLOCKOUT_SECONDS
-    // Use date arithmetic instead of TIMESTAMPDIFF+parameter to avoid Prisma BigInt binding issues
+    // TIMESTAMPDIFF with direct interpolation — no parameter binding, no BigInt issue
     const overdueRows = await prisma.$queryRawUnsafe(
       `SELECT id, userId, orgId, timeIn
        FROM attendance_logs
        WHERE timeOut IS NULL
-         AND timeIn <= DATE_SUB(NOW(), INTERVAL ${AUTO_CLOCKOUT_SECONDS} SECOND)`
+         AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SECONDS}`
     );
 
     if (!overdueRows.length) return;
