@@ -168,6 +168,30 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Server is working!' });
 });
 
+// Temp: manually trigger clockout and return full result
+app.get('/run-clockout', async (req, res) => {
+  const hours = Number(req.query.hours) || 1.5;
+  const threshSec = hours * 3600;
+  const log = [];
+  try {
+    const overdue = await prisma.$queryRawUnsafe(
+      `SELECT id, userId, orgId, timeIn FROM attendance_logs WHERE timeOut IS NULL AND timeIn <= DATE_SUB(NOW(), INTERVAL ${threshSec} SECOND)`
+    );
+    log.push(`found ${overdue.length} overdue sessions (threshold: ${hours}h)`);
+    for (const row of overdue) {
+      try {
+        const affected = await prisma.$executeRawUnsafe(
+          `UPDATE attendance_logs SET timeOut = NOW(3), duration = TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
+          row.id
+        );
+        log.push(`session ${row.id}: rowsAffected=${Number(affected)}`);
+        try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch {}
+      } catch (e) { log.push(`session ${row.id} ERROR: ${e.message}`); }
+    }
+    res.json({ ok: true, log });
+  } catch (e) { res.json({ ok: false, error: e.message, log }); }
+});
+
 // Temp: diagnose attendance cron
 app.get('/debug-attendance', async (req, res) => {
   try {
