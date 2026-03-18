@@ -3197,6 +3197,34 @@ async function startServer() {
   startNotificationScheduler();
   startAttendanceCron();
 
+  // Inline attendance auto-clockout (backup — runs directly in server process)
+  const AUTO_CLOCKOUT_SEC = 9.5 * 3600; // 9h 30m
+  async function runInlineClockout() {
+    if (!process.env.DATABASE_URL) return;
+    try {
+      const overdue = await prisma.$queryRawUnsafe(
+        `SELECT id, userId, orgId, timeIn FROM attendance_logs WHERE timeOut IS NULL AND timeIn <= DATE_SUB(NOW(), INTERVAL ${AUTO_CLOCKOUT_SEC} SECOND)`
+      );
+      if (!overdue.length) return;
+      console.log(`[InlineClockout] Found ${overdue.length} overdue session(s)`);
+      for (const row of overdue) {
+        try {
+          const now = new Date();
+          const grossSeconds = Math.floor((now - new Date(row.timeIn)) / 1000);
+          const affected = await prisma.$executeRawUnsafe(
+            `UPDATE attendance_logs SET timeOut = ?, duration = ?, updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
+            now, grossSeconds, row.id
+          );
+          console.log(`[InlineClockout] Closed session ${row.id} (${row.userId}), rows affected: ${Number(affected)}`);
+          try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch {}
+        } catch (e) { console.error(`[InlineClockout] Row error ${row.id}:`, e.message); }
+      }
+    } catch (e) { console.error('[InlineClockout] Error:', e.message); }
+  }
+  runInlineClockout();
+  setInterval(runInlineClockout, 60 * 1000);
+  console.log('  ✅ Inline attendance clockout running (every 1 min, limit: 9h30m)');
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`🔐 Auth endpoints available at /api/auth/*`);
