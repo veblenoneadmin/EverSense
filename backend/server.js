@@ -3209,9 +3209,81 @@ async function ensureAdminCredentialAccount() {
   }
 }
 
+async function ensureAuthTables() {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `User` (' +
+      '  `id` VARCHAR(36) NOT NULL,' +
+      '  `email` VARCHAR(255) NOT NULL,' +
+      '  `emailVerified` BOOLEAN NULL DEFAULT false,' +
+      '  `name` VARCHAR(255) NULL,' +
+      '  `image` MEDIUMTEXT NULL,' +
+      '  `createdAt` TIMESTAMP(0) NULL DEFAULT CURRENT_TIMESTAMP,' +
+      '  `updatedAt` TIMESTAMP(0) NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,' +
+      '  `completedWizards` TEXT NULL,' +
+      '  PRIMARY KEY (`id`),' +
+      '  UNIQUE KEY `email` (`email`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `Account` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `accountId` VARCHAR(191) NOT NULL,' +
+      '  `userId` VARCHAR(36) NULL,' +
+      '  `providerId` VARCHAR(191) NOT NULL,' +
+      '  `providerAccountId` VARCHAR(191) NULL,' +
+      '  `type` VARCHAR(191) NOT NULL DEFAULT \'oauth\',' +
+      '  `expires_at` INT NULL,' +
+      '  `token_type` VARCHAR(191) NULL,' +
+      '  `scope` TEXT NULL,' +
+      '  `session_state` VARCHAR(191) NULL,' +
+      '  `password` TEXT NULL,' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),' +
+      '  `accessToken` TEXT NULL,' +
+      '  `accessTokenExpiresAt` DATETIME(3) NULL,' +
+      '  `idToken` TEXT NULL,' +
+      '  `refreshToken` TEXT NULL,' +
+      '  PRIMARY KEY (`id`),' +
+      '  UNIQUE KEY `Account_providerId_providerAccountId_key` (`providerId`, `providerAccountId`),' +
+      '  KEY `Account_userId_idx` (`userId`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `Session` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `token` VARCHAR(191) NOT NULL,' +
+      '  `userId` VARCHAR(36) NULL,' +
+      '  `expiresAt` DATETIME(3) NOT NULL,' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),' +
+      '  `ipAddress` VARCHAR(191) NULL,' +
+      '  `userAgent` VARCHAR(191) NULL,' +
+      '  PRIMARY KEY (`id`),' +
+      '  UNIQUE KEY `Session_token_key` (`token`),' +
+      '  KEY `Session_userId_idx` (`userId`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `verification` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `identifier` VARCHAR(255) NOT NULL,' +
+      '  `value` TEXT NOT NULL,' +
+      '  `expiresAt` DATETIME(3) NOT NULL,' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),' +
+      '  PRIMARY KEY (`id`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+    console.log('  ✅ auth tables (User, Account, Session, verification) ready');
+  } catch (e) { console.warn('  ⚠️  ensureAuthTables:', e.message); }
+}
+
 // Run migrations and start server
 async function startServer() {
   await runDatabaseMigrations();
+  await ensureAuthTables();
   await ensureRoleEnumSchema();
   await ensureTaskTablesSchema();
   await ensureTaskAssigneesSchema();
