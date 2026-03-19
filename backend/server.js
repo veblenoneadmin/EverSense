@@ -117,7 +117,8 @@ app.use((req, res, next) => {
     'https://vebtask.com',
     'https://www.vebtask.com',
     'https://vebtask-production.up.railway.app',
-    'https://vebtaskrevamp-production.up.railway.app'
+    'https://vebtaskrevamp-production.up.railway.app',
+    'https://eversense-ai.up.railway.app'
   ];
   
   const origin = req.headers.origin;
