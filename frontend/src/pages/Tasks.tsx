@@ -200,6 +200,7 @@ export function Tasks() {
   const [filterPriorities, setFilterPriorities] = useState<string[]>([]);
   const [filterProject, setFilterProject] = useState('');
   const [filterOverdueOnly, setFilterOverdueOnly] = useState(false);
+  const [filterActiveTimer, setFilterActiveTimer] = useState(false);
   const [filterStaffId, setFilterStaffId] = useState('');
 
   // Sort
@@ -602,6 +603,7 @@ export function Tasks() {
         if (!over) return false;
       }
       if (filterStaffId && !t.assignees?.some((a: { id: string }) => a.id === filterStaffId)) return false;
+      if (filterActiveTimer && !activeTimers.some((at: { taskId: string }) => at.taskId === t.id)) return false;
       return true;
     })
     .sort((a, b) => {
@@ -617,7 +619,7 @@ export function Tasks() {
       }
     });
 
-  const activeFilterCount = filterPriorities.length + (filterProject ? 1 : 0) + (filterOverdueOnly ? 1 : 0) + (filterStaffId ? 1 : 0);
+  const activeFilterCount = filterPriorities.length + (filterProject ? 1 : 0) + (filterOverdueOnly ? 1 : 0) + (filterActiveTimer ? 1 : 0) + (filterStaffId ? 1 : 0);
 
   const tasksForCol = (colId: string) => filtered.filter(t => t.status === colId);
 
@@ -920,10 +922,29 @@ export function Tasks() {
                     Overdue only
                   </button>
 
+                  {/* Active timer only */}
+                  <button
+                    onClick={() => setFilterActiveTimer(v => !v)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-[12px] transition-all"
+                    style={{
+                      background: filterActiveTimer ? `${VS.orange}18` : 'transparent',
+                      border: `1px solid ${filterActiveTimer ? VS.orange + '55' : VS.border}`,
+                      color: filterActiveTimer ? VS.orange : VS.text2,
+                    }}
+                  >
+                    <div
+                      className="h-3.5 w-3.5 rounded flex items-center justify-center shrink-0"
+                      style={{ background: filterActiveTimer ? VS.orange : VS.bg3, border: `1px solid ${filterActiveTimer ? VS.orange : VS.border2}` }}
+                    >
+                      {filterActiveTimer && <Check className="h-2.5 w-2.5 text-white" style={{ strokeWidth: 3 }} />}
+                    </div>
+                    Active timer only
+                  </button>
+
                   {/* Clear */}
                   {activeFilterCount > 0 && (
                     <button
-                      onClick={() => { setFilterPriorities([]); setFilterProject(''); setFilterOverdueOnly(false); setFilterStaffId(''); }}
+                      onClick={() => { setFilterPriorities([]); setFilterProject(''); setFilterOverdueOnly(false); setFilterActiveTimer(false); setFilterStaffId(''); }}
                       className="w-full text-[11px] py-1.5 rounded-lg text-center transition-colors hover:opacity-80"
                       style={{ color: VS.text1, background: VS.bg3, border: `1px solid ${VS.border}` }}
                     >
