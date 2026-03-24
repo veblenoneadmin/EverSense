@@ -1771,7 +1771,7 @@ export function Tasks() {
                 />
               </div>
 
-              {userRole !== 'STAFF' && (
+              {userRole !== 'CLIENT' && (
               <div>
                 <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>
                   Assignees
