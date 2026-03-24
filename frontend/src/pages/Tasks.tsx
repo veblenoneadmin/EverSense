@@ -296,9 +296,9 @@ export function Tasks() {
     return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
   }, []);
 
-  // ── poll org-wide active timers (admin only, every 5s) ────────────────────
+  // ── poll org-wide active timers (all roles, every 5s) ─────────────────────
   useEffect(() => {
-    if (!isAdminOrOwner || !session?.user?.id || !currentOrg?.id) return;
+    if (!session?.user?.id || !currentOrg?.id) return;
     const poll = () => {
       apiClient.fetch('/api/tasks/active-timers')
         .then(d => { if (d.timers) setActiveTimers(d.timers); })
@@ -307,7 +307,7 @@ export function Tasks() {
     poll();
     const id = setInterval(poll, 5000);
     return () => clearInterval(id);
-  }, [isAdminOrOwner, session?.user?.id, currentOrg?.id]);
+  }, [session?.user?.id, currentOrg?.id]);
 
   // ── timer: respond to attendance break/resume/clock-out ────────────────────
   useEffect(() => {
@@ -1263,8 +1263,8 @@ export function Tasks() {
                             </span>
                           </div>
                         )}
-                        {/* ── Live timer strips — other users (admin view) ── */}
-                        {isAdminOrOwner && activeTimers
+                        {/* ── Live timer strips — other users (all roles) ── */}
+                        {activeTimers
                           .filter(at => at.taskId === task.id && at.userId !== session?.user?.id)
                           .map(at => (
                             <div
