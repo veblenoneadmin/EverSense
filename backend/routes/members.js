@@ -79,7 +79,7 @@ router.get('/:orgId/members', requireAuth, withOrgScope, requireAdmin, async (re
           where: {
             userId: member.userId,
             orgId: req.orgId,
-            startTime: {
+            begin: {
               gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
             }
           },
@@ -189,7 +189,7 @@ router.get('/:orgId/members/:memberId', requireAuth, withOrgScope, requireAdmin,
         include: {
           task: { select: { title: true } }
         },
-        orderBy: { startTime: 'desc' },
+        orderBy: { begin: 'desc' },
         take: 10
       })
     ]);
@@ -210,8 +210,8 @@ router.get('/:orgId/members/:memberId', requireAuth, withOrgScope, requireAdmin,
         type: 'time_log',
         description: activity.task?.title || activity.description || 'Work session',
         duration: activity.duration,
-        startTime: activity.startTime,
-        endTime: activity.endTime,
+        startTime: activity.begin,
+        endTime: activity.end,
         isBillable: activity.isBillable
       })),
       canModify: canModifyMember(
