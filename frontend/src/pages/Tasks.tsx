@@ -279,6 +279,24 @@ export function Tasks() {
       .catch(() => {});
   }, [session?.user?.id, currentOrg?.id]);
 
+  // ── validate localStorage timer against DB on mount — clears stale timers ──
+  useEffect(() => {
+    if (!session?.user?.id || !currentOrg?.id) return;
+    const stored = (() => { try { return JSON.parse(localStorage.getItem('task_timer_active') || 'null'); } catch { return null; } })();
+    if (!stored?.taskId) return;
+    apiClient.fetch(`/api/timers?taskId=${stored.taskId}&running=true`)
+      .then(d => {
+        const hasRunning = Array.isArray(d.timers) && d.timers.some((t: any) => !t.end);
+        if (!hasRunning) {
+          localStorage.removeItem('task_timer_active');
+          localStorage.removeItem('task_timer_paused');
+          setTimerTaskId(null);
+          setTimerStart(null);
+        }
+      })
+      .catch(() => {});
+  }, [session?.user?.id, currentOrg?.id]);
+
   // ── tick interval — always running so own timer + other users' timers update live ──
   useEffect(() => {
     const active = (() => {
