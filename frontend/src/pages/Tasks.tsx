@@ -1260,13 +1260,7 @@ export function Tasks() {
                               })()}
                             </div>
 
-                            {task.createdByName && (
-                              <span className="text-[10px] truncate max-w-[90px]" style={{ color: VS.text2 }} title={`Created by ${task.createdByName}`}>
-                                by {task.createdByName}
-                              </span>
-                            )}
-
-                            {col.id === 'not_started' && colTasks[0]?.id === task.id ? (
+{col.id === 'not_started' && colTasks[0]?.id === task.id ? (
                               <span
                                 className="text-[11px] font-semibold px-3 py-1 rounded-full"
                                 style={{ background: 'rgba(78,201,176,0.15)', color: '#4ec9b0', border: '1px solid #4ec9b044' }}

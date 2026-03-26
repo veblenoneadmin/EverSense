@@ -30,6 +30,7 @@ interface Task {
   mainAssigneeId?: string | null;
   parentTaskId?: string | null;
   assignees?: { id: string; name: string; email: string }[];
+  createdByName?: string | null;
 }
 
 interface Comment {
@@ -411,6 +412,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                   { icon: Clock,    label: 'Est. Time',      value: (() => { const h = Math.floor(task.estimatedHours || 0); const m = Math.round(((task.estimatedHours || 0) % 1) * 60); return h && m ? `${h}h ${m}m` : h ? `${h}h` : m ? `${m}m` : '—'; })(), color: VS.text1 },
                   { icon: Clock,    label: 'Actual Hours',    value: `${task.actualHours}h`,    color: VS.text1 },
                   { icon: User,     label: 'Assignee',        value: task.assignee || '—',       color: VS.text1 },
+                  { icon: User,     label: 'Created By',      value: task.createdByName || '—',  color: VS.text1 },
                 ].map(({ icon: Icon, label, value, color }) => (
                   <div key={label} className="flex items-start gap-2.5 p-3 rounded-lg" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
                     <Icon className="h-4 w-4 mt-0.5 shrink-0" style={{ color: VS.text2 }} />
