@@ -309,6 +309,8 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       userId: task.userId,
+      createdBy: task.createdBy || null,
+      createdByName: null,
       assignees: [],
       isTeamTask: !!(task.isTeamTask),
       mainAssigneeId: task.mainAssigneeId || null,
@@ -370,6 +372,23 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
           for (const t of formattedTasks) {
             const p = pMap[t.projectId];
             if (p) { t.project = p.name; t.projectColor = p.color; t.projectStatus = p.status; }
+          }
+        }
+      } catch (_) {}
+
+      // Enrich creator names
+      try {
+        const creatorIds = [...new Set(formattedTasks.map(t => t.createdBy).filter(Boolean))];
+        if (creatorIds.length) {
+          const cph = creatorIds.map(() => '?').join(',');
+          const creators = await prisma.$queryRawUnsafe(
+            `SELECT id, name FROM User WHERE id IN (${cph})`, ...creatorIds
+          );
+          const cMap = {};
+          for (const c of creators) cMap[c.id] = c;
+          for (const t of formattedTasks) {
+            const c = cMap[t.createdBy];
+            if (c) t.createdByName = c.name;
           }
         }
       } catch (_) {}
