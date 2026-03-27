@@ -8,7 +8,6 @@ import type { EventInput, EventClickArg, EventChangeArg, EventSourceFuncArg } fr
 import type { DateClickArg } from '@fullcalendar/interaction';
 import { useApiClient } from '../lib/api-client';
 import { useOrganization } from '../contexts/OrganizationContext';
-import { signIn } from '../lib/auth-client';
 import {
   Plus, X, Video, Users, Calendar as CalendarIcon,
   Check, ExternalLink, Search, ChevronDown, MapPin,
@@ -28,6 +27,7 @@ interface CalEventExtended {
   syncedToGoogle: boolean;
   googleEventId: string | null;
   attendees: OrgMember[];
+  isGoogleEvent?: boolean;
 }
 
 interface EventFormData {
@@ -85,6 +85,7 @@ export function Calendar() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGoogleOnly, setIsGoogleOnly] = useState(false);
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -109,6 +110,7 @@ export function Calendar() {
       allDay: allDay || false,
     });
     setEditingEventId(null);
+    setIsGoogleOnly(false);
     setError(null);
     setShowModal(true);
   };
@@ -119,6 +121,8 @@ export function Calendar() {
 
   const handleEventClick = (info: EventClickArg) => {
     const ext = info.event.extendedProps as CalEventExtended;
+    const googleOnly = !!(ext.isGoogleEvent || info.event.id.startsWith('gcal_'));
+    setIsGoogleOnly(googleOnly);
     setEditingEventId(info.event.id);
     setForm({
       title:        info.event.title,
@@ -208,7 +212,7 @@ export function Calendar() {
             </div>
           ) : (
             <button
-              onClick={() => signIn.social({ provider: 'google', callbackURL: '/calendar' })}
+              onClick={() => { window.location.href = '/api/integrations/google/connect'; }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500,
@@ -269,6 +273,7 @@ export function Calendar() {
           setForm={setForm}
           members={members}
           isEdit={!!editingEventId}
+          isGoogleOnly={isGoogleOnly}
           googleConnected={googleConnected}
           saving={saving}
           deleting={deleting}
@@ -288,6 +293,7 @@ interface EventModalProps {
   setForm: React.Dispatch<React.SetStateAction<EventFormData>>;
   members: OrgMember[];
   isEdit: boolean;
+  isGoogleOnly: boolean;
   googleConnected: boolean;
   saving: boolean;
   deleting: boolean;
@@ -298,7 +304,7 @@ interface EventModalProps {
 }
 
 function EventModal({
-  form, setForm, members, isEdit, googleConnected,
+  form, setForm, members, isEdit, isGoogleOnly, googleConnected,
   saving, deleting, error, onSave, onDelete, onClose,
 }: EventModalProps) {
   const [memberSearch, setMemberSearch] = useState('');
@@ -339,7 +345,7 @@ function EventModal({
           padding: '16px 20px', borderBottom: `1px solid ${VS.border}`,
         }}>
           <h2 style={{ color: VS.text0, fontSize: 15, fontWeight: 600, margin: 0 }}>
-            {isEdit ? 'Edit Event' : 'New Event'}
+            {isGoogleOnly ? 'Google Calendar Event' : isEdit ? 'Edit Event' : 'New Event'}
           </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2, padding: 4 }}>
             <X size={16} />
@@ -656,20 +662,22 @@ function EventModal({
                 borderRadius: 6, padding: '7px 14px', fontSize: 13, cursor: 'pointer',
               }}
             >
-              Cancel
+              {isGoogleOnly ? 'Close' : 'Cancel'}
             </button>
-            <button
-              onClick={onSave}
-              disabled={saving}
-              style={{
-                background: VS.accent, color: '#fff', border: 'none',
-                borderRadius: 6, padding: '7px 16px', fontSize: 13,
-                fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer',
-                opacity: saving ? 0.7 : 1,
-              }}
-            >
-              {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create event'}
-            </button>
+            {!isGoogleOnly && (
+              <button
+                onClick={onSave}
+                disabled={saving}
+                style={{
+                  background: VS.accent, color: '#fff', border: 'none',
+                  borderRadius: 6, padding: '7px 16px', fontSize: 13,
+                  fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.7 : 1,
+                }}
+              >
+                {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create event'}
+              </button>
+            )}
           </div>
         </div>
       </div>

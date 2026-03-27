@@ -9,6 +9,7 @@ import {
   createGoogleCalendarEvent,
   updateGoogleCalendarEvent,
   deleteGoogleCalendarEvent,
+  listGoogleCalendarEvents,
 } from '../lib/google-calendar.js';
 
 const router = express.Router();
@@ -164,15 +165,14 @@ router.get('/events', requireAuth, withOrgScope, async (req, res) => {
       ...params
     );
 
-    if (events.length === 0) return res.json({ events: [] });
-
-    // Fetch attendees for all events in one query
+    // Fetch attendees for all events in one query (skip if no local events)
     const eventIds = events.map(e => e.id);
-    const placeholders = eventIds.map(() => '?').join(',');
-    const attendeeRows = await prisma.$queryRawUnsafe(
-      `SELECT eventId, userId FROM calendar_event_attendees WHERE eventId IN (${placeholders})`,
-      ...eventIds
-    );
+    const attendeeRows = eventIds.length > 0
+      ? await prisma.$queryRawUnsafe(
+          `SELECT eventId, userId FROM calendar_event_attendees WHERE eventId IN (${eventIds.map(() => '?').join(',')})`,
+          ...eventIds
+        )
+      : [];
 
     // Hydrate user details
     const allUserIds = [...new Set(attendeeRows.map(a => a.userId))];
@@ -192,7 +192,19 @@ router.get('/events', requireAuth, withOrgScope, async (req, res) => {
     }
 
     const shaped = events.map(e => shapeEvent(e, attendeesByEvent[e.id] || []));
-    res.json({ events: shaped });
+
+    // Merge Google Calendar events (deduplicate against already-synced local ones)
+    let allEvents = shaped;
+    try {
+      const googleEvents = await listGoogleCalendarEvents(req.user.id, start || null, end || null);
+      if (googleEvents.length > 0) {
+        const localGoogleIds = new Set(events.filter(e => e.googleEventId).map(e => e.googleEventId));
+        const newGoogleEvents = googleEvents.filter(e => !localGoogleIds.has(e.extendedProps.googleEventId));
+        allEvents = [...shaped, ...newGoogleEvents];
+      }
+    } catch (_) {}
+
+    res.json({ events: allEvents });
   } catch (err) {
     console.error('[Calendar] list error:', err);
     res.status(500).json({ error: 'Failed to fetch events' });
@@ -374,6 +386,13 @@ router.delete('/events/:id', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureTables();
     const { id } = req.params;
+
+    // Google-only event (id prefixed gcal_) — delete directly from Google, no local record
+    if (id.startsWith('gcal_')) {
+      const googleEventId = id.slice(5); // strip 'gcal_'
+      await deleteGoogleCalendarEvent(req.user.id, googleEventId, 'primary');
+      return res.json({ message: 'Google event deleted' });
+    }
 
     const rows = await prisma.$queryRawUnsafe(
       'SELECT * FROM calendar_events WHERE id = ? AND orgId = ?', id, req.orgId
