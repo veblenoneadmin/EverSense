@@ -34,6 +34,7 @@ import firefliesRoutes, { startFirefliesPolling } from './api/fireflies.js';
 import eventsRoutes from './api/events.js';
 import leavesRoutes from './api/leaves.js';
 import apikeysRoutes from './api/apikeys.js';
+import extRoutes from './api/ext.js';
 import integrationsRoutes from './api/integrations.js';
 import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
@@ -517,6 +518,7 @@ app.use('/api/fireflies', firefliesRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/leaves', leavesRoutes);
 app.use('/api/apikeys', apikeysRoutes);
+app.use('/api/ext', extRoutes);
 app.use('/api/integrations', integrationsRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 
