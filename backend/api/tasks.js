@@ -885,6 +885,7 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
     
     // Remove fields that shouldn't be updated directly
     const newAssigneeIds = updates.assigneeIds;
+    const putParentTaskId = updates.parentTaskId;
     delete updates.id;
     delete updates.createdAt;
     delete updates.updatedAt;
@@ -893,6 +894,7 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
     delete updates.isTeamTask;
     delete updates.mainAssigneeId;
     delete updates.checklistItems;
+    delete updates.parentTaskId; // not in Prisma schema — handle via raw SQL below
 
     // Handle date fields
     if (updates.dueDate !== undefined) {
@@ -956,6 +958,15 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
     // Replace assignees if provided (empty array clears all)
     if (Array.isArray(newAssigneeIds)) {
       await setTaskAssignees(taskId, req.orgId, newAssigneeIds);
+    }
+
+    // Handle parentTaskId (not in Prisma schema — raw SQL)
+    if (putParentTaskId !== undefined) {
+      await ensureTeamTaskSchema();
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET parentTaskId = ? WHERE id = ?',
+        putParentTaskId || null, taskId
+      ).catch(() => {});
     }
 
     // Handle team task fields
