@@ -47,10 +47,13 @@ async function isAdminOrOwner(userId, orgId) {
 }
 
 // ── POST /api/apikeys — Generate a new API key ─────────────────────────────────
+// Body: { name, userId? }
+// If userId is provided (admin only), the key is generated on behalf of that user.
+// If omitted, the key is generated for the requester.
 router.post('/', requireAuth, withOrgScope, async (req, res) => {
   await ensureApiKeysTable();
   try {
-    const { name } = req.body;
+    const { name, userId: targetUserId } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'name is required' });
     }
@@ -60,16 +63,33 @@ router.post('/', requireAuth, withOrgScope, async (req, res) => {
       return res.status(403).json({ error: 'Only Admins and Owners can generate API keys' });
     }
 
+    // Resolve which user the key belongs to
+    let keyUserId = req.user.id;
+    let keyUserEmail = req.user.email;
+
+    if (targetUserId && targetUserId !== req.user.id) {
+      // Verify the target user is a member of this org
+      const membership = await prisma.membership.findUnique({
+        where: { userId_orgId: { userId: targetUserId, orgId: req.orgId } },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+      if (!membership) {
+        return res.status(404).json({ error: 'User not found in this organisation' });
+      }
+      keyUserId = membership.user.id;
+      keyUserEmail = membership.user.email;
+    }
+
     const id = randomBytes(12).toString('hex');
     const key = generateKey();
 
     await prisma.$executeRawUnsafe(
       `INSERT INTO api_keys (id, \`key\`, name, orgId, userId, createdAt)
        VALUES (?, ?, ?, ?, ?, NOW())`,
-      id, key, name.trim(), req.orgId, req.user.id
+      id, key, name.trim(), req.orgId, keyUserId
     );
 
-    console.log(`🔑 API key created: "${name}" by ${req.user.email}`);
+    console.log(`🔑 API key created: "${name}" for ${keyUserEmail} by ${req.user.email}`);
 
     // Return the key ONCE — it will never be shown again
     res.status(201).json({
@@ -78,8 +98,10 @@ router.post('/', requireAuth, withOrgScope, async (req, res) => {
       apiKey: {
         id,
         name: name.trim(),
-        key, // ← shown only on creation
+        key,
         orgId: req.orgId,
+        forUserId: keyUserId,
+        forUserEmail: keyUserEmail,
         createdAt: new Date().toISOString(),
       },
     });
