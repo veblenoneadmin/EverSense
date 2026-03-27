@@ -650,13 +650,52 @@ router.get('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
       assignedTo: task.user,
       organization: task.org,
       tags: task.tags,
-      timeLogs: task.timeLogs
+      timeLogs: task.timeLogs,
+      parentTaskId: null,
+      subtasks: [],
     };
-    
+
+    // Fetch parentTaskId and subtasks via raw SQL (column not in Prisma schema)
+    try {
+      await ensureTeamTaskSchema();
+      const [parentRow] = await prisma.$queryRawUnsafe(
+        'SELECT parentTaskId FROM macro_tasks WHERE id = ?', taskId
+      );
+      taskDetails.parentTaskId = parentRow?.parentTaskId || null;
+
+      const subtaskRows = await prisma.$queryRawUnsafe(
+        `SELECT id, title, status, priority, userId, createdAt
+         FROM macro_tasks WHERE parentTaskId = ? ORDER BY createdAt ASC`,
+        taskId
+      );
+      taskDetails.subtasks = subtaskRows;
+    } catch (_) {}
+
     res.json(taskDetails);
   } catch (error) {
     console.error('Error fetching task details:', error);
     res.status(500).json({ error: 'Failed to fetch task details' });
+  }
+});
+
+// ── GET /api/tasks/:taskId/subtasks ───────────────────────────────────────────
+router.get('/:taskId/subtasks', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureTeamTaskSchema();
+    const subtasks = await prisma.$queryRawUnsafe(
+      `SELECT mt.id, mt.title, mt.status, mt.priority, mt.dueDate,
+              mt.estimatedHours, mt.actualHours, mt.userId, mt.createdAt,
+              u.name as assigneeName
+       FROM macro_tasks mt
+       LEFT JOIN User u ON u.id = mt.userId
+       WHERE mt.parentTaskId = ? AND mt.orgId = ?
+       ORDER BY mt.createdAt ASC`,
+      req.params.taskId, req.orgId
+    );
+    res.json({ subtasks, total: subtasks.length });
+  } catch (err) {
+    console.error('[tasks] subtasks error:', err);
+    res.status(500).json({ error: 'Failed to fetch subtasks' });
   }
 });
 
@@ -732,6 +771,16 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
     });
     
     console.log(`✅ Created new task: ${title}`);
+
+    // Store parentTaskId if provided (field not in Prisma schema — use raw SQL)
+    const { parentTaskId } = req.body;
+    if (parentTaskId) {
+      await ensureTeamTaskSchema();
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET parentTaskId = ? WHERE id = ?',
+        parentTaskId, task.id
+      ).catch(() => {});
+    }
 
     // Store multi-assignees
     const assigneeIds = Array.isArray(req.body.assigneeIds) && req.body.assigneeIds.length > 0
@@ -975,6 +1024,7 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
 
     // Remove fields that shouldn't be updated directly
     const newAssigneeIdsPatch = updates.assigneeIds;
+    const newParentTaskId = updates.parentTaskId; // handle via raw SQL below
     delete updates.id;
     delete updates.createdAt;
     delete updates.updatedAt;
@@ -983,6 +1033,7 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
     delete updates.isTeamTask;
     delete updates.mainAssigneeId;
     delete updates.checklistItems;
+    delete updates.parentTaskId; // not in Prisma schema — must not be passed to update()
 
     // Handle date fields
     if (updates.dueDate !== undefined) {
@@ -1046,6 +1097,15 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
     // Replace assignees if provided (empty array clears all)
     if (Array.isArray(newAssigneeIdsPatch)) {
       await setTaskAssignees(taskId, req.orgId, newAssigneeIdsPatch);
+    }
+
+    // Handle parentTaskId (not in Prisma schema — raw SQL)
+    if (newParentTaskId !== undefined) {
+      await ensureTeamTaskSchema();
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET parentTaskId = ? WHERE id = ?',
+        newParentTaskId || null, taskId
+      ).catch(() => {});
     }
 
     // Handle team task fields
