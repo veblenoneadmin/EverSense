@@ -996,15 +996,43 @@ export function TimeLogs() {
 
                     {/* Status */}
                     <td className="px-4 py-3">
-                      <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
-                        style={log.isActive
-                          ? { background: `${VS.teal}18`, color: VS.teal, border: `1px solid ${VS.teal}30` }
-                          : { background: `${VS.text2}10`, color: VS.text2, border: `1px solid ${VS.border}` }
-                        }
-                      >
-                        {log.isActive ? '● Active' : 'Completed'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                          style={log.isActive
+                            ? { background: `${VS.teal}18`, color: VS.teal, border: `1px solid ${VS.teal}30` }
+                            : { background: `${VS.text2}10`, color: VS.text2, border: `1px solid ${VS.border}` }
+                          }
+                        >
+                          {log.isActive ? '● Active' : 'Completed'}
+                        </span>
+                        {log.isActive && isPrivileged && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Force stop all timers for ${log.memberName}?`)) return;
+                              try {
+                                const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                                if (orgId) headers['x-org-id'] = orgId;
+                                const res = await fetch(`/api/attendance/force-stop/${log.memberId}`, {
+                                  method: 'POST', credentials: 'include', headers,
+                                });
+                                if (res.ok) {
+                                  await fetchLogs(false);
+                                  window.dispatchEvent(new CustomEvent('attendance-change'));
+                                } else {
+                                  const d = await res.json();
+                                  alert(d.error || 'Failed to force stop');
+                                }
+                              } catch (err) { console.error(err); alert('Failed to force stop'); }
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors hover:opacity-80"
+                            style={{ background: `${VS.red}18`, color: VS.red, border: `1px solid ${VS.red}30` }}
+                            title={`Force stop all timers for ${log.memberName}`}
+                          >
+                            ⛔ Force Stop
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

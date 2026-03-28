@@ -165,6 +165,60 @@ async function handleClockOut(req, res) {
 router.post('/clock-out', requireAuth, withOrgScope, handleClockOut);
 router.post('/time-out',  requireAuth, withOrgScope, handleClockOut);
 
+// ── POST /api/attendance/force-stop/:userId — Admin force-stop a user's clock ─
+router.post('/force-stop/:userId', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const orgId   = req.orgId;
+    const targetUserId = req.params.userId;
+
+    // Only ADMIN / OWNER / HALL_OF_JUSTICE can force-stop
+    const membership = await prisma.membership.findUnique({
+      where: { userId_orgId: { userId: adminId, orgId } },
+      select: { role: true },
+    });
+    const role = membership?.role || 'STAFF';
+    if (!['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(role)) {
+      return res.status(403).json({ error: 'Only admins can force-stop timers' });
+    }
+
+    const now = new Date();
+
+    // 1) Close attendance log
+    const active = await prisma.attendanceLog.findFirst({
+      where: { userId: targetUserId, orgId, timeOut: null },
+      orderBy: { timeIn: 'desc' },
+    });
+    if (active) {
+      const duration = Math.floor((now.getTime() - new Date(active.timeIn).getTime()) / 1000);
+      await prisma.$executeRawUnsafe(
+        `UPDATE attendance_logs SET timeOut=?, duration=?, updatedAt=NOW(3) WHERE id=?`,
+        now, duration, active.id
+      );
+    }
+
+    // 2) Delete from active_timers
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM active_timers WHERE userId = ? AND orgId = ?`,
+      targetUserId, orgId
+    ).catch(() => {});
+
+    // 3) Close any open time_logs
+    await prisma.$executeRawUnsafe(
+      'UPDATE time_logs SET `end` = ?, duration = TIMESTAMPDIFF(SECOND, `begin`, ?) WHERE userId = ? AND orgId = ? AND `end` IS NULL',
+      now, now, targetUserId, orgId
+    ).catch(() => {});
+
+    console.log(`[Attendance] ⛔ Force-stopped all timers for ${targetUserId} by admin ${adminId}`);
+    broadcast(orgId, 'attendance', { action: 'clock-out', userId: targetUserId });
+
+    res.json({ message: 'All timers force-stopped', userId: targetUserId });
+  } catch (err) {
+    console.error('[Attendance] force-stop error:', err);
+    res.status(500).json({ error: 'Failed to force-stop timer' });
+  }
+});
+
 // ── GET /api/attendance/logs — fetch logs (role-aware) ───────────────────────
 router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
   try {
