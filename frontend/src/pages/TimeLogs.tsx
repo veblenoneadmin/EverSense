@@ -1025,11 +1025,12 @@ export function TimeLogs() {
                                 }
                               } catch (err) { console.error(err); alert('Failed to force stop'); }
                             }}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors hover:opacity-80"
-                            style={{ background: `${VS.red}18`, color: VS.red, border: `1px solid ${VS.red}30` }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all hover:brightness-110 active:scale-95"
+                            style={{ background: VS.red, color: '#fff', boxShadow: `0 2px 8px ${VS.red}55` }}
                             title={`Force stop all timers for ${log.memberName}`}
                           >
-                            ⛔ Force Stop
+                            <LogOut className="h-3 w-3" />
+                            Force Stop
                           </button>
                         )}
                       </div>
