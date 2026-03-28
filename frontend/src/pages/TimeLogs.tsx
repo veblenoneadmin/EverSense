@@ -783,6 +783,10 @@ export function TimeLogs() {
                   style={{ color: VS.text2 }}>Overtime</th>
                 <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
                   style={{ color: VS.text2 }}>Status</th>
+                {isPrivileged && (
+                  <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
+                    style={{ color: VS.text2 }}>Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -996,17 +1000,21 @@ export function TimeLogs() {
 
                     {/* Status */}
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
-                          style={log.isActive
-                            ? { background: `${VS.teal}18`, color: VS.teal, border: `1px solid ${VS.teal}30` }
-                            : { background: `${VS.text2}10`, color: VS.text2, border: `1px solid ${VS.border}` }
-                          }
-                        >
-                          {log.isActive ? '● Active' : 'Completed'}
-                        </span>
-                        {log.isActive && isPrivileged && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                        style={log.isActive
+                          ? { background: `${VS.teal}18`, color: VS.teal, border: `1px solid ${VS.teal}30` }
+                          : { background: `${VS.text2}10`, color: VS.text2, border: `1px solid ${VS.border}` }
+                        }
+                      >
+                        {log.isActive ? '● Active' : 'Completed'}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    {isPrivileged && (
+                      <td className="px-4 py-3">
+                        {log.isActive && (
                           <button
                             onClick={async () => {
                               if (!confirm(`Force stop all timers for ${log.memberName}?`)) return;
@@ -1033,8 +1041,8 @@ export function TimeLogs() {
                             Force Stop
                           </button>
                         )}
-                      </div>
-                    </td>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
