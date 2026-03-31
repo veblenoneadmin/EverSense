@@ -534,7 +534,7 @@ export function Admin() {
                   </span>
                 </div>
                 <div className="text-[12px] truncate" style={{ color: VS.text2 }}>
-                  {inv.invitedBy.name || inv.invitedBy.email}
+                  {inv.invitedBy?.name || inv.invitedBy?.email || '—'}
                 </div>
                 <div>
                   {inv.status === 'PENDING' && (
