@@ -182,6 +182,11 @@ export function Tasks() {
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [taskCounts, setTaskCounts] = useState<Record<string, { comments: number; attachments: number }>>({});
 
+  // Status report modal (required for on_hold / cancelled)
+  const [reportModal, setReportModal] = useState<{ taskId: string; status: Task['status']; prevStatus: Task['status'] } | null>(null);
+  const [reportText, setReportText] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
   // My tasks vs all tasks toggle (OWNER/ADMIN only)
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
 
@@ -509,6 +514,14 @@ export function Tasks() {
     if (!taskId) return;
     const task = tasks.find(t => t.id === taskId);
     if (!task || task.status === colId) return;
+
+    // Require a report when moving to on_hold or cancelled
+    if (colId === 'on_hold' || colId === 'cancelled') {
+      setReportModal({ taskId, status: colId, prevStatus: task.status });
+      setReportText('');
+      return;
+    }
+
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: colId } : t));
     try {
       await apiClient.fetch(`/api/tasks/${taskId}/status`, {
@@ -517,6 +530,25 @@ export function Tasks() {
       });
     } catch {
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: task.status } : t));
+    }
+  };
+
+  const handleReportSubmit = async () => {
+    if (!reportModal || !reportText.trim()) return;
+    setReportSubmitting(true);
+    const { taskId, status, prevStatus } = reportModal;
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
+    try {
+      await apiClient.fetch(`/api/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, report: reportText.trim() }),
+      });
+      setReportModal(null);
+      setReportText('');
+    } catch {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: prevStatus } : t));
+    } finally {
+      setReportSubmitting(false);
     }
   };
 
@@ -1461,6 +1493,59 @@ export function Tasks() {
           );
         })}
       </div>
+
+      {/* ── Status Report Modal (on_hold / cancelled) ── */}
+      {reportModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={e => { if (e.target === e.currentTarget) { setReportModal(null); setReportText(''); } }}
+        >
+          <div className="w-full max-w-md rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}` }}>
+              <h3 className="text-[14px] font-bold" style={{ color: reportModal.status === 'cancelled' ? VS.orange : VS.red }}>
+                {reportModal.status === 'cancelled' ? 'Cancel Task — Report Required' : 'Hold Task — Report Required'}
+              </h3>
+              <button onClick={() => { setReportModal(null); setReportText(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2 }}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-[13px]" style={{ color: VS.text2 }}>
+                {reportModal.status === 'cancelled'
+                  ? 'Please provide a reason for cancelling this task.'
+                  : 'Please provide a reason for putting this task on hold.'}
+              </p>
+              <textarea
+                value={reportText}
+                onChange={e => setReportText(e.target.value)}
+                placeholder="Enter your reason..."
+                rows={4}
+                autoFocus
+                className={inputCls + ' resize-none'}
+                style={inputStyle}
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => { setReportModal(null); setReportText(''); }}
+                  className="px-4 py-2 rounded-lg text-[13px] font-medium"
+                  style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReportSubmit}
+                  disabled={!reportText.trim() || reportSubmitting}
+                  className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
+                  style={{ background: reportModal.status === 'cancelled' ? VS.orange : VS.red, color: '#fff' }}
+                >
+                  {reportSubmitting ? 'Submitting…' : reportModal.status === 'cancelled' ? 'Cancel Task' : 'Put On Hold'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── New Task Modal ── */}
       {showNewTaskForm && (

@@ -93,6 +93,30 @@ async function ensureTeamTaskSchema() {
   teamTaskSchemaReady = true;
 }
 
+// ── Lazy task_status_reports table ────────────────────────────────────────────
+let statusReportsTableReady = false;
+async function ensureStatusReportsTable() {
+  if (statusReportsTableReady) return;
+  try {
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `task_status_reports` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `taskId` VARCHAR(50) NOT NULL,' +
+      '  `userId` VARCHAR(36) NOT NULL,' +
+      '  `orgId` VARCHAR(191) NOT NULL,' +
+      '  `fromStatus` VARCHAR(20) NOT NULL,' +
+      '  `toStatus` VARCHAR(20) NOT NULL,' +
+      '  `report` TEXT NOT NULL,' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  PRIMARY KEY (`id`),' +
+      '  KEY `tsr_taskId_idx` (`taskId`),' +
+      '  KEY `tsr_userId_idx` (`userId`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+    statusReportsTableReady = true;
+  } catch (_) { statusReportsTableReady = true; }
+}
+
 // ── Replace all assignees for a task ─────────────────────────────────────────
 async function setTaskAssignees(taskId, orgId, assigneeIds) {
   if (!Array.isArray(assigneeIds)) return;
@@ -1193,13 +1217,28 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
 router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership, validateBody(taskSchemas.statusUpdate), async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { status } = req.body;
+    const { status, report } = req.body;
 
     if (!status) {
       return res.status(400).json({ error: 'status is required' });
     }
 
+    // Require a report when moving to on_hold or cancelled
+    if ((status === 'on_hold' || status === 'cancelled') && (!report || !report.trim())) {
+      return res.status(400).json({ error: 'A report/reason is required when putting a task on hold or cancelling it' });
+    }
+
     await ensureAssigneesTable();
+
+    // Store the status report if provided
+    if (report && report.trim()) {
+      await ensureStatusReportsTable();
+      const currentTask = await prisma.macroTask.findUnique({ where: { id: taskId }, select: { status: true } });
+      await prisma.$executeRawUnsafe(
+        'INSERT INTO task_status_reports (id, taskId, userId, orgId, fromStatus, toStatus, report, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3))',
+        randomUUID(), taskId, req.user.id, req.orgId, currentTask?.status || 'unknown', status, report.trim()
+      ).catch(err => console.error('[tasks] report save error:', err));
+    }
 
     // Check if multi-assignee task (more than 1 assignee)
     const assignees = await prisma.$queryRawUnsafe(
@@ -1621,6 +1660,25 @@ router.delete('/:taskId/attachments/:attachId', requireAuth, withOrgScope, async
     await prisma.taskAttachment.delete({ where: { id: req.params.attachId } });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: 'Failed to delete attachment' }); }
+});
+
+// ── GET /api/tasks/:taskId/reports — fetch status change reports ──────────────
+router.get('/:taskId/reports', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureStatusReportsTable();
+    const reports = await prisma.$queryRawUnsafe(
+      `SELECT r.id, r.fromStatus, r.toStatus, r.report, r.createdAt, u.name as userName, u.email as userEmail
+       FROM task_status_reports r
+       JOIN User u ON u.id = r.userId
+       WHERE r.taskId = ?
+       ORDER BY r.createdAt DESC`,
+      req.params.taskId
+    );
+    res.json({ reports });
+  } catch (err) {
+    console.error('[tasks] reports fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch reports' });
+  }
 });
 
 // ── GET /api/tasks/:taskId/checklist — fetch sub-tasks ───────────────────────
