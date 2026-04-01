@@ -41,8 +41,14 @@ async function ensureAssigneesTable() {
       '  KEY `ta_taskId_idx` (`taskId`), KEY `ta_userId_idx` (`userId`)' +
       ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
     );
-    assigneesTableReady = true;
-  } catch (_) { assigneesTableReady = true; }
+  } catch (_) {}
+  // Add per-assignee status column
+  try {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE task_assignees ADD COLUMN `status` VARCHAR(20) NULL"
+    );
+  } catch (_) {} // already exists
+  assigneesTableReady = true;
 }
 
 // ── Lazy task_checklist_items table + team task columns ────────────────────────
@@ -393,19 +399,32 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         }
       } catch (_) {}
 
-      // Batch-fetch multi-assignees
+      // Batch-fetch multi-assignees (with per-assignee status)
       try {
         await ensureAssigneesTable();
         const rows = await prisma.$queryRawUnsafe(
-          `SELECT ta.taskId, ta.userId, u.name, u.email, u.image FROM task_assignees ta JOIN User u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
+          `SELECT ta.taskId, ta.userId, ta.status as assigneeStatus, u.name, u.email, u.image FROM task_assignees ta JOIN User u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
           ...taskIds
         );
         const aMap = {};
+        const assigneeStatusMap = {}; // taskId -> { userId -> status }
         for (const r of rows) {
           if (!aMap[r.taskId]) aMap[r.taskId] = [];
           aMap[r.taskId].push({ id: r.userId, name: r.name, email: r.email, image: r.image || null });
+          if (!assigneeStatusMap[r.taskId]) assigneeStatusMap[r.taskId] = {};
+          if (r.assigneeStatus) assigneeStatusMap[r.taskId][r.userId] = r.assigneeStatus;
         }
         for (const t of formattedTasks) t.assignees = aMap[t.id] || [];
+
+        // Override task status with per-assignee status for the current user
+        // (only for multi-assignee tasks where this user has a personal status set)
+        for (const t of formattedTasks) {
+          const taskAssignees = aMap[t.id] || [];
+          if (taskAssignees.length > 1) {
+            const myStatus = assigneeStatusMap[t.id]?.[req.user.id];
+            if (myStatus) t.status = myStatus;
+          }
+        }
       } catch (_) {}
 
       // Batch-fetch sub-task progress + assignees for team tasks
@@ -1175,30 +1194,93 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
   try {
     const { taskId } = req.params;
     const { status } = req.body;
-    
+
     if (!status) {
       return res.status(400).json({ error: 'status is required' });
     }
-    
-    const updateData = { status };
-    
-    // If marking as completed, set completedAt timestamp
-    if (status === 'completed') {
-      updateData.completedAt = new Date();
-    } else if (status !== 'completed') {
-      // If changing from completed to something else, clear completedAt
-      updateData.completedAt = null;
+
+    await ensureAssigneesTable();
+
+    // Check if multi-assignee task (more than 1 assignee)
+    const assignees = await prisma.$queryRawUnsafe(
+      'SELECT userId, status FROM task_assignees WHERE taskId = ?', taskId
+    ).catch(() => []);
+
+    const isMultiAssignee = assignees.length > 1;
+    const callerAssignee = assignees.find(a => a.userId === req.user.id);
+
+    if (isMultiAssignee && callerAssignee) {
+      // ── Per-assignee status: only update THIS user's status ──
+      await prisma.$executeRawUnsafe(
+        'UPDATE task_assignees SET status = ? WHERE taskId = ? AND userId = ?',
+        status, taskId, req.user.id
+      );
+      console.log(`📝 Updated assignee status for ${req.user.id} on task ${taskId} to: ${status}`);
+
+      // Check if ALL assignees are now completed → update global task status
+      const refreshed = await prisma.$queryRawUnsafe(
+        'SELECT userId, status FROM task_assignees WHERE taskId = ?', taskId
+      );
+      const allCompleted = refreshed.length > 0 && refreshed.every(a => a.status === 'completed');
+
+      if (allCompleted) {
+        await prisma.macroTask.update({
+          where: { id: taskId },
+          data: { status: 'completed', completedAt: new Date() },
+        });
+        console.log(`📝 All assignees completed → task ${taskId} marked completed globally`);
+      } else if (status !== 'completed') {
+        // If someone un-completes, ensure global status isn't 'completed'
+        const task = await prisma.macroTask.findUnique({ where: { id: taskId }, select: { status: true } });
+        if (task?.status === 'completed') {
+          await prisma.macroTask.update({
+            where: { id: taskId },
+            data: { status: 'in_progress', completedAt: null },
+          });
+        }
+      }
+    } else {
+      // ── Single assignee or caller is the primary: update global status ──
+      const updateData = { status };
+      if (status === 'completed') {
+        updateData.completedAt = new Date();
+      } else {
+        updateData.completedAt = null;
+      }
+      await prisma.macroTask.update({
+        where: { id: taskId },
+        data: updateData,
+      });
+      // Also update task_assignees row if exists
+      if (callerAssignee) {
+        await prisma.$executeRawUnsafe(
+          'UPDATE task_assignees SET status = ? WHERE taskId = ? AND userId = ?',
+          status, taskId, req.user.id
+        ).catch(() => {});
+      }
+      console.log(`📝 Updated task ${taskId} status to: ${status}`);
     }
-    
-    const task = await prisma.macroTask.update({
-      where: { id: taskId },
-      data: updateData
-    });
-    
-    console.log(`📝 Updated task ${taskId} status to: ${status}`);
+
+    // ── Stop this user's timer for this task when marking as completed ──
+    if (status === 'completed') {
+      const now = new Date();
+      // Stop active_timers
+      await prisma.$executeRawUnsafe(
+        'DELETE FROM active_timers WHERE userId = ? AND taskId = ?',
+        req.user.id, taskId
+      ).catch(() => {});
+      // Close open time_logs
+      await prisma.$executeRawUnsafe(
+        'UPDATE time_logs SET `end` = ?, duration = TIMESTAMPDIFF(SECOND, `begin`, ?) WHERE userId = ? AND taskId = ? AND `end` IS NULL',
+        now, now, req.user.id, taskId
+      ).catch(() => {});
+      console.log(`⏹ Stopped timers for user ${req.user.id} on task ${taskId}`);
+    }
+
+    const task = await prisma.macroTask.findUnique({ where: { id: taskId }, select: { title: true, userId: true, completedAt: true } });
 
     // Notify the task assignee about the status change (if someone else changed it)
-    if (task.userId && task.userId !== req.user.id) {
+    if (task?.userId && task.userId !== req.user.id) {
       const updater = await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
       createNotification({
         userId: task.userId,
@@ -1209,19 +1291,19 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
         link: '/tasks',
       });
     }
-    // If completed, also notify all org admins/owners (excluding the completer and assignee)
+    // If completed, also notify all org admins/owners
     if (status === 'completed') {
       prisma.membership.findMany({
         where: { orgId: req.orgId, role: { in: ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'] } },
         select: { userId: true },
       }).then(admins => {
         for (const { userId: adminId } of admins) {
-          if (adminId !== req.user.id && adminId !== task.userId) {
+          if (adminId !== req.user.id && adminId !== task?.userId) {
             createNotification({
               userId: adminId,
               orgId: req.orgId,
-              title: `Task Completed: ${task.title}`,
-              body: `"${task.title}" has been marked as completed.`,
+              title: `Task Completed: ${task?.title}`,
+              body: `"${task?.title}" has been marked as completed.`,
               type: 'task',
               link: '/tasks',
             });
@@ -1232,9 +1314,9 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
 
     res.json({
       message: 'Task status updated successfully',
-      taskId: taskId,
-      status: status,
-      completedAt: task.completedAt
+      taskId,
+      status,
+      completedAt: task?.completedAt,
     });
   } catch (error) {
     console.error('Error updating task status:', error);
