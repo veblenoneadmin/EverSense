@@ -80,6 +80,44 @@ router.get('/me', async (req, res) => {
   }
 });
 
+// ─── GET /api/ext/users — search org members by email or name ─────────────────
+// Query: ?email=x or ?name=x or ?q=x (searches both)
+router.get('/users', async (req, res) => {
+  try {
+    const { email, name, q } = req.query;
+    const orgId = req.orgId;
+
+    let where = 'WHERE m.orgId = ?';
+    const params = [orgId];
+
+    if (email) {
+      where += ' AND u.email LIKE ?';
+      params.push(`%${email}%`);
+    } else if (name) {
+      where += ' AND u.name LIKE ?';
+      params.push(`%${name}%`);
+    } else if (q) {
+      where += ' AND (u.name LIKE ? OR u.email LIKE ?)';
+      params.push(`%${q}%`, `%${q}%`);
+    }
+
+    const users = await prisma.$queryRawUnsafe(
+      `SELECT u.id, u.name, u.email, m.role
+       FROM User u
+       JOIN memberships m ON m.userId = u.id
+       ${where}
+       ORDER BY u.name ASC
+       LIMIT 50`,
+      ...params
+    );
+
+    res.json({ users, total: users.length });
+  } catch (err) {
+    console.error('[ext] /users error:', err);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
 // ─── GET /api/ext/clock/status ────────────────────────────────────────────────
 router.get('/clock/status', async (req, res) => {
   try {
