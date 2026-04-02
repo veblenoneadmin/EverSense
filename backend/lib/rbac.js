@@ -63,7 +63,7 @@ export async function withOrgScope(req, res, next) {
     return res.status(400).json({
       error:   'Organization context required',
       code:    'MISSING_ORG_CONTEXT',
-      message: 'User has no organization membership. Please complete onboarding.',
+      message: 'Dont hack this Fuck Off!!',
     });
   }
 
