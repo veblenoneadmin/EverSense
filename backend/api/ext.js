@@ -118,6 +118,62 @@ router.get('/users', async (req, res) => {
   }
 });
 
+// ─── POST /api/ext/users/:userId/set-role — change a user's role ─────────────
+// Body: { "role": "STAFF" | "ADMIN" | "OWNER" | "CLIENT" | "HALL_OF_JUSTICE" }
+// Requires caller to be ADMIN or higher
+router.post('/users/:userId/set-role', async (req, res) => {
+  try {
+    const orgId = req.orgId;
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    const validRoles = ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE'];
+    if (!role || !validRoles.includes(role)) {
+      return res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
+    }
+
+    // Check caller is ADMIN or higher
+    const callerMembership = await prisma.membership.findUnique({
+      where: { userId_orgId: { userId: req.user.id, orgId } },
+      select: { role: true },
+    });
+    if (!['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(callerMembership?.role)) {
+      return res.status(403).json({ error: 'Only admins and owners can change roles' });
+    }
+
+    // Check target user exists in org
+    const targetMembership = await prisma.membership.findUnique({
+      where: { userId_orgId: { userId, orgId } },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!targetMembership) {
+      return res.status(404).json({ error: 'User not found in this organisation' });
+    }
+
+    // Prevent changing OWNER/HALL_OF_JUSTICE roles
+    if (['OWNER', 'HALL_OF_JUSTICE'].includes(targetMembership.role)) {
+      return res.status(403).json({ error: 'Cannot change owner role' });
+    }
+
+    await prisma.membership.update({
+      where: { userId_orgId: { userId, orgId } },
+      data: { role },
+    });
+
+    console.log(`[ext] ✅ Role changed: ${targetMembership.user?.email} → ${role} by ${req.user.email}`);
+    res.json({
+      message: 'Role updated',
+      userId,
+      email: targetMembership.user?.email,
+      previousRole: targetMembership.role,
+      newRole: role,
+    });
+  } catch (err) {
+    console.error('[ext] set-role error:', err);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
 // ─── GET /api/ext/clock/status ────────────────────────────────────────────────
 router.get('/clock/status', async (req, res) => {
   try {
