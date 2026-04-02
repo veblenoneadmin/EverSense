@@ -206,7 +206,8 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
 // Get tasks (main endpoint)
 router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.pagination), async (req, res) => {
   try {
-    const { orgId, userId, status, priority, projectId, limit = 200, offset = 0 } = req.query;
+    const { orgId, userId, status, priority, projectId, limit = 200, offset: offsetParam, skip: skipParam } = req.query;
+    const offset = parseInt(skipParam) || parseInt(offsetParam) || 0;
 
     if (!orgId) {
       return res.status(400).json({ error: 'orgId is required' });
@@ -311,7 +312,7 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         { createdAt: 'desc' }
       ],
       take: parseInt(limit),
-      skip: parseInt(offset)
+      skip: offset,
     });
 
     const total = await prisma.macroTask.count({ where });
