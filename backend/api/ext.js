@@ -41,6 +41,20 @@ async function resolveOrgId(userId) {
   return row?.orgId || null;
 }
 
+// Reject users with no organisation
+router.use(async (req, res, next) => {
+  const orgId = req.orgId || await resolveOrgId(req.user.id);
+  if (!orgId) {
+    return res.status(403).json({
+      error: 'No organisation found for this user',
+      code: 'NO_ORG',
+      message: 'This API key belongs to a user who is not a member of any organisation.',
+    });
+  }
+  req.orgId = orgId;
+  next();
+});
+
 // ─── GET /api/ext/me ──────────────────────────────────────────────────────────
 router.get('/me', async (req, res) => {
   try {
