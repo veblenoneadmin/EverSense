@@ -256,22 +256,6 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
         clientProjectIds = projects.map(p => p.id);
       }
       where.projectId = { in: clientProjectIds.length > 0 ? clientProjectIds : ['__none__'] };
-    } else if (callerRole === 'STAFF') {
-      // STAFF: only see tasks assigned to them (primary or multi-assignee)
-      delete where.userId; // ignore any userId filter — scope to self
-      let staffAssigneeTaskIds = [];
-      try {
-        await ensureAssigneesTable();
-        const rows = await prisma.$queryRawUnsafe(
-          `SELECT taskId FROM task_assignees WHERE userId = ? AND orgId = ?`,
-          req.user.id, orgId
-        );
-        staffAssigneeTaskIds = rows.map(r => r.taskId);
-      } catch (_) {}
-      where.OR = [
-        { userId: req.user.id },
-        ...(staffAssigneeTaskIds.length > 0 ? [{ id: { in: staffAssigneeTaskIds } }] : [])
-      ];
     } else if (userId && callerRole !== 'CLIENT') {
       // ADMIN/OWNER with userId filter — also include tasks where they're a multi-assignee
       let assigneeTaskIds = [];
