@@ -182,10 +182,16 @@ export function Tasks() {
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [taskCounts, setTaskCounts] = useState<Record<string, { comments: number; attachments: number }>>({});
 
-  // Status report modal (required for on_hold / cancelled)
+  // Status report modal (required for on_hold / cancelled / completed)
   const [reportModal, setReportModal] = useState<{ taskId: string; status: Task['status']; prevStatus: Task['status'] } | null>(null);
   const [reportText, setReportText] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  // Accomplishment report (completed only)
+  const [accomplishments, setAccomplishments] = useState<string[]>(['']);
+  const [reportLinks, setReportLinks] = useState<string[]>(['']);
+  const [reportFiles, setReportFiles] = useState<File[]>([]);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   // My tasks vs all tasks toggle (OWNER/ADMIN only)
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
@@ -519,6 +525,9 @@ export function Tasks() {
     if (colId === 'on_hold' || colId === 'cancelled' || colId === 'completed') {
       setReportModal({ taskId, status: colId, prevStatus: task.status });
       setReportText('');
+      setAccomplishments(['']);
+      setReportLinks(['']);
+      setReportFiles([]);
       return;
     }
 
@@ -534,17 +543,56 @@ export function Tasks() {
   };
 
   const handleReportSubmit = async () => {
-    if (!reportModal || !reportText.trim()) return;
+    if (!reportModal) return;
+    const isComplete = reportModal.status === 'completed';
+
+    // For completed: need at least one accomplishment. For others: need report text.
+    if (isComplete) {
+      const filled = accomplishments.filter(a => a.trim());
+      if (filled.length === 0) return;
+    } else {
+      if (!reportText.trim()) return;
+    }
+
     setReportSubmitting(true);
     const { taskId, status, prevStatus } = reportModal;
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
     try {
+      // Build the report text
+      let fullReport = '';
+      if (isComplete) {
+        const filled = accomplishments.filter(a => a.trim());
+        fullReport = 'Accomplishments:\n' + filled.map((a, i) => `${i + 1}. ${a.trim()}`).join('\n');
+        const filledLinks = reportLinks.filter(l => l.trim());
+        if (filledLinks.length) fullReport += '\n\nLinks:\n' + filledLinks.map(l => `- ${l.trim()}`).join('\n');
+        if (reportFiles.length) fullReport += `\n\nAttachments: ${reportFiles.map(f => f.name).join(', ')}`;
+      } else {
+        fullReport = reportText.trim();
+      }
+
+      // Upload files first if any
+      if (isComplete && reportFiles.length > 0) {
+        for (const file of reportFiles) {
+          const formData = new FormData();
+          formData.append('file', file);
+          await fetch(`/api/tasks/${taskId}/attachments`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: currentOrg?.id ? { 'x-org-id': currentOrg.id } : {},
+            body: formData,
+          }).catch(() => {});
+        }
+      }
+
       await apiClient.fetch(`/api/tasks/${taskId}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, report: reportText.trim() }),
+        body: JSON.stringify({ status, report: fullReport }),
       });
       setReportModal(null);
       setReportText('');
+      setAccomplishments(['']);
+      setReportLinks(['']);
+      setReportFiles([]);
     } catch {
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: prevStatus } : t));
     } finally {
@@ -1565,25 +1613,151 @@ export function Tasks() {
                 </div>
               )}
 
-              <p className="text-[13px]" style={{ color: VS.text2 }}>
-                {isComplete
-                  ? 'Please describe what was accomplished for this task.'
-                  : isCancelled
-                  ? 'Please provide a reason for cancelling this task.'
-                  : 'Please provide a reason for putting this task on hold.'}
-              </p>
-              <textarea
-                value={reportText}
-                onChange={e => setReportText(e.target.value)}
-                placeholder={isComplete ? 'Describe what was accomplished...' : 'Enter your reason...'}
-                rows={4}
-                autoFocus
-                className={inputCls + ' resize-none'}
-                style={inputStyle}
-              />
+              {/* ── Completed: rich accomplishment form ── */}
+              {isComplete ? (<>
+                {/* Accomplishment items */}
+                <div>
+                  <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>
+                    Tasks Completed
+                  </label>
+                  {accomplishments.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] font-bold shrink-0 w-5 text-center" style={{ color: VS.teal }}>{idx + 1}.</span>
+                      <input
+                        type="text"
+                        value={item}
+                        onChange={e => { const u = [...accomplishments]; u[idx] = e.target.value; setAccomplishments(u); }}
+                        placeholder="What did you accomplish?"
+                        autoFocus={idx === 0}
+                        className={inputCls}
+                        style={inputStyle}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && item.trim()) {
+                            e.preventDefault();
+                            setAccomplishments([...accomplishments, '']);
+                          }
+                        }}
+                      />
+                      {accomplishments.length > 1 && (
+                        <button onClick={() => setAccomplishments(accomplishments.filter((_, i) => i !== idx))}
+                          className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center"
+                          style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.red, cursor: 'pointer' }}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setAccomplishments([...accomplishments, ''])}
+                    className="flex items-center gap-1.5 text-[12px] font-medium mt-1 px-2 py-1 rounded-md"
+                    style={{ color: VS.teal, background: `${VS.teal}12`, border: `1px solid ${VS.teal}30`, cursor: 'pointer' }}
+                  >
+                    <Plus className="h-3 w-3" /> Add item
+                  </button>
+                </div>
+
+                {/* Links */}
+                <div>
+                  <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>
+                    Attach Links
+                  </label>
+                  {reportLinks.map((link, idx) => (
+                    <div key={idx} className="flex items-center gap-2 mb-2">
+                      <input
+                        type="url"
+                        value={link}
+                        onChange={e => { const u = [...reportLinks]; u[idx] = e.target.value; setReportLinks(u); }}
+                        placeholder="https://..."
+                        className={inputCls}
+                        style={inputStyle}
+                      />
+                      {reportLinks.length > 1 && (
+                        <button onClick={() => setReportLinks(reportLinks.filter((_, i) => i !== idx))}
+                          className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center"
+                          style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.red, cursor: 'pointer' }}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setReportLinks([...reportLinks, ''])}
+                    className="flex items-center gap-1.5 text-[12px] font-medium mt-1 px-2 py-1 rounded-md"
+                    style={{ color: VS.blue, background: `${VS.blue}12`, border: `1px solid ${VS.blue}30`, cursor: 'pointer' }}
+                  >
+                    <Plus className="h-3 w-3" /> Add link
+                  </button>
+                </div>
+
+                {/* File upload / drag & drop */}
+                <div>
+                  <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>
+                    Attach Files
+                  </label>
+                  <div
+                    className="rounded-lg p-4 text-center transition-colors"
+                    style={{
+                      border: `2px dashed ${isDraggingFile ? VS.teal : VS.border}`,
+                      background: isDraggingFile ? `${VS.teal}08` : VS.bg3,
+                      cursor: 'pointer',
+                    }}
+                    onDragOver={e => { e.preventDefault(); setIsDraggingFile(true); }}
+                    onDragLeave={() => setIsDraggingFile(false)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setIsDraggingFile(false);
+                      const files = Array.from(e.dataTransfer.files);
+                      if (files.length) setReportFiles(prev => [...prev, ...files]);
+                    }}
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.multiple = true;
+                      input.onchange = () => {
+                        if (input.files?.length) setReportFiles(prev => [...prev, ...Array.from(input.files!)]);
+                      };
+                      input.click();
+                    }}
+                  >
+                    <p className="text-[12px]" style={{ color: VS.text2 }}>
+                      {isDraggingFile ? 'Drop files here...' : 'Drag & drop files or click to browse'}
+                    </p>
+                  </div>
+                  {reportFiles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {reportFiles.map((f, idx) => (
+                        <div key={idx} className="flex items-center justify-between px-3 py-1.5 rounded-md" style={{ background: VS.bg3, border: `1px solid ${VS.border}` }}>
+                          <span className="text-[12px] truncate" style={{ color: VS.text1 }}>{f.name}</span>
+                          <button onClick={() => setReportFiles(reportFiles.filter((_, i) => i !== idx))}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.red, padding: 2 }}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>) : (<>
+                {/* ── Hold / Cancel: simple textarea ── */}
+                <p className="text-[13px]" style={{ color: VS.text2 }}>
+                  {isCancelled
+                    ? 'Please provide a reason for cancelling this task.'
+                    : 'Please provide a reason for putting this task on hold.'}
+                </p>
+                <textarea
+                  value={reportText}
+                  onChange={e => setReportText(e.target.value)}
+                  placeholder="Enter your reason..."
+                  rows={4}
+                  autoFocus
+                  className={inputCls + ' resize-none'}
+                  style={inputStyle}
+                />
+              </>)}
+
               <div className="flex justify-end gap-3">
                 <button
-                  onClick={() => { setReportModal(null); setReportText(''); }}
+                  onClick={() => { setReportModal(null); setReportText(''); setAccomplishments(['']); setReportLinks(['']); setReportFiles([]); }}
                   className="px-4 py-2 rounded-lg text-[13px] font-medium"
                   style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
                 >
@@ -1591,7 +1765,7 @@ export function Tasks() {
                 </button>
                 <button
                   onClick={handleReportSubmit}
-                  disabled={!reportText.trim() || reportSubmitting}
+                  disabled={isComplete ? accomplishments.every(a => !a.trim()) || reportSubmitting : !reportText.trim() || reportSubmitting}
                   className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
                   style={{ background: accentColor, color: '#fff' }}
                 >
