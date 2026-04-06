@@ -1548,9 +1548,6 @@ export function Tasks() {
         const isComplete = reportModal.status === 'completed';
         const isCancelled = reportModal.status === 'cancelled';
         const accentColor = isComplete ? VS.teal : isCancelled ? VS.orange : VS.red;
-        const estH = Math.floor(reportTask?.estimatedHours || 0);
-        const estM = Math.round(((reportTask?.estimatedHours || 0) % 1) * 60);
-        const estStr = estH && estM ? `${estH}h ${estM}m` : estH ? `${estH}h` : estM ? `${estM}m` : '—';
 
         return (
         <div
@@ -1569,48 +1566,9 @@ export function Tasks() {
             </div>
             <div className="p-5 space-y-4">
 
-              {/* Task overview card */}
+              {/* Task title */}
               {reportTask && (
-                <div className="rounded-lg p-4 space-y-3" style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[14px] font-semibold truncate" style={{ color: VS.text0 }}>{reportTask.title}</h4>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ml-2"
-                      style={{ background: (PRIORITY_CONFIG[reportTask.priority] || PRIORITY_CONFIG.Medium).bg, color: (PRIORITY_CONFIG[reportTask.priority] || PRIORITY_CONFIG.Medium).text, border: `1px solid ${(PRIORITY_CONFIG[reportTask.priority] || PRIORITY_CONFIG.Medium).border}33` }}>
-                      {reportTask.priority}
-                    </span>
-                  </div>
-                  {reportTask.description && (
-                    <p className="text-[12px] line-clamp-2" style={{ color: VS.text2 }}>{reportTask.description}</p>
-                  )}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
-                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Assignee</div>
-                      <div className="text-[12px] font-medium mt-0.5 truncate" style={{ color: VS.text0 }}>{reportTask.assignee || '—'}</div>
-                    </div>
-                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
-                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Project</div>
-                      <div className="text-[12px] font-medium mt-0.5 truncate" style={{ color: VS.text0 }}>{reportTask.project || '—'}</div>
-                    </div>
-                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
-                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Est. Time</div>
-                      <div className="text-[12px] font-medium mt-0.5" style={{ color: VS.text0 }}>{estStr}</div>
-                    </div>
-                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
-                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Due Date</div>
-                      <div className="text-[12px] font-medium mt-0.5" style={{ color: reportTask.dueDate && new Date(reportTask.dueDate) < new Date() ? VS.red : VS.text0 }}>
-                        {reportTask.dueDate ? new Date(reportTask.dueDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-                      </div>
-                    </div>
-                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
-                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Actual Hours</div>
-                      <div className="text-[12px] font-medium mt-0.5" style={{ color: VS.text0 }}>{reportTask.actualHours || 0}h</div>
-                    </div>
-                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
-                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Created By</div>
-                      <div className="text-[12px] font-medium mt-0.5 truncate" style={{ color: VS.text0 }}>{reportTask.createdByName || '—'}</div>
-                    </div>
-                  </div>
-                </div>
+                <div className="text-[14px] font-semibold" style={{ color: VS.text0 }}>{reportTask.title}</div>
               )}
 
               {/* ── Completed: rich accomplishment form ── */}
