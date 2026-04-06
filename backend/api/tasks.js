@@ -1224,9 +1224,9 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
       return res.status(400).json({ error: 'status is required' });
     }
 
-    // Require a report when moving to on_hold or cancelled
-    if ((status === 'on_hold' || status === 'cancelled') && (!report || !report.trim())) {
-      return res.status(400).json({ error: 'A report/reason is required when putting a task on hold or cancelling it' });
+    // Require a report when moving to on_hold, cancelled, or completed
+    if ((status === 'on_hold' || status === 'cancelled' || status === 'completed') && (!report || !report.trim())) {
+      return res.status(400).json({ error: 'A report is required when completing, holding, or cancelling a task' });
     }
 
     await ensureAssigneesTable();

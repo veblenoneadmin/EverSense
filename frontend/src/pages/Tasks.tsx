@@ -515,8 +515,8 @@ export function Tasks() {
     const task = tasks.find(t => t.id === taskId);
     if (!task || task.status === colId) return;
 
-    // Require a report when moving to on_hold or cancelled
-    if (colId === 'on_hold' || colId === 'cancelled') {
+    // Require a report when moving to on_hold, cancelled, or completed
+    if (colId === 'on_hold' || colId === 'cancelled' || colId === 'completed') {
       setReportModal({ taskId, status: colId, prevStatus: task.status });
       setReportText('');
       return;
@@ -1503,8 +1503,8 @@ export function Tasks() {
         >
           <div className="w-full max-w-md rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}` }}>
-              <h3 className="text-[14px] font-bold" style={{ color: reportModal.status === 'cancelled' ? VS.orange : VS.red }}>
-                {reportModal.status === 'cancelled' ? 'Cancel Task — Report Required' : 'Hold Task — Report Required'}
+              <h3 className="text-[14px] font-bold" style={{ color: reportModal.status === 'completed' ? VS.teal : reportModal.status === 'cancelled' ? VS.orange : VS.red }}>
+                {reportModal.status === 'completed' ? 'Complete Task — Accomplishment Report' : reportModal.status === 'cancelled' ? 'Cancel Task — Report Required' : 'Hold Task — Report Required'}
               </h3>
               <button onClick={() => { setReportModal(null); setReportText(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2 }}>
                 <X className="h-4 w-4" />
@@ -1512,14 +1512,16 @@ export function Tasks() {
             </div>
             <div className="p-5 space-y-4">
               <p className="text-[13px]" style={{ color: VS.text2 }}>
-                {reportModal.status === 'cancelled'
+                {reportModal.status === 'completed'
+                  ? 'Please describe what was accomplished for this task.'
+                  : reportModal.status === 'cancelled'
                   ? 'Please provide a reason for cancelling this task.'
                   : 'Please provide a reason for putting this task on hold.'}
               </p>
               <textarea
                 value={reportText}
                 onChange={e => setReportText(e.target.value)}
-                placeholder="Enter your reason..."
+                placeholder={reportModal.status === 'completed' ? 'Describe what was accomplished...' : 'Enter your reason...'}
                 rows={4}
                 autoFocus
                 className={inputCls + ' resize-none'}
@@ -1537,9 +1539,9 @@ export function Tasks() {
                   onClick={handleReportSubmit}
                   disabled={!reportText.trim() || reportSubmitting}
                   className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
-                  style={{ background: reportModal.status === 'cancelled' ? VS.orange : VS.red, color: '#fff' }}
+                  style={{ background: reportModal.status === 'completed' ? VS.teal : reportModal.status === 'cancelled' ? VS.orange : VS.red, color: '#fff' }}
                 >
-                  {reportSubmitting ? 'Submitting…' : reportModal.status === 'cancelled' ? 'Cancel Task' : 'Put On Hold'}
+                  {reportSubmitting ? 'Submitting…' : reportModal.status === 'completed' ? 'Mark as Done' : reportModal.status === 'cancelled' ? 'Cancel Task' : 'Put On Hold'}
                 </button>
               </div>
             </div>
