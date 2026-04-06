@@ -1494,34 +1494,88 @@ export function Tasks() {
         })}
       </div>
 
-      {/* ── Status Report Modal (on_hold / cancelled) ── */}
-      {reportModal && (
+      {/* ── Status Report Modal (on_hold / cancelled / completed) ── */}
+      {reportModal && (() => {
+        const reportTask = tasks.find(t => t.id === reportModal.taskId);
+        const isComplete = reportModal.status === 'completed';
+        const isCancelled = reportModal.status === 'cancelled';
+        const accentColor = isComplete ? VS.teal : isCancelled ? VS.orange : VS.red;
+        const estH = Math.floor(reportTask?.estimatedHours || 0);
+        const estM = Math.round(((reportTask?.estimatedHours || 0) % 1) * 60);
+        const estStr = estH && estM ? `${estH}h ${estM}m` : estH ? `${estH}h` : estM ? `${estM}m` : '—';
+
+        return (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.7)' }}
           onClick={e => { if (e.target === e.currentTarget) { setReportModal(null); setReportText(''); } }}
         >
-          <div className="w-full max-w-md rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+          <div className="w-full max-w-lg rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}` }}>
-              <h3 className="text-[14px] font-bold" style={{ color: reportModal.status === 'completed' ? VS.teal : reportModal.status === 'cancelled' ? VS.orange : VS.red }}>
-                {reportModal.status === 'completed' ? 'Complete Task — Accomplishment Report' : reportModal.status === 'cancelled' ? 'Cancel Task — Report Required' : 'Hold Task — Report Required'}
+              <h3 className="text-[14px] font-bold" style={{ color: accentColor }}>
+                {isComplete ? 'Complete Task — Accomplishment Report' : isCancelled ? 'Cancel Task — Report Required' : 'Hold Task — Report Required'}
               </h3>
               <button onClick={() => { setReportModal(null); setReportText(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2 }}>
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="p-5 space-y-4">
+
+              {/* Task overview card */}
+              {reportTask && (
+                <div className="rounded-lg p-4 space-y-3" style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[14px] font-semibold truncate" style={{ color: VS.text0 }}>{reportTask.title}</h4>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ml-2"
+                      style={{ background: (PRIORITY_CONFIG[reportTask.priority] || PRIORITY_CONFIG.Medium).bg, color: (PRIORITY_CONFIG[reportTask.priority] || PRIORITY_CONFIG.Medium).text, border: `1px solid ${(PRIORITY_CONFIG[reportTask.priority] || PRIORITY_CONFIG.Medium).border}33` }}>
+                      {reportTask.priority}
+                    </span>
+                  </div>
+                  {reportTask.description && (
+                    <p className="text-[12px] line-clamp-2" style={{ color: VS.text2 }}>{reportTask.description}</p>
+                  )}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
+                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Assignee</div>
+                      <div className="text-[12px] font-medium mt-0.5 truncate" style={{ color: VS.text0 }}>{reportTask.assignee || '—'}</div>
+                    </div>
+                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
+                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Project</div>
+                      <div className="text-[12px] font-medium mt-0.5 truncate" style={{ color: VS.text0 }}>{reportTask.project || '—'}</div>
+                    </div>
+                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
+                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Est. Time</div>
+                      <div className="text-[12px] font-medium mt-0.5" style={{ color: VS.text0 }}>{estStr}</div>
+                    </div>
+                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
+                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Due Date</div>
+                      <div className="text-[12px] font-medium mt-0.5" style={{ color: reportTask.dueDate && new Date(reportTask.dueDate) < new Date() ? VS.red : VS.text0 }}>
+                        {reportTask.dueDate ? new Date(reportTask.dueDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                      </div>
+                    </div>
+                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
+                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Actual Hours</div>
+                      <div className="text-[12px] font-medium mt-0.5" style={{ color: VS.text0 }}>{reportTask.actualHours || 0}h</div>
+                    </div>
+                    <div className="rounded-md p-2" style={{ background: VS.bg3 }}>
+                      <div className="text-[10px] uppercase font-semibold" style={{ color: VS.text2 }}>Created By</div>
+                      <div className="text-[12px] font-medium mt-0.5 truncate" style={{ color: VS.text0 }}>{reportTask.createdByName || '—'}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <p className="text-[13px]" style={{ color: VS.text2 }}>
-                {reportModal.status === 'completed'
+                {isComplete
                   ? 'Please describe what was accomplished for this task.'
-                  : reportModal.status === 'cancelled'
+                  : isCancelled
                   ? 'Please provide a reason for cancelling this task.'
                   : 'Please provide a reason for putting this task on hold.'}
               </p>
               <textarea
                 value={reportText}
                 onChange={e => setReportText(e.target.value)}
-                placeholder={reportModal.status === 'completed' ? 'Describe what was accomplished...' : 'Enter your reason...'}
+                placeholder={isComplete ? 'Describe what was accomplished...' : 'Enter your reason...'}
                 rows={4}
                 autoFocus
                 className={inputCls + ' resize-none'}
@@ -1539,15 +1593,16 @@ export function Tasks() {
                   onClick={handleReportSubmit}
                   disabled={!reportText.trim() || reportSubmitting}
                   className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
-                  style={{ background: reportModal.status === 'completed' ? VS.teal : reportModal.status === 'cancelled' ? VS.orange : VS.red, color: '#fff' }}
+                  style={{ background: accentColor, color: '#fff' }}
                 >
-                  {reportSubmitting ? 'Submitting…' : reportModal.status === 'completed' ? 'Mark as Done' : reportModal.status === 'cancelled' ? 'Cancel Task' : 'Put On Hold'}
+                  {reportSubmitting ? 'Submitting…' : isComplete ? 'Mark as Done' : isCancelled ? 'Cancel Task' : 'Put On Hold'}
                 </button>
               </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── New Task Modal ── */}
       {showNewTaskForm && (
