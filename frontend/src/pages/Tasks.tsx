@@ -20,6 +20,7 @@ import {
   Check,
   Users,
   User,
+  Repeat,
 } from 'lucide-react';
 import BrainDumpModal from '../components/BrainDumpModal';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
@@ -157,6 +158,8 @@ export function Tasks() {
     projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
     isTeamTask: false,
     subTasks: [] as { assigneeId: string; title: string }[],
+    recurringPattern: '' as '' | 'daily' | 'weekly' | 'biweekly' | 'monthly',
+    recurringEndDate: '',
   });
   const [taskFormLoading, setTaskFormLoading] = useState(false);
 
@@ -193,8 +196,9 @@ export function Tasks() {
   const [reportFiles, setReportFiles] = useState<File[]>([]);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
-  // My tasks vs all tasks toggle (OWNER/ADMIN only)
+  // My tasks vs all tasks toggle (OWNER/ADMIN/STAFF)
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
+  const canToggleTasks = isAdminOrOwner || currentOrg?.role === 'STAFF';
 
   // Clock-in gate for STAFF
   const [isClockedIn, setIsClockedIn] = useState<boolean | null>(null);
@@ -243,8 +247,8 @@ export function Tasks() {
     if (!session?.user?.id || !currentOrg?.id) return;
     try {
       if (showLoader) setLoading(true);
-      const isAdmin = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
-      const taskUrl = (isAdmin && !showAllTasks)
+      const canToggle = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN' || currentOrg?.role === 'STAFF';
+      const taskUrl = (canToggle && !showAllTasks)
         ? `/api/tasks?userId=${session.user.id}&limit=200`
         : '/api/tasks?limit=500';
       const [data, countsData] = await Promise.all([
@@ -624,11 +628,15 @@ export function Tasks() {
           tags: newTaskForm.tags ? newTaskForm.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
           isTeamTask: newTaskForm.isTeamTask || undefined,
           subTasks: newTaskForm.isTeamTask ? newTaskForm.subTasks.filter(s => s.title && s.assigneeId) : undefined,
+          recurringPattern: newTaskForm.recurringPattern || undefined,
+          recurringConfig: newTaskForm.recurringPattern ? {
+            ...(newTaskForm.recurringEndDate ? { endDate: new Date(newTaskForm.recurringEndDate + 'T23:59:59.000Z').toISOString() } : {}),
+          } : undefined,
         }),
       });
       if (data.task) {
         await fetchTasks(false);
-        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [], isTeamTask: false, subTasks: [] });
+        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [], isTeamTask: false, subTasks: [], recurringPattern: '', recurringEndDate: '' });
         setShowNewTaskForm(false);
       }
     } catch { alert('Failed to create task.'); }
@@ -805,10 +813,10 @@ export function Tasks() {
         <div className="flex items-center gap-3 flex-wrap">
           <div>
             <h1 className="text-lg font-bold tracking-tight" style={{ color: VS.text0 }}>
-              {userRole === 'CLIENT' ? 'My Tasks' : (isAdminOrOwner && !showAllTasks ? 'My Tasks' : 'Task Board')}
+              {userRole === 'CLIENT' ? 'My Tasks' : (canToggleTasks && !showAllTasks ? 'My Tasks' : 'Task Board')}
               <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded align-middle"
                 style={{ background: VS.bg3, color: VS.text2, border: `1px solid ${VS.border}` }}>
-                {isAdminOrOwner && showAllTasks ? 'All Members' : 'My Tasks'}
+                {canToggleTasks && showAllTasks ? 'All Members' : 'My Tasks'}
               </span>
             </h1>
             <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
@@ -836,7 +844,7 @@ export function Tasks() {
               </button>
             ) : null;
           })()}
-          {isAdminOrOwner && (
+          {canToggleTasks && (
             <button
               onClick={() => { setShowAllTasks(v => !v); setFilterStaffId(''); }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 active:scale-95"
@@ -2015,6 +2023,77 @@ export function Tasks() {
                   className={inputCls}
                   style={inputStyle}
                 />
+              </div>
+
+              {/* ── Recurring Task ── */}
+              <div
+                className="rounded-lg overflow-hidden"
+                style={{ border: `1px solid ${newTaskForm.recurringPattern ? VS.teal + '55' : VS.border}`, background: newTaskForm.recurringPattern ? `${VS.teal}08` : 'transparent' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setNewTaskForm(p => ({ ...p, recurringPattern: p.recurringPattern ? '' as const : 'weekly', recurringEndDate: '' }))}
+                  className="flex items-center gap-2 w-full px-3 py-2.5 text-left transition-colors"
+                  style={{ color: newTaskForm.recurringPattern ? VS.teal : VS.text2 }}
+                >
+                  <Repeat className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide flex-1">
+                    {newTaskForm.recurringPattern ? 'Recurring Task' : 'Make Recurring'}
+                  </span>
+                  <div
+                    className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200"
+                    style={{ background: newTaskForm.recurringPattern ? VS.teal : VS.bg3, border: `1px solid ${newTaskForm.recurringPattern ? VS.teal : VS.border}` }}
+                  >
+                    <span
+                      className="inline-block h-3 w-3 rounded-full transition-transform duration-200"
+                      style={{
+                        background: newTaskForm.recurringPattern ? '#fff' : VS.text2,
+                        transform: newTaskForm.recurringPattern ? 'translateX(14px)' : 'translateX(1px)',
+                      }}
+                    />
+                  </div>
+                </button>
+                {newTaskForm.recurringPattern && (
+                  <div className="px-3 pb-3 space-y-2.5" style={{ borderTop: `1px solid ${VS.teal}33` }}>
+                    <div className="pt-2.5">
+                      <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Repeat Every</label>
+                      <div className="flex gap-1.5">
+                        {(['daily', 'weekly', 'biweekly', 'monthly'] as const).map(p => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setNewTaskForm(prev => ({ ...prev, recurringPattern: p }))}
+                            className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+                            style={newTaskForm.recurringPattern === p
+                              ? { background: VS.teal, color: '#fff', border: `1px solid ${VS.teal}` }
+                              : { background: VS.bg3, color: VS.text1, border: `1px solid ${VS.border}` }
+                            }
+                          >
+                            {p === 'daily' ? 'Day' : p === 'weekly' ? 'Week' : p === 'biweekly' ? '2 Weeks' : 'Month'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>
+                        End Date <span className="normal-case font-normal">(optional)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={newTaskForm.recurringEndDate}
+                        onChange={e => setNewTaskForm(p => ({ ...p, recurringEndDate: e.target.value }))}
+                        className={inputCls}
+                        style={{ ...inputStyle, color: VS.text1 }}
+                      />
+                    </div>
+                    <p className="text-[10px]" style={{ color: VS.text2 }}>
+                      {newTaskForm.recurringPattern === 'daily' && 'A new task will be created every day.'}
+                      {newTaskForm.recurringPattern === 'weekly' && 'A new task will be created every week on the same day.'}
+                      {newTaskForm.recurringPattern === 'biweekly' && 'A new task will be created every 2 weeks on the same day.'}
+                      {newTaskForm.recurringPattern === 'monthly' && 'A new task will be created every month on the same date.'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 pt-2">

@@ -109,7 +109,13 @@ export const taskSchemas = {
     assigneeId: z.string().optional(),
     projectId: z.string().optional(),
     estimatedHours: z.number().min(0).max(1000).optional(),
-    tags: z.array(z.string().max(50)).max(10).optional()
+    tags: z.array(z.string().max(50)).max(10).optional(),
+    recurringPattern: z.enum(['daily', 'weekly', 'biweekly', 'monthly']).optional(),
+    recurringConfig: z.object({
+      dayOfWeek: z.number().int().min(0).max(6).optional(),
+      dayOfMonth: z.number().int().min(1).max(28).optional(),
+      endDate: z.string().datetime().nullish(),
+    }).optional(),
   }),
   
   update: z.object({

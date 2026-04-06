@@ -14,7 +14,7 @@ import wizardRoutes from './routes/wizard.js';
 import statsRoutes from './api/stats.js';
 import timersRoutes from './api/timers.js';
 import timerRoutes from './api/timer.js';
-import tasksRoutes from './api/tasks.js';
+import tasksRoutes, { ensureRecurringTaskSchema } from './api/tasks.js';
 import projectsRoutes from './api/projects.js';
 import clientsRoutes from './api/clients.js';
 // import expensesRoutes from './api/expenses.js';
@@ -38,6 +38,7 @@ import extRoutes from './api/ext.js';
 import integrationsRoutes from './api/integrations.js';
 import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
+import { startRecurringTaskScheduler } from './services/recurringTaskScheduler.js';
 import { startAttendanceCron } from './lib/attendance-cron.js';
 import {
   blockPublicRegistration, 
@@ -3295,6 +3296,8 @@ async function startServer() {
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
   startAttendanceCron();
+  await ensureRecurringTaskSchema();
+  startRecurringTaskScheduler();
 
   // Inline attendance auto-clockout (runs directly in server process every minute)
   const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m production threshold

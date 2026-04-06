@@ -93,6 +93,43 @@ async function ensureTeamTaskSchema() {
   teamTaskSchemaReady = true;
 }
 
+// ── Lazy recurring task columns ──────────────────────────────────────────────
+let recurringSchemaReady = false;
+export async function ensureRecurringTaskSchema() {
+  if (recurringSchemaReady) return;
+  // recurringPattern: 'daily' | 'weekly' | 'biweekly' | 'monthly' | null
+  try {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE macro_tasks ADD COLUMN `recurringPattern` VARCHAR(20) NULL"
+    );
+  } catch (_) {}
+  // recurringConfig: JSON blob with dayOfWeek, dayOfMonth, endDate, etc.
+  try {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE macro_tasks ADD COLUMN `recurringConfig` JSON NULL"
+    );
+  } catch (_) {}
+  // nextRecurrenceDate: when the next copy should be created
+  try {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE macro_tasks ADD COLUMN `nextRecurrenceDate` DATETIME(3) NULL"
+    );
+  } catch (_) {}
+  // recurringParentId: points back to the original recurring template task
+  try {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE macro_tasks ADD COLUMN `recurringParentId` VARCHAR(50) NULL"
+    );
+  } catch (_) {}
+  // Index for the scheduler query
+  try {
+    await prisma.$executeRawUnsafe(
+      "CREATE INDEX `mt_nextRecurrence_idx` ON macro_tasks (`nextRecurrenceDate`)"
+    );
+  } catch (_) {}
+  recurringSchemaReady = true;
+}
+
 // ── Lazy task_status_reports table ────────────────────────────────────────────
 let statusReportsTableReady = false;
 async function ensureStatusReportsTable() {
@@ -808,6 +845,29 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
         'UPDATE macro_tasks SET parentTaskId = ? WHERE id = ?',
         parentTaskId, task.id
       ).catch(() => {});
+    }
+
+    // Store recurring task fields if provided
+    const { recurringPattern, recurringConfig } = req.body;
+    if (recurringPattern) {
+      await ensureRecurringTaskSchema();
+      // Compute first nextRecurrenceDate from now (or dueDate if set)
+      const startFrom = dueDate ? new Date(dueDate) : new Date();
+      const configObj = recurringConfig || {};
+      // Set dayOfWeek/dayOfMonth defaults from the start date
+      if (recurringPattern === 'weekly' || recurringPattern === 'biweekly') {
+        if (configObj.dayOfWeek == null) configObj.dayOfWeek = startFrom.getUTCDay();
+      }
+      if (recurringPattern === 'monthly') {
+        if (configObj.dayOfMonth == null) configObj.dayOfMonth = Math.min(startFrom.getUTCDate(), 28);
+      }
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET recurringPattern = ?, recurringConfig = ?, nextRecurrenceDate = ? WHERE id = ?',
+        recurringPattern,
+        JSON.stringify(configObj),
+        startFrom,
+        task.id
+      ).catch(e => console.error('[Tasks] recurring fields error:', e.message));
     }
 
     // Store multi-assignees
