@@ -2679,13 +2679,94 @@ app.post('/api/brain-dump/save-tasks', async (req, res) => {
 
     const savedTasks = [];
 
-    // Save tasks using Prisma (same as POST /api/tasks)
+    // ── Skill-based auto-assignment ─────────────────────────────────────────
+    // Fetch staff members with their skills for scoring
+    let staffWithSkills = [];
+    const workloadMap = {};
+    try {
+      let memberships = [];
+      try {
+        memberships = await prisma.membership.findMany({
+          where: { orgId, role: { in: ['STAFF', 'ADMIN', 'OWNER', 'HALL_OF_JUSTICE'] } },
+          include: {
+            user: {
+              select: { id: true, name: true, email: true },
+              include: {
+                staffSkills: {
+                  where: { orgId },
+                  include: { skill: true },
+                },
+              },
+            },
+          },
+        });
+      } catch (_) {
+        // staffSkills table may not exist yet — fall back to members without skills
+        memberships = await prisma.membership.findMany({
+          where: { orgId, role: { in: ['STAFF', 'ADMIN', 'OWNER', 'HALL_OF_JUSTICE'] } },
+          include: { user: { select: { id: true, name: true, email: true } } },
+        });
+        memberships = memberships.map(m => ({ ...m, user: { ...m.user, staffSkills: [] } }));
+      }
+      staffWithSkills = memberships;
+
+      // Calculate open task workload per member
+      if (memberships.length) {
+        const counts = await Promise.all(
+          memberships.map(m =>
+            prisma.macroTask.count({
+              where: { userId: m.userId, orgId, status: { in: ['not_started', 'in_progress'] } },
+            }).then(count => ({ userId: m.userId, count }))
+          )
+        );
+        counts.forEach(w => { workloadMap[w.userId] = w.count; });
+      }
+    } catch (e) {
+      console.warn('[BrainDump] skill fetch error (falling back to creator):', e.message);
+    }
+
+    const WORKLOAD_LIMIT = 10;
+
+    function findBestAssignee(taskTitle, taskDescription, taskTags) {
+      if (staffWithSkills.length === 0) return userId; // fallback to creator
+
+      // Build keyword list from task title, description, tags
+      const keywords = [
+        ...(taskTitle || '').toLowerCase().split(/\W+/),
+        ...(taskDescription || '').toLowerCase().split(/\W+/),
+        ...(Array.isArray(taskTags) ? taskTags.map(t => t.toLowerCase()) : []),
+      ].filter(w => w.length > 2); // ignore short words
+
+      const scored = staffWithSkills.map(m => {
+        const workload = workloadMap[m.userId] || 0;
+        const matchingSkills = (m.user.staffSkills || []).filter(ss =>
+          keywords.some(kw =>
+            ss.skill.name.toLowerCase().includes(kw) ||
+            kw.includes(ss.skill.name.toLowerCase())
+          )
+        );
+        const skillScore = matchingSkills.reduce((sum, ss) => sum + ss.level, 0);
+        return { userId: m.userId, skillScore, workload, available: workload < WORKLOAD_LIMIT };
+      });
+
+      // Sort: highest skill score first, then lowest workload
+      scored.sort((a, b) =>
+        b.skillScore !== a.skillScore ? b.skillScore - a.skillScore : a.workload - b.workload
+      );
+
+      // Only auto-assign if there's a meaningful skill match (score > 0)
+      const best = scored[0];
+      return (best && best.skillScore > 0 && best.available) ? best.userId : userId;
+    }
+
+    // Save tasks with skill-based assignment
     for (const task of extractedTasks) {
+      const assignedTo = findBestAssignee(task.title, task.description, task.tags);
       const created = await prisma.macroTask.create({
         data: {
           title: task.title,
           description: task.description || null,
-          userId,
+          userId: assignedTo,
           orgId,
           createdBy: userId,
           priority: task.priority || 'Medium',
@@ -2694,7 +2775,10 @@ app.post('/api/brain-dump/save-tasks', async (req, res) => {
           tags: task.tags || null,
         }
       });
-      savedTasks.push({ id: created.id, ...task });
+      if (assignedTo !== userId) {
+        console.log(`🎯 Auto-assigned "${task.title}" to ${assignedTo} (skill match)`);
+      }
+      savedTasks.push({ id: created.id, assignedTo, ...task });
     }
 
     // Save brain dump record (non-fatal)
