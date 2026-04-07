@@ -21,9 +21,12 @@ import {
   Users,
   User,
   Repeat,
+  LayoutGrid,
+  GanttChartSquare,
 } from 'lucide-react';
 import BrainDumpModal from '../components/BrainDumpModal';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import GanttChart from '../components/GanttChart';
 
 interface Task {
   id: string;
@@ -146,6 +149,7 @@ export function Tasks() {
   const [loading, setLoading] = useState(true);
   const userRole = currentOrg?.role ?? 'CLIENT';
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'board' | 'gantt'>('board');
 
   // Org members for assignee picker
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
@@ -1149,6 +1153,36 @@ export function Tasks() {
             </button>
           )}
 
+          {/* View toggle: Board / Gantt */}
+          {isAdminOrOwner && (
+            <div className="flex items-center rounded-lg overflow-hidden" style={{ border: `1px solid ${VS.border}` }}>
+              <button
+                onClick={() => setViewMode('board')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold transition-all"
+                style={viewMode === 'board'
+                  ? { background: VS.accent, color: '#fff' }
+                  : { background: VS.bg3, color: VS.text2 }
+                }
+                title="Board View"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Board
+              </button>
+              <button
+                onClick={() => setViewMode('gantt')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold transition-all"
+                style={viewMode === 'gantt'
+                  ? { background: VS.accent, color: '#fff' }
+                  : { background: VS.bg3, color: VS.text2 }
+                }
+                title="Gantt Chart"
+              >
+                <GanttChartSquare className="h-3.5 w-3.5" />
+                Gantt
+              </button>
+            </div>
+          )}
+
           {/* Add New */}
           {userRole !== 'CLIENT' && (
             <button
@@ -1163,8 +1197,18 @@ export function Tasks() {
         </div>
       </div>
 
+      {/* ── Gantt Chart View ── */}
+      {viewMode === 'gantt' && isAdminOrOwner && (
+        <div className="flex-1 p-5 overflow-hidden" style={{ minHeight: 400 }}>
+          <GanttChart
+            tasks={filtered}
+            onTaskClick={(task) => setDetailTask(task as any)}
+          />
+        </div>
+      )}
+
       {/* ── Kanban columns ── */}
-      <div className="flex-1 flex gap-4 overflow-x-auto p-5" style={{ alignItems: 'flex-start' }}>
+      {viewMode === 'board' && <div className="flex-1 flex gap-4 overflow-x-auto p-5" style={{ alignItems: 'flex-start' }}>
         {COLUMNS.map(col => {
           const colTasks = tasksForCol(col.id);
           const isOver = dragOverCol === col.id;
@@ -1548,7 +1592,7 @@ export function Tasks() {
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* ── Status Report Modal (on_hold / cancelled / completed) ── */}
       {reportModal && (() => {
