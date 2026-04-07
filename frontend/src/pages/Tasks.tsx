@@ -191,6 +191,11 @@ export function Tasks() {
   // Card menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [showBulkAssignee, setShowBulkAssignee] = useState(false);
+
   // Brain Dump modal
   const [showBrainDump, setShowBrainDump] = useState(false);
 
@@ -754,6 +759,55 @@ export function Tasks() {
     } catch { alert('Failed to delete task.'); }
   };
 
+  // ── bulk operations ────────────────────────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllInColumn = (colId: string) => {
+    const ids = filtered.filter(t => t.status === colId).map(t => t.id);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allSelected = ids.every(id => next.has(id));
+      ids.forEach(id => allSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  };
+
+  const clearSelection = () => { setSelectedIds(new Set()); setShowBulkAssignee(false); };
+
+  const handleBulkUpdate = async (updates: { status?: string; priority?: string; assigneeId?: string }) => {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await apiClient.fetch('/api/tasks/bulk', {
+        method: 'PATCH',
+        body: JSON.stringify({ taskIds: [...selectedIds], updates }),
+      });
+      await fetchTasks(false);
+      clearSelection();
+    } catch { alert('Bulk update failed.'); }
+    finally { setBulkLoading(false); }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} task(s)?`)) return;
+    setBulkLoading(true);
+    try {
+      for (const id of selectedIds) {
+        await apiClient.fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {});
+      }
+      await fetchTasks(false);
+      clearSelection();
+    } catch { alert('Bulk delete failed.'); }
+    finally { setBulkLoading(false); }
+  };
+
   // ── open edit form ─────────────────────────────────────────────────────────
   const handleEditTask = (task: Task) => {
     setOpenMenuId(null);
@@ -1266,6 +1320,84 @@ export function Tasks() {
         </div>
       </div>
 
+      {/* ── Bulk action bar ── */}
+      {selectedIds.size > 0 && userRole !== 'CLIENT' && (
+        <div
+          className="flex items-center gap-3 px-6 py-2.5 flex-wrap"
+          style={{ background: `${VS.accent}12`, borderBottom: `1px solid ${VS.accent}33` }}
+        >
+          <span className="text-[12px] font-bold" style={{ color: VS.accent }}>
+            {selectedIds.size} selected
+          </span>
+          <div className="h-4 w-px" style={{ background: VS.accent + '44' }} />
+
+          {/* Status buttons */}
+          {[
+            { status: 'not_started', label: 'To Do', color: VS.blue },
+            { status: 'in_progress', label: 'In Progress', color: VS.yellow },
+            { status: 'completed', label: 'Done', color: VS.teal },
+            { status: 'on_hold', label: 'On Hold', color: VS.red },
+          ].map(s => (
+            <button key={s.status} onClick={() => handleBulkUpdate({ status: s.status })} disabled={bulkLoading}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+              style={{ background: `${s.color}18`, color: s.color, border: `1px solid ${s.color}33` }}>
+              {s.label}
+            </button>
+          ))}
+
+          <div className="h-4 w-px" style={{ background: VS.accent + '44' }} />
+
+          {/* Priority */}
+          {['High', 'Medium', 'Low'].map(p => (
+            <button key={p} onClick={() => handleBulkUpdate({ priority: p })} disabled={bulkLoading}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+              style={{ background: VS.bg3, color: VS.text1, border: `1px solid ${VS.border}` }}>
+              {p}
+            </button>
+          ))}
+
+          <div className="h-4 w-px" style={{ background: VS.accent + '44' }} />
+
+          {/* Assignee */}
+          <div className="relative">
+            <button onClick={() => setShowBulkAssignee(v => !v)} disabled={bulkLoading}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+              style={{ background: VS.bg3, color: VS.text1, border: `1px solid ${VS.border}` }}>
+              <User className="h-3 w-3" /> Reassign
+            </button>
+            {showBulkAssignee && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowBulkAssignee(false)} />
+                <div className="absolute left-0 top-full mt-1 z-20 rounded-lg overflow-hidden shadow-xl"
+                  style={{ background: VS.bg0, border: `1px solid ${VS.border2}`, minWidth: 180, maxHeight: 200, overflowY: 'auto' }}>
+                  {orgMembers.map(m => (
+                    <button key={m.id}
+                      onClick={() => { handleBulkUpdate({ assigneeId: m.id }); setShowBulkAssignee(false); }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-left text-[12px] hover:opacity-80"
+                      style={{ color: VS.text0, borderBottom: `1px solid ${VS.border}22` }}>
+                      {m.name || m.email}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="h-4 w-px" style={{ background: VS.accent + '44' }} />
+
+          {/* Delete */}
+          <button onClick={handleBulkDelete} disabled={bulkLoading}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+            style={{ background: `${VS.red}18`, color: VS.red, border: `1px solid ${VS.red}33` }}>
+            <Trash2 className="h-3 w-3 inline mr-1" /> Delete
+          </button>
+
+          <button onClick={clearSelection} className="ml-auto text-[11px] font-medium hover:opacity-70" style={{ color: VS.text2 }}>
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* ── Gantt Chart View ── */}
       {viewMode === 'gantt' && isAdminOrOwner && (
         <div className="flex-1 p-5 overflow-hidden" style={{ minHeight: 400 }}>
@@ -1311,16 +1443,33 @@ export function Tasks() {
                       {colTasks.length}
                     </span>
                   </div>
-                  {userRole !== 'CLIENT' && (
-                    <button
-                      onClick={() => { setNewTaskColumnStatus(col.id); setShowNewTaskForm(true); }}
-                      className="h-6 w-6 rounded-full flex items-center justify-center transition-all hover:opacity-80"
-                      style={{ background: col.bg, color: col.accent }}
-                      title="Add task"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {userRole !== 'CLIENT' && colTasks.length > 0 && (
+                      <button
+                        onClick={() => selectAllInColumn(col.id)}
+                        className="h-5 w-5 rounded flex items-center justify-center transition-all hover:opacity-80"
+                        style={{
+                          background: colTasks.every(t => selectedIds.has(t.id)) && colTasks.length > 0 ? VS.accent : 'transparent',
+                          border: `1.5px solid ${colTasks.every(t => selectedIds.has(t.id)) && colTasks.length > 0 ? VS.accent : VS.border2}`,
+                        }}
+                        title="Select all in column"
+                      >
+                        {colTasks.every(t => selectedIds.has(t.id)) && colTasks.length > 0 && (
+                          <Check className="h-3 w-3 text-white" />
+                        )}
+                      </button>
+                    )}
+                    {userRole !== 'CLIENT' && (
+                      <button
+                        onClick={() => { setNewTaskColumnStatus(col.id); setShowNewTaskForm(true); }}
+                        className="h-6 w-6 rounded-full flex items-center justify-center transition-all hover:opacity-80"
+                        style={{ background: col.bg, color: col.accent }}
+                        title="Add task"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
                   {colTasks.length} {colTasks.length === 1 ? 'task' : 'tasks'}
@@ -1363,14 +1512,32 @@ export function Tasks() {
                         className="rounded-2xl overflow-hidden transition-all duration-150"
                         style={{
                           background: VS.bg2,
-                          border: `1px solid ${pCfg.border}55`,
+                          border: `1px solid ${selectedIds.has(task.id) ? VS.accent : pCfg.border + '55'}`,
                           boxShadow: isDragging
                             ? `0 0 0 2px ${pCfg.border}50`
-                            : '0 4px 20px rgba(0,0,0,0.4)',
+                            : selectedIds.has(task.id)
+                              ? `0 0 0 2px ${VS.accent}44`
+                              : '0 4px 20px rgba(0,0,0,0.4)',
                         }}
                       >
                         {/* Content */}
                         <div className="px-4 pt-6 pb-3">
+
+                          {/* Selection checkbox */}
+                          {userRole !== 'CLIENT' && (
+                            <button
+                              onClick={e => { e.stopPropagation(); toggleSelect(task.id); }}
+                              className="absolute top-[18px] left-3 z-20 h-5 w-5 rounded flex items-center justify-center transition-all"
+                              style={{
+                                background: selectedIds.has(task.id) ? VS.accent : 'transparent',
+                                border: `1.5px solid ${selectedIds.has(task.id) ? VS.accent : VS.border2}`,
+                                opacity: selectedIds.size > 0 ? 1 : undefined,
+                              }}
+                              onMouseDown={e => e.stopPropagation()}
+                            >
+                              {selectedIds.has(task.id) && <Check className="h-3 w-3 text-white" />}
+                            </button>
+                          )}
 
                           {/* ⋯ context menu */}
                           {userRole !== 'CLIENT' && (

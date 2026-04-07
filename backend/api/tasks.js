@@ -1258,6 +1258,68 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
   }
 });
 
+// ── Bulk update tasks (status, priority, assignee) ──────────────────────────
+router.patch('/bulk', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const { taskIds, updates } = req.body;
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: 'taskIds array is required' });
+    }
+    if (!updates || typeof updates !== 'object') {
+      return res.status(400).json({ error: 'updates object is required' });
+    }
+    if (taskIds.length > 50) {
+      return res.status(400).json({ error: 'Maximum 50 tasks per bulk operation' });
+    }
+
+    const { status, priority, assigneeId } = updates;
+    let updated = 0;
+
+    // Bulk status update
+    if (status) {
+      const ph = taskIds.map(() => '?').join(',');
+      await prisma.$executeRawUnsafe(
+        `UPDATE macro_tasks SET status = ?, updatedAt = NOW(3) ${status === 'completed' ? ', completedAt = NOW(3)' : ''} WHERE id IN (${ph}) AND orgId = ?`,
+        status, ...taskIds, req.orgId
+      );
+      updated = taskIds.length;
+      console.log(`📝 Bulk status update → ${status} for ${taskIds.length} tasks`);
+    }
+
+    // Bulk priority update
+    if (priority) {
+      const ph = taskIds.map(() => '?').join(',');
+      await prisma.$executeRawUnsafe(
+        `UPDATE macro_tasks SET priority = ?, updatedAt = NOW(3) WHERE id IN (${ph}) AND orgId = ?`,
+        priority, ...taskIds, req.orgId
+      );
+      updated = taskIds.length;
+      console.log(`📝 Bulk priority update → ${priority} for ${taskIds.length} tasks`);
+    }
+
+    // Bulk reassign (set primary userId)
+    if (assigneeId) {
+      const ph = taskIds.map(() => '?').join(',');
+      await prisma.$executeRawUnsafe(
+        `UPDATE macro_tasks SET userId = ?, updatedAt = NOW(3) WHERE id IN (${ph}) AND orgId = ?`,
+        assigneeId, ...taskIds, req.orgId
+      );
+      // Also update task_assignees
+      await ensureAssigneesTable();
+      for (const tid of taskIds) {
+        await setTaskAssignees(tid, req.orgId, [assigneeId]).catch(() => {});
+      }
+      updated = taskIds.length;
+      console.log(`📝 Bulk reassign → ${assigneeId} for ${taskIds.length} tasks`);
+    }
+
+    res.json({ success: true, updated, message: `${updated} task(s) updated` });
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    res.status(500).json({ error: 'Failed to bulk update tasks' });
+  }
+});
+
 // Update task status
 router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership, validateBody(taskSchemas.statusUpdate), async (req, res) => {
   try {
