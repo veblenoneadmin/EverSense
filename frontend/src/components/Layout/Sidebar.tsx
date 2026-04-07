@@ -17,6 +17,7 @@ import {
   Video,
   X,
   History,
+  Timer,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -34,6 +35,7 @@ const navItems = [
   { name: 'Clients',        href: '/clients',     icon: Users,           roles: ['OWNER', 'ADMIN'] },
   { name: 'Reports',        href: '/reports',     icon: BarChart3,       roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF'] },
+  { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
   { name: 'Settings',       href: '/settings',    icon: Settings,        roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
 ];

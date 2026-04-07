@@ -22,6 +22,7 @@ import { InviteAccept } from './pages/InviteAccept';
 import { SuperAdmin } from './pages/SuperAdmin';
 import { Onboarding } from './pages/Onboarding';
 import { TaskHistory } from './pages/TaskHistory';
+import { EstimatesReport } from './pages/EstimatesReport';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingGuard } from './components/OnboardingGuard';
@@ -79,6 +80,7 @@ function AppContent() {
                 <Route path="meetings" element={<Meetings />} />
                 <Route path="meetings/:id" element={<Meetings />} />
                 <Route path="task-history" element={<TaskHistory />} />
+                <Route path="estimates-report" element={<EstimatesReport />} />
               </Route>
 
               <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
