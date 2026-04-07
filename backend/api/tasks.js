@@ -1278,11 +1278,34 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
     // Store the status report if provided
     if (report && report.trim()) {
       await ensureStatusReportsTable();
-      const currentTask = await prisma.macroTask.findUnique({ where: { id: taskId }, select: { status: true } });
+      const currentTask = await prisma.macroTask.findUnique({
+        where: { id: taskId },
+        select: { status: true, title: true, projectId: true },
+      });
       await prisma.$executeRawUnsafe(
         'INSERT INTO task_status_reports (id, taskId, userId, orgId, fromStatus, toStatus, report, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3))',
         randomUUID(), taskId, req.user.id, req.orgId, currentTask?.status || 'unknown', status, report.trim()
       ).catch(err => console.error('[tasks] report save error:', err));
+
+      // Also insert into the main reports table so it appears on the Reports page
+      if (status === 'completed') {
+        try {
+          const userName = (await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true, email: true } }));
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO reports (id, title, description, userName, image, projectId, userId, orgId, createdAt, updatedAt) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NOW(), NOW())`,
+            randomUUID(),
+            `Task Completed: ${currentTask?.title || 'Untitled'}`,
+            report.trim(),
+            userName?.name || userName?.email || 'Unknown',
+            currentTask?.projectId || null,
+            req.user.id,
+            req.orgId
+          );
+          console.log(`📝 Accomplishment report saved to reports table for task ${taskId}`);
+        } catch (err) {
+          console.error('[tasks] reports table insert error:', err.message);
+        }
+      }
     }
 
     // Check if multi-assignee task (more than 1 assignee)
