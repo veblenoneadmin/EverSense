@@ -303,15 +303,15 @@ function OverviewModal({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 shrink-0"
+        <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 shrink-0"
           style={{ borderBottom: `1px solid ${VS.border}` }}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
             <div className="h-9 w-9 rounded-xl flex items-center justify-center"
               style={{ background: `linear-gradient(135deg, ${sCfg.accent}, ${sCfg.accent}99)` }}>
               {getStatusIcon(project.status)}
             </div>
             <div>
-              <p className="text-[15px] font-bold" style={{ color: VS.text0 }}>{project.name}</p>
+              <p className="text-[14px] md:text-[15px] font-bold truncate" style={{ color: VS.text0 }}>{project.name}</p>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                   style={{ background: sCfg.bg, color: sCfg.text, border: `1px solid ${sCfg.accent}44` }}>
@@ -349,7 +349,7 @@ function OverviewModal({
 
         {/* List / Gantt / Files toggle */}
         {!loading && (
-          <div className="flex items-center gap-1.5 px-6 py-2 shrink-0" style={{ borderBottom: `1px solid ${VS.border}`, background: VS.bg2 }}>
+          <div className="flex items-center gap-1.5 px-3 md:px-6 py-2 shrink-0 overflow-x-auto" style={{ borderBottom: `1px solid ${VS.border}`, background: VS.bg2 }}>
             {[
               { id: 'list' as const, label: 'List', icon: LayoutList },
               { id: 'gantt' as const, label: 'Gantt', icon: GanttChartSquare },
@@ -361,7 +361,7 @@ function OverviewModal({
                 <button
                   key={tab.id}
                   onClick={() => setOverviewTab(tab.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap shrink-0"
                   style={overviewTab === tab.id
                     ? { background: VS.accent, color: '#fff' }
                     : { background: VS.bg3, color: VS.text2 }
