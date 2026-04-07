@@ -750,10 +750,21 @@ async function ensureMilestonesTable() {
       ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
     );
   } catch (_) {}
+  // Add milestoneId column to macro_tasks if not exists
+  try {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE macro_tasks ADD COLUMN `milestoneId` VARCHAR(191) NULL"
+    );
+  } catch (_) {}
+  try {
+    await prisma.$executeRawUnsafe(
+      "CREATE INDEX `mt_milestoneId_idx` ON macro_tasks (`milestoneId`)"
+    );
+  } catch (_) {}
   milestonesReady = true;
 }
 
-/** GET /api/projects/:projectId/milestones */
+/** GET /api/projects/:projectId/milestones — includes tasks per milestone */
 router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureMilestonesTable();
@@ -761,7 +772,36 @@ router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res)
       'SELECT * FROM project_milestones WHERE projectId = ? AND orgId = ? ORDER BY sortOrder ASC, dueDate ASC',
       req.params.projectId, req.orgId
     );
-    res.json({ success: true, milestones });
+
+    // Fetch tasks for each milestone + unassigned tasks
+    const allTasks = await prisma.$queryRawUnsafe(
+      `SELECT t.id, t.title, t.status, t.priority, t.milestoneId,
+              u.name AS assigneeName, u.email AS assigneeEmail
+       FROM macro_tasks t
+       LEFT JOIN users u ON u.id = t.userId
+       WHERE t.projectId = ? AND t.orgId = ?
+       ORDER BY t.priority DESC, t.createdAt ASC`,
+      req.params.projectId, req.orgId
+    ).catch(() => []);
+
+    // Group tasks by milestoneId
+    const taskMap = {};
+    const unassigned = [];
+    for (const t of allTasks) {
+      if (t.milestoneId) {
+        if (!taskMap[t.milestoneId]) taskMap[t.milestoneId] = [];
+        taskMap[t.milestoneId].push(t);
+      } else {
+        unassigned.push(t);
+      }
+    }
+
+    const enriched = milestones.map(m => ({
+      ...m,
+      tasks: taskMap[m.id] || [],
+    }));
+
+    res.json({ success: true, milestones: enriched, unassignedTasks: unassigned });
   } catch (e) {
     console.error('[Milestones] GET error:', e.message);
     res.status(500).json({ error: 'Failed to fetch milestones' });
@@ -823,6 +863,11 @@ router.patch('/:projectId/milestones/:id', requireAuth, withOrgScope, async (req
 router.delete('/:projectId/milestones/:id', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureMilestonesTable();
+    // Unassign tasks from this milestone before deleting
+    await prisma.$executeRawUnsafe(
+      'UPDATE macro_tasks SET milestoneId = NULL WHERE milestoneId = ? AND orgId = ?',
+      req.params.id, req.orgId
+    ).catch(() => {});
     await prisma.$executeRawUnsafe(
       'DELETE FROM project_milestones WHERE id = ? AND projectId = ? AND orgId = ?',
       req.params.id, req.params.projectId, req.orgId
@@ -831,6 +876,31 @@ router.delete('/:projectId/milestones/:id', requireAuth, withOrgScope, async (re
   } catch (e) {
     console.error('[Milestones] DELETE error:', e.message);
     res.status(500).json({ error: 'Failed to delete milestone' });
+  }
+});
+
+/** PATCH /api/projects/:projectId/milestones/:id/tasks — assign/unassign a task */
+router.patch('/:projectId/milestones/:milestoneId/tasks', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureMilestonesTable();
+    const { taskId, action } = req.body; // action: 'assign' | 'unassign'
+    if (!taskId) return res.status(400).json({ error: 'taskId is required' });
+
+    if (action === 'unassign') {
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET milestoneId = NULL, updatedAt = NOW(3) WHERE id = ? AND orgId = ?',
+        taskId, req.orgId
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET milestoneId = ?, updatedAt = NOW(3) WHERE id = ? AND orgId = ?',
+        req.params.milestoneId, taskId, req.orgId
+      );
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Milestones] task assign error:', e.message);
+    res.status(500).json({ error: 'Failed to assign task to milestone' });
   }
 });
 

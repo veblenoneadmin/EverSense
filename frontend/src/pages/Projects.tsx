@@ -160,20 +160,46 @@ function OverviewModal({
   const sCfg = PROJECT_STATUS[project.status] || PROJECT_STATUS.planning;
 
   // Milestones
-  interface Milestone { id: string; name: string; description: string | null; dueDate: string | null; status: string; sortOrder: number; createdAt: string }
+  interface MilestoneTask { id: string; title: string; status: string; priority: string; milestoneId: string | null; assigneeName: string | null; assigneeEmail: string | null }
+  interface Milestone { id: string; name: string; description: string | null; dueDate: string | null; status: string; sortOrder: number; createdAt: string; tasks: MilestoneTask[] }
   const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [unassignedTasks, setUnassignedTasks] = useState<MilestoneTask[]>([]);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
   const [newMilestone, setNewMilestone] = useState({ name: '', description: '', dueDate: '' });
   const [addingMilestone, setAddingMilestone] = useState(false);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
+  const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(null);
 
   const fetchMilestones = async () => {
     setMilestonesLoading(true);
     try {
       const data = await apiClient.fetch(`/api/projects/${project.id}/milestones`);
-      if (data.success) setMilestones(data.milestones || []);
+      if (data.success) {
+        setMilestones(data.milestones || []);
+        setUnassignedTasks(data.unassignedTasks || []);
+      }
     } catch { /* ignore */ }
     finally { setMilestonesLoading(false); }
+  };
+
+  const handleAssignTask = async (taskId: string, milestoneId: string) => {
+    try {
+      await apiClient.fetch(`/api/projects/${project.id}/milestones/${milestoneId}/tasks`, {
+        method: 'PATCH',
+        body: JSON.stringify({ taskId, action: 'assign' }),
+      });
+      fetchMilestones();
+    } catch { /* ignore */ }
+  };
+
+  const handleUnassignTask = async (taskId: string, milestoneId: string) => {
+    try {
+      await apiClient.fetch(`/api/projects/${project.id}/milestones/${milestoneId}/tasks`, {
+        method: 'PATCH',
+        body: JSON.stringify({ taskId, action: 'unassign' }),
+      });
+      fetchMilestones();
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -551,72 +577,133 @@ function OverviewModal({
                   <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>Add milestones to track project progress</p>
                 </div>
               ) : (
-                <div className="relative">
-                  {/* Vertical timeline line */}
-                  {milestones.length > 1 && (
-                    <div className="absolute left-[15px] top-4 bottom-4 w-px" style={{ background: VS.border2 }} />
-                  )}
-                  <div className="space-y-1">
-                    {milestones.map((ms) => {
-                      const isDone = ms.status === 'completed';
-                      const isOverdue = ms.dueDate && !isDone && new Date(ms.dueDate) < new Date();
-                      const dotColor = isDone ? VS.teal : isOverdue ? VS.red : VS.blue;
-                      return (
-                        <div key={ms.id} className="flex items-start gap-3 py-3 px-1 group relative">
-                          {/* Timeline dot */}
+                <div className="space-y-3">
+                  {milestones.map((ms) => {
+                    const isDone = ms.status === 'completed';
+                    const isOverdue = ms.dueDate && !isDone && new Date(ms.dueDate) < new Date();
+                    const dotColor = isDone ? VS.teal : isOverdue ? VS.red : VS.blue;
+                    const isExpanded = expandedMilestoneId === ms.id;
+                    const doneTasks = ms.tasks.filter(t => t.status === 'completed').length;
+                    return (
+                      <div key={ms.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${isDone ? VS.teal + '33' : VS.border}`, background: VS.bg2 }}>
+                        {/* Milestone header */}
+                        <div className="flex items-center gap-3 px-4 py-3 group cursor-pointer"
+                          onClick={() => setExpandedMilestoneId(isExpanded ? null : ms.id)}>
                           <button
-                            onClick={() => handleToggleMilestone(ms)}
-                            className="relative z-10 h-[30px] w-[30px] rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-110"
-                            style={{
-                              background: isDone ? dotColor : VS.bg1,
-                              border: `2.5px solid ${dotColor}`,
-                            }}
-                            title={isDone ? 'Mark as pending' : 'Mark as completed'}
+                            onClick={e => { e.stopPropagation(); handleToggleMilestone(ms); }}
+                            className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-110"
+                            style={{ background: isDone ? dotColor : VS.bg1, border: `2px solid ${dotColor}` }}
+                            title={isDone ? 'Mark pending' : 'Mark completed'}
                           >
-                            {isDone && <CheckCircle2 className="h-4 w-4 text-white" />}
-                            {!isDone && <Flag className="h-3 w-3" style={{ color: dotColor }} />}
+                            {isDone ? <CheckCircle2 className="h-3.5 w-3.5 text-white" /> : <Flag className="h-3 w-3" style={{ color: dotColor }} />}
                           </button>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0 pt-1">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <p className="text-[13px] font-semibold" style={{
-                                color: isDone ? VS.text2 : VS.text0,
-                                textDecoration: isDone ? 'line-through' : 'none',
-                              }}>
+                              <p className="text-[13px] font-semibold truncate" style={{ color: isDone ? VS.text2 : VS.text0, textDecoration: isDone ? 'line-through' : 'none' }}>
                                 {ms.name}
                               </p>
-                              {isOverdue && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${VS.red}18`, color: VS.red }}>
-                                  OVERDUE
-                                </span>
-                              )}
-                              {isDone && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${VS.teal}18`, color: VS.teal }}>
-                                  DONE
-                                </span>
-                              )}
+                              {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: `${VS.red}18`, color: VS.red }}>OVERDUE</span>}
+                              {isDone && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: `${VS.teal}18`, color: VS.teal }}>DONE</span>}
                             </div>
-                            {ms.description && (
-                              <p className="text-[11px] mt-0.5 line-clamp-2" style={{ color: VS.text2 }}>{ms.description}</p>
-                            )}
-                            {ms.dueDate && (
-                              <p className="text-[10px] mt-1" style={{ color: isOverdue ? VS.red : VS.text2 }}>
-                                Due {new Date(ms.dueDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </p>
-                            )}
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {ms.dueDate && <span className="text-[10px]" style={{ color: isOverdue ? VS.red : VS.text2 }}>Due {new Date(ms.dueDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</span>}
+                              <span className="text-[10px]" style={{ color: VS.text2 }}>{doneTasks}/{ms.tasks.length} tasks</span>
+                            </div>
                           </div>
-
-                          {/* Delete */}
-                          <button onClick={() => handleDeleteMilestone(ms.id)}
-                            className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-1 mt-1"
+                          {/* Progress mini bar */}
+                          {ms.tasks.length > 0 && (
+                            <div className="w-16 h-1.5 rounded-full overflow-hidden shrink-0" style={{ background: VS.bg3 }}>
+                              <div className="h-full rounded-full" style={{ width: `${Math.round((doneTasks / ms.tasks.length) * 100)}%`, background: dotColor }} />
+                            </div>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); handleDeleteMilestone(ms.id); }}
+                            className="opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity p-1 shrink-0"
                             style={{ color: VS.red }}>
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        {/* Expanded: tasks list + assign dropdown */}
+                        {isExpanded && (
+                          <div style={{ borderTop: `1px solid ${VS.border}` }}>
+                            {ms.tasks.length > 0 && (
+                              <div className="divide-y" style={{ borderColor: VS.border + '44' }}>
+                                {ms.tasks.map(t => {
+                                  const tColor = t.status === 'completed' ? VS.teal : t.status === 'in_progress' ? VS.yellow : VS.text2;
+                                  return (
+                                    <div key={t.id} className="flex items-center gap-2 px-4 py-2 group/task">
+                                      <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: tColor }} />
+                                      <span className="text-[12px] flex-1 truncate" style={{ color: t.status === 'completed' ? VS.text2 : VS.text0, textDecoration: t.status === 'completed' ? 'line-through' : 'none' }}>{t.title}</span>
+                                      {t.assigneeName && <span className="text-[10px] shrink-0" style={{ color: VS.text2 }}>{t.assigneeName}</span>}
+                                      <button onClick={() => handleUnassignTask(t.id, ms.id)}
+                                        className="opacity-0 group-hover/task:opacity-60 hover:!opacity-100 text-[10px] px-1.5 py-0.5 rounded transition-opacity"
+                                        style={{ color: VS.orange, background: `${VS.orange}15` }}>
+                                        Remove
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {/* Assign unassigned tasks */}
+                            {unassignedTasks.length > 0 && (
+                              <div className="px-4 py-2" style={{ background: `${VS.accent}08` }}>
+                                <select
+                                  onChange={e => { if (e.target.value) { handleAssignTask(e.target.value, ms.id); e.target.value = ''; } }}
+                                  className="w-full px-2 py-1.5 rounded text-[11px] focus:outline-none"
+                                  style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
+                                  defaultValue=""
+                                >
+                                  <option value="" disabled>+ Add task to this milestone...</option>
+                                  {unassignedTasks.map(t => (
+                                    <option key={t.id} value={t.id}>{t.title}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            {ms.tasks.length === 0 && unassignedTasks.length === 0 && (
+                              <p className="px-4 py-3 text-[11px]" style={{ color: VS.text2 }}>No tasks in this project yet</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Unassigned tasks pool */}
+                  {unassignedTasks.length > 0 && (
+                    <div className="rounded-xl overflow-hidden" style={{ border: `1px dashed ${VS.border2}`, background: 'transparent' }}>
+                      <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: VS.bg2 }}>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: VS.text2 }}>Unassigned Tasks</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: VS.bg3, color: VS.text2 }}>{unassignedTasks.length}</span>
+                      </div>
+                      <div className="divide-y" style={{ borderColor: VS.border + '22' }}>
+                        {unassignedTasks.slice(0, 10).map(t => {
+                          const tColor = t.status === 'completed' ? VS.teal : t.status === 'in_progress' ? VS.yellow : VS.text2;
+                          return (
+                            <div key={t.id} className="flex items-center gap-2 px-4 py-2">
+                              <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: tColor }} />
+                              <span className="text-[12px] flex-1 truncate" style={{ color: VS.text1 }}>{t.title}</span>
+                              {milestones.length > 0 && (
+                                <select
+                                  onChange={e => { if (e.target.value) handleAssignTask(t.id, e.target.value); }}
+                                  className="px-1.5 py-0.5 rounded text-[10px] focus:outline-none shrink-0"
+                                  style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text2, maxWidth: 120 }}
+                                  defaultValue=""
+                                >
+                                  <option value="" disabled>Assign to...</option>
+                                  {milestones.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {unassignedTasks.length > 10 && (
+                          <p className="px-4 py-2 text-[10px]" style={{ color: VS.text2 }}>+{unassignedTasks.length - 10} more</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
