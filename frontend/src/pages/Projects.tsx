@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { ProjectModal } from '../components/ProjectModal';
 import GanttChart from '../components/GanttChart';
-import { LayoutList, GanttChartSquare, Paperclip, Upload, Download, FileText, Image, File as FileIcon } from 'lucide-react';
+import { LayoutList, GanttChartSquare, Paperclip, Upload, Download, FileText, Image, File as FileIcon, Flag, Plus as PlusIcon } from 'lucide-react';
 
 import { VS } from '../lib/theme';
 
@@ -155,9 +155,68 @@ function OverviewModal({
   onRegenerate: () => void;
   regenerating: boolean;
 }) {
-  const [overviewTab, setOverviewTab] = useState<'list' | 'gantt' | 'files'>('list');
+  const [overviewTab, setOverviewTab] = useState<'list' | 'gantt' | 'milestones' | 'files'>('list');
   const apiClient = useApiClient();
   const sCfg = PROJECT_STATUS[project.status] || PROJECT_STATUS.planning;
+
+  // Milestones
+  interface Milestone { id: string; name: string; description: string | null; dueDate: string | null; status: string; sortOrder: number; createdAt: string }
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestonesLoading, setMilestonesLoading] = useState(false);
+  const [newMilestone, setNewMilestone] = useState({ name: '', description: '', dueDate: '' });
+  const [addingMilestone, setAddingMilestone] = useState(false);
+  const [showAddMilestone, setShowAddMilestone] = useState(false);
+
+  const fetchMilestones = async () => {
+    setMilestonesLoading(true);
+    try {
+      const data = await apiClient.fetch(`/api/projects/${project.id}/milestones`);
+      if (data.success) setMilestones(data.milestones || []);
+    } catch { /* ignore */ }
+    finally { setMilestonesLoading(false); }
+  };
+
+  useEffect(() => {
+    if (overviewTab === 'milestones') fetchMilestones();
+  }, [overviewTab, project.id]);
+
+  const handleAddMilestone = async () => {
+    if (!newMilestone.name.trim()) return;
+    setAddingMilestone(true);
+    try {
+      await apiClient.fetch(`/api/projects/${project.id}/milestones`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newMilestone.name.trim(),
+          description: newMilestone.description || null,
+          dueDate: newMilestone.dueDate ? new Date(newMilestone.dueDate + 'T00:00:00.000Z').toISOString() : null,
+          sortOrder: milestones.length,
+        }),
+      });
+      setNewMilestone({ name: '', description: '', dueDate: '' });
+      setShowAddMilestone(false);
+      fetchMilestones();
+    } catch { /* ignore */ }
+    finally { setAddingMilestone(false); }
+  };
+
+  const handleToggleMilestone = async (ms: Milestone) => {
+    const newStatus = ms.status === 'completed' ? 'pending' : 'completed';
+    try {
+      await apiClient.fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setMilestones(prev => prev.map(m => m.id === ms.id ? { ...m, status: newStatus } : m));
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteMilestone = async (id: string) => {
+    try {
+      await apiClient.fetch(`/api/projects/${project.id}/milestones/${id}`, { method: 'DELETE' });
+      setMilestones(prev => prev.filter(m => m.id !== id));
+    } catch { /* ignore */ }
+  };
 
   // Project files
   const [files, setFiles] = useState<{ id: string; name: string; mimeType: string; size: number; category: string; createdAt: string; userId: string; userName: string; userEmail: string }[]>([]);
@@ -294,6 +353,7 @@ function OverviewModal({
             {[
               { id: 'list' as const, label: 'List', icon: LayoutList },
               { id: 'gantt' as const, label: 'Gantt', icon: GanttChartSquare },
+              { id: 'milestones' as const, label: `Milestones${milestones.length ? ` (${milestones.length})` : ''}`, icon: Flag },
               { id: 'files' as const, label: `Files${files.length ? ` (${files.length})` : ''}`, icon: Paperclip },
             ].map(tab => {
               const Icon = tab.icon;
@@ -421,6 +481,145 @@ function OverviewModal({
                 })}
               </tbody>
             </table>
+          )}
+
+          {/* ── MILESTONES TAB ── */}
+          {overviewTab === 'milestones' && (
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[13px] font-semibold" style={{ color: VS.text0 }}>
+                  Milestones
+                  <span className="ml-2 text-[11px] font-normal" style={{ color: VS.text2 }}>
+                    {milestones.filter(m => m.status === 'completed').length}/{milestones.length} completed
+                  </span>
+                </h3>
+                <button onClick={() => setShowAddMilestone(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90"
+                  style={{ background: VS.accent, color: '#fff' }}>
+                  <PlusIcon className="h-3.5 w-3.5" /> Add Milestone
+                </button>
+              </div>
+
+              {/* Add milestone form */}
+              {showAddMilestone && (
+                <div className="rounded-lg p-4 space-y-3" style={{ background: VS.bg2, border: `1px solid ${VS.accent}33` }}>
+                  <input type="text" value={newMilestone.name}
+                    onChange={e => setNewMilestone(p => ({ ...p, name: e.target.value }))}
+                    placeholder="Milestone name..."
+                    className="w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none"
+                    style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text0 }}
+                    autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddMilestone(); if (e.key === 'Escape') setShowAddMilestone(false); }}
+                  />
+                  <textarea value={newMilestone.description}
+                    onChange={e => setNewMilestone(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Description (optional)"
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg text-[12px] resize-none focus:outline-none"
+                    style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
+                  />
+                  <div className="flex items-center gap-3">
+                    <input type="date" value={newMilestone.dueDate}
+                      onChange={e => setNewMilestone(p => ({ ...p, dueDate: e.target.value }))}
+                      className="px-3 py-1.5 rounded-lg text-[12px] focus:outline-none"
+                      style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
+                    />
+                    <div className="flex-1" />
+                    <button onClick={() => { setShowAddMilestone(false); setNewMilestone({ name: '', description: '', dueDate: '' }); }}
+                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium"
+                      style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}>
+                      Cancel
+                    </button>
+                    <button onClick={handleAddMilestone} disabled={addingMilestone || !newMilestone.name.trim()}
+                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white disabled:opacity-40"
+                      style={{ background: VS.accent }}>
+                      {addingMilestone ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Milestone list */}
+              {milestonesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2" style={{ borderColor: VS.accent }} />
+                </div>
+              ) : milestones.length === 0 && !showAddMilestone ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Flag className="h-8 w-8 mb-3 opacity-30" style={{ color: VS.text2 }} />
+                  <p className="text-[13px] font-medium" style={{ color: VS.text1 }}>No milestones yet</p>
+                  <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>Add milestones to track project progress</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  {/* Vertical timeline line */}
+                  {milestones.length > 1 && (
+                    <div className="absolute left-[15px] top-4 bottom-4 w-px" style={{ background: VS.border2 }} />
+                  )}
+                  <div className="space-y-1">
+                    {milestones.map((ms) => {
+                      const isDone = ms.status === 'completed';
+                      const isOverdue = ms.dueDate && !isDone && new Date(ms.dueDate) < new Date();
+                      const dotColor = isDone ? VS.teal : isOverdue ? VS.red : VS.blue;
+                      return (
+                        <div key={ms.id} className="flex items-start gap-3 py-3 px-1 group relative">
+                          {/* Timeline dot */}
+                          <button
+                            onClick={() => handleToggleMilestone(ms)}
+                            className="relative z-10 h-[30px] w-[30px] rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-110"
+                            style={{
+                              background: isDone ? dotColor : VS.bg1,
+                              border: `2.5px solid ${dotColor}`,
+                            }}
+                            title={isDone ? 'Mark as pending' : 'Mark as completed'}
+                          >
+                            {isDone && <CheckCircle2 className="h-4 w-4 text-white" />}
+                            {!isDone && <Flag className="h-3 w-3" style={{ color: dotColor }} />}
+                          </button>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0 pt-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[13px] font-semibold" style={{
+                                color: isDone ? VS.text2 : VS.text0,
+                                textDecoration: isDone ? 'line-through' : 'none',
+                              }}>
+                                {ms.name}
+                              </p>
+                              {isOverdue && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${VS.red}18`, color: VS.red }}>
+                                  OVERDUE
+                                </span>
+                              )}
+                              {isDone && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${VS.teal}18`, color: VS.teal }}>
+                                  DONE
+                                </span>
+                              )}
+                            </div>
+                            {ms.description && (
+                              <p className="text-[11px] mt-0.5 line-clamp-2" style={{ color: VS.text2 }}>{ms.description}</p>
+                            )}
+                            {ms.dueDate && (
+                              <p className="text-[10px] mt-1" style={{ color: isOverdue ? VS.red : VS.text2 }}>
+                                Due {new Date(ms.dueDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Delete */}
+                          <button onClick={() => handleDeleteMilestone(ms.id)}
+                            className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-1 mt-1"
+                            style={{ color: VS.red }}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── FILES TAB ── */}

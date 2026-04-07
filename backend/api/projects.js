@@ -725,6 +725,116 @@ router.get('/:id/overview', requireAuth, withOrgScope, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PROJECT MILESTONES
+// ─────────────────────────────────────────────────────────────────────────────
+
+let milestonesReady = false;
+async function ensureMilestonesTable() {
+  if (milestonesReady) return;
+  try {
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `project_milestones` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `projectId` VARCHAR(50) NOT NULL,' +
+      '  `orgId` VARCHAR(191) NOT NULL,' +
+      '  `name` VARCHAR(300) NOT NULL,' +
+      '  `description` TEXT NULL,' +
+      '  `dueDate` DATETIME(3) NULL,' +
+      '  `status` VARCHAR(20) NOT NULL DEFAULT \'pending\',' +
+      '  `sortOrder` INT NOT NULL DEFAULT 0,' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),' +
+      '  PRIMARY KEY (`id`),' +
+      '  KEY `pm_projectId_idx` (`projectId`),' +
+      '  KEY `pm_orgId_idx` (`orgId`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+  } catch (_) {}
+  milestonesReady = true;
+}
+
+/** GET /api/projects/:projectId/milestones */
+router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureMilestonesTable();
+    const milestones = await prisma.$queryRawUnsafe(
+      'SELECT * FROM project_milestones WHERE projectId = ? AND orgId = ? ORDER BY sortOrder ASC, dueDate ASC',
+      req.params.projectId, req.orgId
+    );
+    res.json({ success: true, milestones });
+  } catch (e) {
+    console.error('[Milestones] GET error:', e.message);
+    res.status(500).json({ error: 'Failed to fetch milestones' });
+  }
+});
+
+/** POST /api/projects/:projectId/milestones */
+router.post('/:projectId/milestones', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureMilestonesTable();
+    const { name, description, dueDate, sortOrder } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Milestone name is required' });
+
+    const id = randomUUID();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO project_milestones (id, projectId, orgId, name, description, dueDate, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      id, req.params.projectId, req.orgId,
+      name.trim(),
+      description || null,
+      dueDate ? new Date(dueDate) : null,
+      sortOrder ?? 0
+    );
+
+    console.log(`📌 Milestone created: "${name.trim()}" for project ${req.params.projectId}`);
+    res.status(201).json({ success: true, milestone: { id, name: name.trim(), status: 'pending' } });
+  } catch (e) {
+    console.error('[Milestones] POST error:', e.message);
+    res.status(500).json({ error: 'Failed to create milestone' });
+  }
+});
+
+/** PATCH /api/projects/:projectId/milestones/:id */
+router.patch('/:projectId/milestones/:id', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureMilestonesTable();
+    const { name, description, dueDate, status, sortOrder } = req.body;
+    const sets = [];
+    const vals = [];
+    if (name !== undefined)        { sets.push('name = ?');        vals.push(name.trim()); }
+    if (description !== undefined)  { sets.push('description = ?'); vals.push(description || null); }
+    if (dueDate !== undefined)      { sets.push('dueDate = ?');     vals.push(dueDate ? new Date(dueDate) : null); }
+    if (status !== undefined)       { sets.push('status = ?');      vals.push(status); }
+    if (sortOrder !== undefined)    { sets.push('sortOrder = ?');   vals.push(sortOrder); }
+
+    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE project_milestones SET ${sets.join(', ')} WHERE id = ? AND projectId = ? AND orgId = ?`,
+      ...vals, req.params.id, req.params.projectId, req.orgId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Milestones] PATCH error:', e.message);
+    res.status(500).json({ error: 'Failed to update milestone' });
+  }
+});
+
+/** DELETE /api/projects/:projectId/milestones/:id */
+router.delete('/:projectId/milestones/:id', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureMilestonesTable();
+    await prisma.$executeRawUnsafe(
+      'DELETE FROM project_milestones WHERE id = ? AND projectId = ? AND orgId = ?',
+      req.params.id, req.params.projectId, req.orgId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Milestones] DELETE error:', e.message);
+    res.status(500).json({ error: 'Failed to delete milestone' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PROJECT FILE SHARING
 // ─────────────────────────────────────────────────────────────────────────────
 
