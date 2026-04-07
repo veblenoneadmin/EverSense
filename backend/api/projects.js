@@ -703,8 +703,10 @@ router.get('/:id/overview', requireAuth, withOrgScope, async (req, res) => {
         status:         t.status,
         priority:       t.priority,
         estimatedHours: t.estimatedHours,
+        actualHours:    t.actualHours,
         requiredSkills: Array.isArray(t.tags) ? t.tags : [],
         createdAt:      t.createdAt,
+        dueDate:        t.dueDate,
         assignee: u ? {
           userId: t.userId,
           name:   u.name || u.email,

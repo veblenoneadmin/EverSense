@@ -24,6 +24,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { ProjectModal } from '../components/ProjectModal';
+import GanttChart from '../components/GanttChart';
+import { LayoutList, GanttChartSquare } from 'lucide-react';
 
 import { VS } from '../lib/theme';
 
@@ -87,6 +89,9 @@ interface OverviewTask {
   status: string;
   priority: string;
   estimatedHours: number;
+  actualHours?: number;
+  createdAt?: string;
+  dueDate?: string;
   requiredSkills: string[];
   assignee: {
     userId: string;
@@ -150,6 +155,7 @@ function OverviewModal({
   onRegenerate: () => void;
   regenerating: boolean;
 }) {
+  const [overviewTab, setOverviewTab] = useState<'list' | 'gantt'>('list');
   const sCfg = PROJECT_STATUS[project.status] || PROJECT_STATUS.planning;
 
   const taskStats = {
@@ -216,7 +222,35 @@ function OverviewModal({
           ))}
         </div>
 
-        {/* Task list */}
+        {/* List / Gantt toggle */}
+        {tasks.length > 0 && !loading && (
+          <div className="flex items-center gap-1.5 px-6 py-2 shrink-0" style={{ borderBottom: `1px solid ${VS.border}`, background: VS.bg2 }}>
+            <button
+              onClick={() => setOverviewTab('list')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+              style={overviewTab === 'list'
+                ? { background: VS.accent, color: '#fff' }
+                : { background: VS.bg3, color: VS.text2 }
+              }
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+              List
+            </button>
+            <button
+              onClick={() => setOverviewTab('gantt')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+              style={overviewTab === 'gantt'
+                ? { background: VS.accent, color: '#fff' }
+                : { background: VS.bg3, color: VS.text2 }
+              }
+            >
+              <GanttChartSquare className="h-3.5 w-3.5" />
+              Gantt
+            </button>
+          </div>
+        )}
+
+        {/* Task list / Gantt */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-40">
@@ -227,6 +261,22 @@ function OverviewModal({
               <CheckSquare className="h-8 w-8 mb-3" style={{ color: VS.text2 }} />
               <p className="text-sm font-medium" style={{ color: VS.text1 }}>No tasks yet</p>
               <p className="text-xs mt-1" style={{ color: VS.text2 }}>Click "Generate Tasks" to auto-create tasks for this project</p>
+            </div>
+          ) : overviewTab === 'gantt' ? (
+            <div className="p-4" style={{ minHeight: 300 }}>
+              <GanttChart
+                tasks={tasks.map(t => ({
+                  id: t.id,
+                  title: t.title,
+                  status: (t.status as any) || 'not_started',
+                  priority: (t.priority as any) || 'Medium',
+                  dueDate: t.dueDate,
+                  createdAt: t.createdAt || new Date().toISOString(),
+                  estimatedHours: t.estimatedHours || 0,
+                  actualHours: t.actualHours || 0,
+                  assignees: t.assignee ? [{ id: t.assignee.userId, name: t.assignee.name, email: t.assignee.email, image: t.assignee.image }] : [],
+                }))}
+              />
             </div>
           ) : (
             <table className="w-full text-xs">
