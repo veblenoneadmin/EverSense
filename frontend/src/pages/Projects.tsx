@@ -174,20 +174,24 @@ function OverviewModal({
     setMilestonesLoading(true);
     try {
       const data = await apiClient.fetch(`/api/projects/${project.id}/milestones`);
+      console.log('[Milestones] API response:', data);
       if (data.success) {
         setMilestones(data.milestones || []);
         setUnassignedTasks(data.unassignedTasks || []);
+        console.log('[Milestones] milestones:', data.milestones?.length, 'unassigned:', data.unassignedTasks?.length);
       }
-    } catch { /* ignore */ }
+    } catch (e: any) { console.error('[Milestones] fetch error:', e.message); }
     finally { setMilestonesLoading(false); }
   };
 
   const handleAssignTask = async (taskId: string, milestoneId: string) => {
+    console.log('[Milestones] Assigning task', taskId, 'to milestone', milestoneId);
     try {
       const res = await apiClient.fetch(`/api/projects/${project.id}/milestones/${milestoneId}/tasks`, {
         method: 'PATCH',
         body: JSON.stringify({ taskId, action: 'assign' }),
       });
+      console.log('[Milestones] Assign result:', res);
       if (res.success) fetchMilestones();
       else console.error('Assign failed:', res.error);
     } catch (e: any) { console.error('Assign error:', e.message); }
@@ -651,10 +655,10 @@ function OverviewModal({
                             {unassignedTasks.length > 0 && (
                               <div className="px-4 py-2" style={{ background: `${VS.accent}08` }}>
                                 <select
-                                  onChange={e => { if (e.target.value) { handleAssignTask(e.target.value, ms.id); e.target.value = ''; } }}
+                                  value=""
+                                  onChange={e => { if (e.target.value) handleAssignTask(e.target.value, ms.id); }}
                                   className="w-full px-2 py-1.5 rounded text-[11px] focus:outline-none"
                                   style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
-                                  defaultValue=""
                                 >
                                   <option value="" disabled>+ Add task to this milestone...</option>
                                   {unassignedTasks.map(t => (
@@ -688,10 +692,10 @@ function OverviewModal({
                               <span className="text-[12px] flex-1 truncate" style={{ color: VS.text1 }}>{t.title}</span>
                               {milestones.length > 0 && (
                                 <select
+                                  value=""
                                   onChange={e => { if (e.target.value) handleAssignTask(t.id, e.target.value); }}
                                   className="px-1.5 py-0.5 rounded text-[10px] focus:outline-none shrink-0"
                                   style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text2, maxWidth: 120 }}
-                                  defaultValue=""
                                 >
                                   <option value="" disabled>Assign to...</option>
                                   {milestones.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
