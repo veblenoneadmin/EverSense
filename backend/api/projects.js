@@ -852,6 +852,33 @@ router.post('/:projectId/milestones', requireAuth, withOrgScope, async (req, res
 });
 
 /** PATCH /api/projects/:projectId/milestones/:id */
+/** PATCH /api/projects/:projectId/milestones/:milestoneId/tasks — assign/unassign a task */
+// NOTE: This route MUST come BEFORE /:projectId/milestones/:id to avoid Express catching /tasks as :id
+router.patch('/:projectId/milestones/:milestoneId/tasks', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureMilestonesTable();
+    const { taskId, action } = req.body; // action: 'assign' | 'unassign'
+    if (!taskId) return res.status(400).json({ error: 'taskId is required' });
+
+    if (action === 'unassign') {
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET milestoneId = NULL, updatedAt = NOW(3) WHERE id = ? AND orgId = ?',
+        taskId, req.orgId
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET milestoneId = ?, updatedAt = NOW(3) WHERE id = ? AND orgId = ?',
+        req.params.milestoneId, taskId, req.orgId
+      );
+    }
+    console.log(`📌 Task ${taskId} ${action === 'unassign' ? 'unassigned from' : 'assigned to'} milestone ${req.params.milestoneId}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Milestones] task assign error:', e.message);
+    res.status(500).json({ error: `Failed to assign task: ${e.message}` });
+  }
+});
+
 router.patch('/:projectId/milestones/:id', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureMilestonesTable();
@@ -894,32 +921,6 @@ router.delete('/:projectId/milestones/:id', requireAuth, withOrgScope, async (re
   } catch (e) {
     console.error('[Milestones] DELETE error:', e.message);
     res.status(500).json({ error: 'Failed to delete milestone' });
-  }
-});
-
-/** PATCH /api/projects/:projectId/milestones/:id/tasks — assign/unassign a task */
-router.patch('/:projectId/milestones/:milestoneId/tasks', requireAuth, withOrgScope, async (req, res) => {
-  try {
-    await ensureMilestonesTable();
-    const { taskId, action } = req.body; // action: 'assign' | 'unassign'
-    if (!taskId) return res.status(400).json({ error: 'taskId is required' });
-
-    if (action === 'unassign') {
-      await prisma.$executeRawUnsafe(
-        'UPDATE macro_tasks SET milestoneId = NULL, updatedAt = NOW(3) WHERE id = ? AND orgId = ?',
-        taskId, req.orgId
-      );
-    } else {
-      await prisma.$executeRawUnsafe(
-        'UPDATE macro_tasks SET milestoneId = ?, updatedAt = NOW(3) WHERE id = ? AND orgId = ?',
-        req.params.milestoneId, taskId, req.orgId
-      );
-    }
-    console.log(`📌 Task ${taskId} ${action === 'unassign' ? 'unassigned from' : 'assigned to'} milestone ${req.params.milestoneId}`);
-    res.json({ success: true });
-  } catch (e) {
-    console.error('[Milestones] task assign error:', e.message);
-    res.status(500).json({ error: `Failed to assign task: ${e.message}` });
   }
 });
 
