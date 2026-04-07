@@ -147,12 +147,81 @@ async function runTimeReminderJob() {
   }
 }
 
+// ── Job: clock-out reminder (runs every hour) ──────────────────────────────
+const CLOCKOUT_WARN_SECS = 8 * 3600;  // 8 hours — warn before the 9.5h auto-clockout
+const CLOCKOUT_LIMIT_SECS = 9.5 * 3600;
+const notifiedSessions = new Set(); // track session IDs already notified this server cycle
+
+async function runClockOutReminderJob() {
+  try {
+    // Find attendance sessions still open and clocked in > 8 hours
+    const longSessions = await prisma.$queryRawUnsafe(
+      `SELECT id, userId, orgId, timeIn, TIMESTAMPDIFF(SECOND, timeIn, NOW()) AS elapsed
+       FROM attendance_logs
+       WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ?`,
+      CLOCKOUT_WARN_SECS
+    );
+
+    let reminded = 0;
+    for (const sess of longSessions) {
+      // Skip if we already notified this session
+      if (notifiedSessions.has(sess.id)) continue;
+      notifiedSessions.add(sess.id);
+
+      const elapsed = Number(sess.elapsed);
+      const hours = Math.floor(elapsed / 3600);
+      const mins = Math.floor((elapsed % 3600) / 60);
+      const remaining = Math.max(0, Math.round((CLOCKOUT_LIMIT_SECS - elapsed) / 60));
+
+      createNotification({
+        userId: sess.userId,
+        orgId:  sess.orgId,
+        title:  `Clock-Out Reminder`,
+        body:   `You've been clocked in for ${hours}h ${mins}m. Auto clock-out in ~${remaining} minutes. Please clock out if you're done for the day.`,
+        link:   '/attendance',
+        type:   'reminder',
+      });
+
+      // Also notify org admins
+      prisma.membership.findMany({
+        where:  { orgId: sess.orgId, role: { in: ['OWNER', 'ADMIN'] } },
+        select: { userId: true },
+      }).then(admins => {
+        const user = prisma.user.findUnique({ where: { id: sess.userId }, select: { name: true, email: true } }).catch(() => null);
+        user.then(u => {
+          const name = u?.name || u?.email || 'A team member';
+          for (const { userId: adminId } of admins) {
+            if (adminId !== sess.userId) {
+              createNotification({
+                userId: adminId,
+                orgId:  sess.orgId,
+                title:  `Long Session: ${name}`,
+                body:   `${name} has been clocked in for ${hours}h ${mins}m. Auto clock-out in ~${remaining} min.`,
+                link:   '/time-logs',
+                type:   'reminder',
+              });
+            }
+          }
+        });
+      }).catch(() => {});
+
+      reminded++;
+    }
+
+    if (reminded) console.log(`[NotifScheduler] clock-out reminder: notified ${reminded} user(s)`);
+  } catch (e) {
+    console.error('[NotifScheduler] clock-out reminder error:', e.message);
+  }
+}
+
 // ── Hourly tick ───────────────────────────────────────────────────────────────
 async function tick() {
   const h = utcHour();
   if (h === 0)  await runDueSoonJob();
   if (h === 1)  await runOverdueJob();
   if (h === 9)  await runTimeReminderJob();
+  // Clock-out reminder runs every hour
+  await runClockOutReminderJob();
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────
