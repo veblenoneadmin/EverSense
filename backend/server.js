@@ -14,7 +14,7 @@ import wizardRoutes from './routes/wizard.js';
 import statsRoutes from './api/stats.js';
 import timersRoutes from './api/timers.js';
 import timerRoutes from './api/timer.js';
-import tasksRoutes, { ensureRecurringTaskSchema } from './api/tasks.js';
+import tasksRoutes, { ensureRecurringTaskSchema, ensureTaskTemplatesSchema } from './api/tasks.js';
 import projectsRoutes from './api/projects.js';
 import clientsRoutes from './api/clients.js';
 // import expensesRoutes from './api/expenses.js';
@@ -3297,6 +3297,7 @@ async function startServer() {
   startNotificationScheduler();
   startAttendanceCron();
   await ensureRecurringTaskSchema();
+  await ensureTaskTemplatesSchema();
   startRecurringTaskScheduler();
 
   // Inline attendance auto-clockout (runs directly in server process every minute)

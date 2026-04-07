@@ -1827,4 +1827,107 @@ router.patch('/:taskId/checklist/:itemId', requireAuth, withOrgScope, async (req
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK TEMPLATES
+// ─────────────────────────────────────────────────────────────────────────────
+
+let templateSchemaReady = false;
+export async function ensureTaskTemplatesSchema() {
+  if (templateSchemaReady) return;
+  try {
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `task_templates` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `orgId` VARCHAR(191) NOT NULL,' +
+      '  `createdBy` VARCHAR(36) NOT NULL,' +
+      '  `name` VARCHAR(200) NOT NULL,' +
+      '  `title` VARCHAR(200) NOT NULL DEFAULT \'\',' +
+      '  `description` TEXT NULL,' +
+      '  `priority` VARCHAR(20) NOT NULL DEFAULT \'Medium\',' +
+      '  `estimatedHours` DECIMAL(5,2) NOT NULL DEFAULT 0,' +
+      '  `tags` JSON NULL,' +
+      '  `projectId` VARCHAR(50) NULL,' +
+      '  `isTeamTask` TINYINT(1) NOT NULL DEFAULT 0,' +
+      '  `subTasks` JSON NULL,' +
+      '  `recurringPattern` VARCHAR(20) NULL,' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),' +
+      '  PRIMARY KEY (`id`),' +
+      '  KEY `tt_orgId_idx` (`orgId`),' +
+      '  KEY `tt_createdBy_idx` (`createdBy`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+  } catch (_) {}
+  templateSchemaReady = true;
+}
+
+/** GET /api/tasks/templates — list templates for current org */
+router.get('/templates', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureTaskTemplatesSchema();
+    const templates = await prisma.$queryRawUnsafe(
+      'SELECT * FROM task_templates WHERE orgId = ? ORDER BY name ASC',
+      req.orgId
+    );
+    // Parse JSON fields
+    const parsed = templates.map(t => ({
+      ...t,
+      tags: typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags,
+      subTasks: typeof t.subTasks === 'string' ? JSON.parse(t.subTasks) : t.subTasks,
+      isTeamTask: !!t.isTeamTask,
+      estimatedHours: parseFloat(t.estimatedHours) || 0,
+    }));
+    res.json({ success: true, templates: parsed });
+  } catch (e) {
+    console.error('[Templates] GET error:', e.message);
+    res.status(500).json({ error: 'Failed to fetch templates' });
+  }
+});
+
+/** POST /api/tasks/templates — save a new template */
+router.post('/templates', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureTaskTemplatesSchema();
+    const { name, title, description, priority, estimatedHours, tags, projectId, isTeamTask, subTasks, recurringPattern } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Template name is required' });
+
+    const id = randomUUID();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO task_templates (id, orgId, createdBy, name, title, description, priority, estimatedHours, tags, projectId, isTeamTask, subTasks, recurringPattern) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, req.orgId, req.user.id,
+      name.trim(),
+      (title || '').trim(),
+      description || null,
+      priority || 'Medium',
+      parseFloat(estimatedHours) || 0,
+      tags ? JSON.stringify(tags) : null,
+      projectId || null,
+      isTeamTask ? 1 : 0,
+      subTasks ? JSON.stringify(subTasks) : null,
+      recurringPattern || null
+    );
+
+    console.log(`📋 Template created: "${name.trim()}" by ${req.user.email}`);
+    res.status(201).json({ success: true, template: { id, name: name.trim() } });
+  } catch (e) {
+    console.error('[Templates] POST error:', e.message);
+    res.status(500).json({ error: 'Failed to create template' });
+  }
+});
+
+/** DELETE /api/tasks/templates/:id — delete a template */
+router.delete('/templates/:id', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureTaskTemplatesSchema();
+    await prisma.$executeRawUnsafe(
+      'DELETE FROM task_templates WHERE id = ? AND orgId = ?',
+      req.params.id, req.orgId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Templates] DELETE error:', e.message);
+    res.status(500).json({ error: 'Failed to delete template' });
+  }
+});
+
 export default router;
