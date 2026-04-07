@@ -108,6 +108,83 @@ async function runOverdueJob() {
   }
 }
 
+// ── Job: SLA escalation (runs at 02:00 UTC = 10:00 AWST) ────────────────────
+// Tasks overdue by 3+ days: auto-bump to Urgent priority + escalation notice
+const ESCALATION_DAYS = 3;
+
+async function runEscalationJob() {
+  try {
+    const now = new Date();
+    const threshold = new Date(now.getTime() - ESCALATION_DAYS * 24 * 60 * 60 * 1000);
+
+    // Tasks overdue by 3+ days, not yet Urgent, not completed/cancelled
+    const tasks = await prisma.$queryRawUnsafe(
+      `SELECT id, title, dueDate, userId, orgId, priority
+       FROM macro_tasks
+       WHERE dueDate IS NOT NULL
+         AND dueDate < ?
+         AND status NOT IN ('completed', 'cancelled', 'done')
+         AND priority != 'Urgent'`,
+      threshold
+    );
+
+    let escalated = 0;
+    for (const task of tasks) {
+      if (!task.userId || !task.orgId) continue;
+
+      const overdueDays = Math.floor((now.getTime() - new Date(task.dueDate).getTime()) / (1000 * 60 * 60 * 24));
+
+      // Bump priority to Urgent
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET priority = ?, updatedAt = NOW(3) WHERE id = ?',
+        'Urgent', task.id
+      ).catch(() => {});
+
+      const dueStr = new Date(task.dueDate).toLocaleDateString('en-AU', {
+        day: 'numeric', month: 'short',
+      });
+
+      // Notify assignee with escalation warning
+      createNotification({
+        userId: task.userId,
+        orgId:  task.orgId,
+        title:  `ESCALATED: ${task.title}`,
+        body:   `This task is ${overdueDays} days overdue (due ${dueStr}). Priority has been auto-escalated to Urgent.`,
+        link:   '/tasks',
+        type:   'overdue',
+      });
+
+      // Notify all admins/owners with escalation alert
+      prisma.membership.findMany({
+        where:  { orgId: task.orgId, role: { in: ['OWNER', 'ADMIN'] } },
+        select: { userId: true },
+      }).then(async admins => {
+        // Get assignee name
+        const assignee = await prisma.user.findUnique({ where: { id: task.userId }, select: { name: true, email: true } }).catch(() => null);
+        const name = assignee?.name || assignee?.email || 'A team member';
+        for (const { userId: adminId } of admins) {
+          if (adminId !== task.userId) {
+            createNotification({
+              userId: adminId,
+              orgId:  task.orgId,
+              title:  `SLA Breach: ${task.title}`,
+              body:   `${name}'s task is ${overdueDays} days overdue (was ${task.priority}, now Urgent). Immediate attention required.`,
+              link:   '/tasks',
+              type:   'overdue',
+            });
+          }
+        }
+      }).catch(() => {});
+
+      escalated++;
+    }
+
+    if (escalated) console.log(`[NotifScheduler] escalation: bumped ${escalated} task(s) to Urgent`);
+  } catch (e) {
+    console.error('[NotifScheduler] escalation error:', e.message);
+  }
+}
+
 // ── Job: time-log reminder (runs at 09:00 UTC = 17:00 AWST) ─────────────────
 async function runTimeReminderJob() {
   try {
@@ -219,6 +296,7 @@ async function tick() {
   const h = utcHour();
   if (h === 0)  await runDueSoonJob();
   if (h === 1)  await runOverdueJob();
+  if (h === 2)  await runEscalationJob();
   if (h === 9)  await runTimeReminderJob();
   // Clock-out reminder runs every hour
   await runClockOutReminderJob();
