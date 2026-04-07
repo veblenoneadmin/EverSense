@@ -1779,7 +1779,7 @@ export function Tasks() {
                   className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
                   style={{ background: accentColor, color: '#fff' }}
                 >
-                  {reportSubmitting ? 'Submitting…' : isComplete ? 'Mark as Done' : isCancelled ? 'Cancel Task' : 'Put On Hold'}
+                  {reportSubmitting ? 'Submitting…' : isComplete ? 'Submit Report' : isCancelled ? 'Cancel Task' : 'Put On Hold'}
                 </button>
               </div>
             </div>
