@@ -153,8 +153,19 @@ async function handleClockOut(req, res) {
       now, duration, breakDuration, notes || active.notes, active.id
     );
 
+    // Stop any running task timers for this user
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM active_timers WHERE userId = ? AND orgId = ?`,
+      userId, orgId
+    ).catch(() => {});
+    // Close any open time_logs
+    await prisma.$executeRawUnsafe(
+      'UPDATE time_logs SET `end` = ?, duration = TIMESTAMPDIFF(SECOND, `begin`, ?) WHERE userId = ? AND orgId = ? AND `end` IS NULL',
+      now, now, userId, orgId
+    ).catch(() => {});
+
     const log = await prisma.attendanceLog.findUnique({ where: { id: active.id } });
-    console.log(`[Attendance] ✅ Clock out: ${req.user.email}, net ${Math.round(duration/60)}min, break ${Math.round(breakDuration/60)}min`);
+    console.log(`[Attendance] ✅ Clock out: ${req.user.email}, net ${Math.round(duration/60)}min, break ${Math.round(breakDuration/60)}min (timers stopped)`);
     broadcast(orgId, 'attendance', { action: 'clock-out', userId });
     res.json({ message: 'Clocked out successfully', log });
   } catch (err) {
