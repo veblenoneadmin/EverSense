@@ -78,6 +78,7 @@ interface Task {
   status: string;
   priority: string;
   dueDate?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,6 +88,9 @@ interface Project {
   name: string;
   color: string;
   status: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
   tasks: Task[];
 }
 
@@ -546,6 +550,131 @@ export function ClientDashboard() {
               </div>
             )}
           </div>
+
+          {/* Project Progress Timeline */}
+          {projects.length > 0 && (
+            <div
+              className="rounded-xl p-5"
+              style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}
+            >
+              <div className="flex items-center gap-2 mb-5">
+                <Activity className="h-4 w-4" style={{ color: VS.accent }} />
+                <h2 className="text-[13px] font-bold" style={{ color: VS.text0 }}>Project Timeline</h2>
+              </div>
+              <div className="space-y-8">
+                {projects.map(proj => {
+                  const tasks = proj.tasks;
+                  const totalT = tasks.length;
+                  const doneT = tasks.filter(t => t.status === 'completed').length;
+                  const pct = totalT > 0 ? Math.round((doneT / totalT) * 100) : 0;
+
+                  // Build milestone events from task data
+                  type Milestone = { date: Date; label: string; type: 'start' | 'task' | 'completed' | 'deadline' | 'end'; color: string };
+                  const milestones: Milestone[] = [];
+
+                  // Project start
+                  const startDate = proj.startDate || proj.createdAt;
+                  if (startDate) milestones.push({ date: new Date(startDate), label: 'Project started', type: 'start', color: VS.blue });
+
+                  // Completed tasks (up to 5 most recent)
+                  tasks
+                    .filter(t => t.status === 'completed' && t.completedAt)
+                    .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime())
+                    .slice(0, 5)
+                    .forEach(t => milestones.push({ date: new Date(t.completedAt!), label: t.title, type: 'completed', color: VS.teal }));
+
+                  // Upcoming deadlines (next tasks due)
+                  const now = new Date();
+                  tasks
+                    .filter(t => t.dueDate && t.status !== 'completed' && t.status !== 'cancelled')
+                    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+                    .slice(0, 3)
+                    .forEach(t => milestones.push({ date: new Date(t.dueDate!), label: t.title, type: 'deadline', color: new Date(t.dueDate!) < now ? VS.red : VS.yellow }));
+
+                  // Project end date
+                  if (proj.endDate) milestones.push({ date: new Date(proj.endDate), label: 'Project deadline', type: 'end', color: VS.orange });
+
+                  // Sort chronologically
+                  milestones.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+                  const STATUS_LABEL: Record<string, { text: string; color: string }> = {
+                    planning:  { text: 'Planning',  color: VS.blue   },
+                    active:    { text: 'Active',    color: VS.teal   },
+                    on_hold:   { text: 'On Hold',   color: VS.yellow },
+                    completed: { text: 'Completed', color: VS.teal   },
+                    cancelled: { text: 'Cancelled', color: VS.orange },
+                  };
+                  const sl = STATUS_LABEL[proj.status] || STATUS_LABEL.planning;
+
+                  return (
+                    <div key={proj.id}>
+                      {/* Project header */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-3 w-3 rounded-full shrink-0" style={{ background: proj.color || VS.accent }} />
+                        <span className="text-[13px] font-bold" style={{ color: VS.text0 }}>{proj.name}</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full ml-auto"
+                          style={{ background: `${sl.color}18`, color: sl.color, border: `1px solid ${sl.color}33` }}>
+                          {sl.text}
+                        </span>
+                      </div>
+
+                      {/* Progress bar */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: VS.bg2 }}>
+                          <div className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${pct}%`, background: pct === 100 ? VS.teal : proj.color || VS.accent }} />
+                        </div>
+                        <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color: pct === 100 ? VS.teal : VS.text1 }}>
+                          {pct}%
+                        </span>
+                      </div>
+
+                      {/* Timeline */}
+                      {milestones.length > 0 && (
+                        <div className="relative pl-5">
+                          {/* Vertical line */}
+                          <div className="absolute left-[7px] top-1 bottom-1 w-px" style={{ background: VS.border2 }} />
+
+                          <div className="space-y-3">
+                            {milestones.map((m, i) => {
+                              const isPast = m.date <= now;
+                              return (
+                                <div key={i} className="relative flex items-start gap-3">
+                                  {/* Dot */}
+                                  <div
+                                    className="absolute -left-5 top-[5px] h-3 w-3 rounded-full border-2 shrink-0"
+                                    style={{
+                                      background: isPast ? m.color : VS.bg1,
+                                      borderColor: m.color,
+                                    }}
+                                  />
+                                  {/* Content */}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[12px] font-medium truncate" style={{ color: isPast ? VS.text0 : VS.text2 }}>
+                                      {m.type === 'completed' && <span style={{ color: VS.teal }}>&#10003; </span>}
+                                      {m.type === 'deadline' && m.date < now && <span style={{ color: VS.red }}>! </span>}
+                                      {m.label}
+                                    </p>
+                                  </div>
+                                  <span className="text-[10px] tabular-nums shrink-0" style={{ color: VS.text2 }}>
+                                    {m.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {milestones.length === 0 && (
+                        <p className="text-[11px] pl-5" style={{ color: VS.text2 }}>No milestones yet</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
         </div>
 
