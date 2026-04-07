@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
+import { useOrganization } from '../contexts/OrganizationContext';
 import {
   X, MessageSquare, Paperclip, Send, Trash2, Download,
   Calendar, Clock, Tag, Folder, User, Users, AlertTriangle,
-  FileText, Image, File, ChevronRight, ChevronLeft, Upload, CheckSquare, Check,
+  FileText, Image, File, ChevronRight, ChevronLeft, Upload, CheckSquare, Check, AtSign,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -96,10 +97,23 @@ function fileIcon(mime: string) {
   return File;
 }
 
+/** Render @Name mentions as highlighted spans */
+function renderMentions(text: string) {
+  const parts = text.split(/(@\w[\w\s]*?\w(?=\s|$)|@\w+)/g);
+  return parts.map((part, i) =>
+    part.startsWith('@') ? (
+      <span key={i} style={{ color: VS.accent, fontWeight: 600 }}>{part}</span>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _onTaskUpdated, onCountsLoaded }: Props) {
   const { data: session } = useSession();
   const api = useApiClient();
+  const { currentOrg } = useOrganization();
   const [tab, setTab] = useState<'overview' | 'comments' | 'attachments'>('overview');
   const [postError, setPostError] = useState('');
 
@@ -109,6 +123,12 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
   const [postingComment, setPosting] = useState(false);
   const [commentsLoading, setCL]    = useState(false);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  // @mention state
+  const [orgMembers, setOrgMembers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIdx, setMentionIdx] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Attachments
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -186,6 +206,91 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
   useEffect(() => {
     if (tab === 'comments') commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments, tab]);
+
+  // ── Fetch org members for @mentions ──────────────────────────────────────
+  useEffect(() => {
+    if (!currentOrg?.id) return;
+    api.fetch('/api/tasks/members').then(d => {
+      if (d.members) setOrgMembers(d.members);
+    }).catch(() => {});
+  }, [currentOrg?.id]);
+
+  // ── @mention helpers ─────────────────────────────────────────────────────
+  const filteredMentions = mentionQuery !== null
+    ? orgMembers.filter(m =>
+        (m.name || m.email).toLowerCase().includes(mentionQuery.toLowerCase())
+      ).slice(0, 6)
+    : [];
+
+  const handleCommentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setCommentText(val);
+
+    // Detect @mention trigger
+    const pos = e.target.selectionStart ?? val.length;
+    const before = val.slice(0, pos);
+    const atMatch = before.match(/@(\w*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+      setMentionIdx(0);
+      // Position dropdown above textarea
+
+    } else {
+      setMentionQuery(null);
+
+    }
+  }, []);
+
+  const insertMention = useCallback((member: { id: string; name: string; email: string }) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const pos = ta.selectionStart ?? commentText.length;
+    const before = commentText.slice(0, pos);
+    const after = commentText.slice(pos);
+    const atIdx = before.lastIndexOf('@');
+    if (atIdx < 0) return;
+    const displayName = member.name || member.email;
+    const newText = before.slice(0, atIdx) + `@${displayName} ` + after;
+    setCommentText(newText);
+    setMentionQuery(null);
+    // Refocus textarea
+    setTimeout(() => {
+      ta.focus();
+      const newPos = atIdx + displayName.length + 2; // @name + space
+      ta.setSelectionRange(newPos, newPos);
+    }, 0);
+  }, [commentText]);
+
+  const handleCommentKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle mention dropdown navigation
+    if (mentionQuery !== null && filteredMentions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIdx(i => (i + 1) % filteredMentions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIdx(i => (i - 1 + filteredMentions.length) % filteredMentions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(filteredMentions[mentionIdx]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setMentionQuery(null);
+  
+        return;
+      }
+    }
+    // Normal Enter to send
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handlePostComment();
+    }
+  }, [mentionQuery, filteredMentions, mentionIdx, insertMention]);
 
   // ── Post comment ──────────────────────────────────────────────────────────
   const handlePostComment = async () => {
@@ -618,7 +723,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                               color: VS.text1,
                             }}
                           >
-                            {c.content}
+                            {renderMentions(c.content)}
                           </div>
                           {isOwn && (
                             <button
@@ -638,16 +743,54 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
               </div>
 
               {/* Comment input */}
-              <div className="p-4 shrink-0" style={{ borderTop: `1px solid ${VS.border}`, background: VS.bg1 }}>
+              <div className="p-4 shrink-0 relative" style={{ borderTop: `1px solid ${VS.border}`, background: VS.bg1 }}>
                 {postError && (
                   <p className="text-[11px] mb-2" style={{ color: VS.red }}>{postError}</p>
                 )}
+
+                {/* @mention dropdown */}
+                {mentionQuery !== null && filteredMentions.length > 0 && (
+                  <div
+                    className="absolute bottom-full left-4 mb-1 rounded-lg overflow-hidden shadow-xl z-30"
+                    style={{ background: VS.bg0, border: `1px solid ${VS.border2}`, minWidth: 220, maxHeight: 240, overflowY: 'auto' }}
+                  >
+                    <div className="px-3 py-1.5 flex items-center gap-1.5" style={{ borderBottom: `1px solid ${VS.border}`, background: VS.bg2 }}>
+                      <AtSign className="h-3 w-3" style={{ color: VS.accent }} />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: VS.text2 }}>Mention someone</span>
+                    </div>
+                    {filteredMentions.map((m, i) => (
+                      <button
+                        key={m.id}
+                        onMouseDown={e => { e.preventDefault(); insertMention(m); }}
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
+                        style={{
+                          background: i === mentionIdx ? `${VS.accent}22` : 'transparent',
+                          borderBottom: `1px solid ${VS.border}22`,
+                          color: i === mentionIdx ? VS.text0 : VS.text1,
+                        }}
+                      >
+                        <div
+                          className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                          style={{ background: `${VS.blue}22`, color: VS.blue }}
+                        >
+                          {getInitials(m.name, m.email)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-medium truncate">{m.name || m.email}</p>
+                          {m.name && <p className="text-[10px] truncate" style={{ color: VS.text2 }}>{m.email}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex gap-2 items-end">
                   <textarea
+                    ref={textareaRef}
                     value={commentText}
-                    onChange={e => setCommentText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); }}}
-                    placeholder="Write a comment… (Enter to send, Shift+Enter for new line)"
+                    onChange={handleCommentChange}
+                    onKeyDown={handleCommentKeyDown}
+                    placeholder="Write a comment… Type @ to mention someone"
                     rows={2}
                     className="flex-1 px-3 py-2 rounded-lg text-[13px] resize-none focus:outline-none focus:ring-1"
                     style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text0 }}

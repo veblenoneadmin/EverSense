@@ -1609,21 +1609,51 @@ router.post('/:taskId/comments', requireAuth, withOrgScope, async (req, res) => 
       include: { user: { select: { id: true, name: true, email: true } } },
     });
 
-    // Notify task assignee and creator (excluding the commenter)
+    // Notify task assignee, creator, AND @mentioned users
     try {
       const taskInfo = await prisma.macroTask.findUnique({
         where: { id: req.params.taskId },
         select: { userId: true, title: true, createdBy: true },
       });
       if (taskInfo) {
-        const notifyIds = new Set([taskInfo.userId, taskInfo.createdBy].filter(id => id && id !== req.user.id));
         const commenterName = comment.user?.name || 'Someone';
         const preview = content.trim().length > 100 ? content.trim().slice(0, 97) + '...' : content.trim();
+
+        // Parse @mentions from content — match @Name or @FirstName LastName
+        const mentionNames = [...content.matchAll(/@([\w][\w\s]*?[\w])(?=\s|$)|@(\w+)/g)]
+          .map(m => (m[1] || m[2]).toLowerCase());
+        let mentionedUserIds = [];
+        if (mentionNames.length > 0) {
+          try {
+            // Find users in this org whose name matches any mention
+            const members = await prisma.membership.findMany({
+              where: { orgId: req.orgId },
+              include: { user: { select: { id: true, name: true, email: true } } },
+            });
+            mentionedUserIds = members
+              .filter(m => m.user && mentionNames.some(mn =>
+                (m.user.name || '').toLowerCase() === mn ||
+                (m.user.email || '').split('@')[0].toLowerCase() === mn
+              ))
+              .map(m => m.userId);
+          } catch (_) {}
+        }
+
+        // Combine: task owner + creator + mentioned users, exclude commenter
+        const notifyIds = new Set([
+          taskInfo.userId,
+          taskInfo.createdBy,
+          ...mentionedUserIds,
+        ].filter(id => id && id !== req.user.id));
+
         for (const uid of notifyIds) {
+          const isMentioned = mentionedUserIds.includes(uid);
           createNotification({
             userId: uid,
             orgId: req.orgId,
-            title: `New Comment on: ${taskInfo.title}`,
+            title: isMentioned
+              ? `${commenterName} mentioned you on: ${taskInfo.title}`
+              : `New Comment on: ${taskInfo.title}`,
             body: `${commenterName}: "${preview}"`,
             type: 'comment',
             link: '/tasks',
