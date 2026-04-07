@@ -983,7 +983,7 @@ export function Tasks() {
 
       {/* ── Top header bar ── */}
       <div
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 md:px-6 py-3 md:py-4"
         style={{ borderBottom: `1px solid ${VS.border}` }}
       >
         {/* Left: title + meta */}
@@ -1039,7 +1039,7 @@ export function Tasks() {
         </div>
 
         {/* Right: search + actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
@@ -1049,7 +1049,7 @@ export function Tasks() {
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="pl-8 pr-3 py-1.5 rounded text-sm focus:outline-none focus:ring-1 transition-all"
-              style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text0, width: 160, outline: 'none' }}
+              style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text0, width: 'min(160px, 30vw)', outline: 'none' }}
             />
           </div>
 
@@ -1463,7 +1463,7 @@ export function Tasks() {
       )}
 
       {/* ── Kanban columns ── */}
-      {viewMode === 'board' && <div className="flex-1 flex gap-4 overflow-x-auto p-5" style={{ alignItems: 'flex-start' }}>
+      {viewMode === 'board' && <div className="flex-1 flex gap-3 md:gap-4 overflow-x-auto p-3 md:p-5" style={{ alignItems: 'flex-start' }}>
         {COLUMNS.map(col => {
           const colTasks = tasksForCol(col.id);
           const isOver = dragOverCol === col.id;
@@ -1473,7 +1473,7 @@ export function Tasks() {
               key={col.id}
               className="flex-shrink-0 flex flex-col rounded-2xl overflow-hidden transition-all duration-200"
               style={{
-                width: 300,
+                width: 'min(300px, max(240px, calc(100vw - 40px)))',
                 background: isOver ? col.bg : VS.bg1,
                 border: `1px solid ${isOver ? col.accent + '66' : VS.border}`,
                 borderTop: `3px solid ${col.accent}`,
@@ -1535,7 +1535,7 @@ export function Tasks() {
               {/* ── Cards ── */}
               <div
                 className="flex-1 overflow-y-auto pb-3 px-3"
-                style={{ maxHeight: 'calc(100vh - 260px)', paddingTop: '16px' }}
+                style={{ maxHeight: 'calc(100vh - 220px)', paddingTop: '16px' }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
                 {colTasks.map(task => {
@@ -1908,7 +1908,7 @@ export function Tasks() {
 
         return (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.7)' }}
           onClick={e => { if (e.target === e.currentTarget) { setReportModal(null); setReportText(''); } }}
         >
@@ -2096,7 +2096,7 @@ export function Tasks() {
       {/* ── Bulk Complete Report Modal ── */}
       {bulkReportModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.75)' }}
           onClick={e => { if (e.target === e.currentTarget) setBulkReportModal(false); }}
         >
@@ -2184,7 +2184,7 @@ export function Tasks() {
       {/* ── New Task Modal ── */}
       {showNewTaskForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.75)' }}
           onClick={e => { if (e.target === e.currentTarget) setShowNewTaskForm(false); }}
         >
@@ -2665,7 +2665,7 @@ export function Tasks() {
       {/* ── Edit Task Modal ── */}
       {editingTask && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.75)' }}
           onClick={e => { if (e.target === e.currentTarget) setEditingTask(null); }}
         >
