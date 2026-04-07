@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { VS } from '../lib/theme';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -90,7 +90,7 @@ export default function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
   }, [tasks]);
 
   // Timeline range
-  const { rangeStart, rangeEnd, totalDays, columns } = useMemo(() => {
+  const { rangeStart, totalDays, columns } = useMemo(() => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
@@ -162,7 +162,7 @@ export default function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
       }
     }
 
-    return { rangeStart: start, rangeEnd: end, totalDays: days, columns: cols };
+    return { rangeStart: start, totalDays: days, columns: cols };
   }, [zoom, offset, DAY_WIDTH]);
 
   // Map task to bar position
