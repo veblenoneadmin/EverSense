@@ -1574,24 +1574,32 @@ export function Tasks() {
                               : '0 4px 20px rgba(0,0,0,0.4)',
                         }}
                       >
-                        {/* Content */}
-                        <div className="px-4 pt-6 pb-3">
-
-                          {/* Selection checkbox */}
-                          {userRole !== 'CLIENT' && (
+                        {/* Selection row — above card content */}
+                        {userRole !== 'CLIENT' && (selectedIds.size > 0 || undefined) && (
+                          <div
+                            className="flex items-center gap-2 px-3 py-1.5"
+                            style={{ borderBottom: `1px solid ${selectedIds.has(task.id) ? VS.accent + '44' : VS.border}` }}
+                            onClick={e => e.stopPropagation()}
+                            onMouseDown={e => e.stopPropagation()}
+                          >
                             <button
                               onClick={e => { e.stopPropagation(); toggleSelect(task.id); }}
-                              className="absolute top-[18px] left-3 z-20 h-5 w-5 rounded flex items-center justify-center transition-all"
+                              className="h-4 w-4 rounded flex items-center justify-center transition-all"
                               style={{
                                 background: selectedIds.has(task.id) ? VS.accent : 'transparent',
                                 border: `1.5px solid ${selectedIds.has(task.id) ? VS.accent : VS.border2}`,
-                                opacity: selectedIds.size > 0 ? 1 : undefined,
                               }}
-                              onMouseDown={e => e.stopPropagation()}
                             >
-                              {selectedIds.has(task.id) && <Check className="h-3 w-3 text-white" />}
+                              {selectedIds.has(task.id) && <Check className="h-2.5 w-2.5 text-white" />}
                             </button>
-                          )}
+                            <span className="text-[10px]" style={{ color: selectedIds.has(task.id) ? VS.accent : VS.text2 }}>
+                              {selectedIds.has(task.id) ? 'Selected' : 'Select'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Content */}
+                        <div className="px-4 pt-4 pb-3">
 
                           {/* ⋯ context menu */}
                           {userRole !== 'CLIENT' && (
