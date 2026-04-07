@@ -28,6 +28,7 @@ export function useSSE(orgId: string | undefined, onEvent: SSEHandler) {
 
       es.addEventListener('attendance',   handle('attendance'));
       es.addEventListener('notification', handle('notification'));
+      es.addEventListener('task',         handle('task'));
       es.addEventListener('ping',         handle('ping'));
 
       es.onerror = () => {

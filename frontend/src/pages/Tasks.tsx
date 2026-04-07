@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { useSSE } from '../hooks/useSSE';
 import {
   Plus,
   X,
@@ -288,6 +289,14 @@ export function Tasks() {
   };
 
   useEffect(() => { fetchTasks(); }, [session?.user?.id, currentOrg?.id, showAllTasks]);
+
+  // ── Real-time task updates via SSE ────────────────────────────────────────
+  useSSE(currentOrg?.id || undefined, useCallback((event: string, data: any) => {
+    if (event === 'task' && data?.userId !== session?.user?.id) {
+      // Another user changed a task — silently refetch
+      fetchTasks(false);
+    }
+  }, [session?.user?.id]));
 
   // ── fetch projects ─────────────────────────────────────────────────────────
   const fetchProjects = async () => {

@@ -6,6 +6,7 @@ import { requireAuth, withOrgScope, requireTaskOwnership } from '../lib/rbac.js'
 import { requireAuthOrApiKey } from '../middleware/apiKeyAuth.js';
 import { validateBody, validateQuery, commonSchemas, taskSchemas } from '../lib/validation.js';
 import { createNotification } from './notifications.js';
+import { broadcast } from '../lib/sse.js';
 const router = express.Router();
 
 // ── Lazy active_timers table init ─────────────────────────────────────────────
@@ -948,6 +949,8 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
       }
     }
 
+    broadcast(req.orgId, 'task', { action: 'create', taskId: task.id, userId: req.user.id });
+
     res.status(201).json({
       task: task,
       message: 'Task created successfully'
@@ -1097,6 +1100,8 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
         }
       }
     }
+
+    broadcast(req.orgId, 'task', { action: 'update', taskId: task.id, userId: req.user.id });
 
     res.json({
       task: task,
@@ -1248,6 +1253,8 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
       }
     }
 
+    broadcast(req.orgId, 'task', { action: 'update', taskId: task.id, userId: req.user.id });
+
     res.json({
       task: task,
       message: 'Task updated successfully'
@@ -1313,6 +1320,7 @@ router.patch('/bulk', requireAuth, withOrgScope, async (req, res) => {
       console.log(`📝 Bulk reassign → ${assigneeId} for ${taskIds.length} tasks`);
     }
 
+    broadcast(req.orgId, 'task', { action: 'bulk-update', taskIds, userId: req.user.id });
     res.json({ success: true, updated, message: `${updated} task(s) updated` });
   } catch (error) {
     console.error('Bulk update error:', error);
@@ -1481,6 +1489,8 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
       }).catch(() => {});
     }
 
+    broadcast(req.orgId, 'task', { action: 'status', taskId, status, userId: req.user.id });
+
     res.json({
       message: 'Task status updated successfully',
       taskId,
@@ -1503,7 +1513,8 @@ router.delete('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async
     });
     
     console.log(`🗑️ Deleted task ${taskId}`);
-    
+    broadcast(req.orgId, 'task', { action: 'delete', taskId, userId: req.user.id });
+
     res.json({
       message: 'Task deleted successfully',
       taskId: taskId
