@@ -7,6 +7,7 @@ import {
   CheckCircle2, AlertTriangle, FolderOpen, TrendingUp,
   CheckSquare, BarChart3, ArrowRight, Circle,
   Target, Zap, Clock, Activity, DollarSign, Timer,
+  CalendarClock,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -214,6 +215,32 @@ export function ClientDashboard() {
       return { ...task, projectName: proj?.name };
     });
 
+  // Per-project progress
+  const projectProgress = projects.map(p => {
+    const t = p.tasks.length;
+    const c = p.tasks.filter(tk => tk.status === 'completed').length;
+    const ip = p.tasks.filter(tk => tk.status === 'in_progress').length;
+    return { ...p, total: t, completed: c, inProgress: ip, pct: t > 0 ? Math.round((c / t) * 100) : 0 };
+  });
+
+  // Upcoming deadlines (next 14 days, not completed/cancelled)
+  const now = new Date();
+  const in14d = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const upcoming = allTasks
+    .filter(t => t.dueDate && t.status !== 'completed' && t.status !== 'cancelled')
+    .filter(t => {
+      const d = new Date(t.dueDate!);
+      return d >= now && d <= in14d;
+    })
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .slice(0, 8)
+    .map(t => {
+      const proj = projects.find(p => p.tasks.some(tk => tk.id === t.id));
+      const d = new Date(t.dueDate!);
+      const daysLeft = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { ...t, projectName: proj?.name, projectColor: proj?.color, daysLeft };
+    });
+
   const displayName = client?.name || session?.user?.email?.split('@')[0] || 'there';
 
   // ── No client record found ─────────────────────────────────────────────────
@@ -403,6 +430,123 @@ export function ClientDashboard() {
               })}
             </div>
           </div>
+
+          {/* Project Progress */}
+          {projectProgress.length > 0 && (
+            <div
+              className="rounded-xl p-5"
+              style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <FolderOpen className="h-4 w-4" style={{ color: VS.orange }} />
+                <h2 className="text-[13px] font-bold" style={{ color: VS.text0 }}>Project Progress</h2>
+                <span className="ml-auto text-[11px]" style={{ color: VS.text2 }}>{projects.length} projects</span>
+              </div>
+              <div className="space-y-4">
+                {projectProgress.map(p => (
+                  <div key={p.id}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: p.color || VS.accent }} />
+                        <span className="text-[12px] font-medium truncate" style={{ color: VS.text0 }}>{p.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span className="text-[11px] tabular-nums" style={{ color: VS.text2 }}>
+                          {p.completed}/{p.total} tasks
+                        </span>
+                        <span className="text-[12px] font-bold tabular-nums" style={{ color: p.pct === 100 ? VS.teal : VS.accent }}>
+                          {p.pct}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-2.5 rounded-full overflow-hidden" style={{ background: VS.bg2 }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${p.pct}%`,
+                          background: p.pct === 100
+                            ? VS.teal
+                            : `linear-gradient(90deg, ${p.color || VS.accent}, ${p.color || VS.accent}99)`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <span className="text-[10px]" style={{ color: VS.teal }}>{p.completed} done</span>
+                      <span className="text-[10px]" style={{ color: VS.blue }}>{p.inProgress} active</span>
+                      <span className="text-[10px]" style={{ color: VS.text2 }}>{p.total - p.completed - p.inProgress} pending</span>
+                      {p.status === 'on_hold' && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                          style={{ background: `${VS.yellow}18`, color: VS.yellow }}>On Hold</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Upcoming Deadlines */}
+          <div
+            className="rounded-xl p-5"
+            style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarClock className="h-4 w-4" style={{ color: VS.purple }} />
+              <h2 className="text-[13px] font-bold" style={{ color: VS.text0 }}>Upcoming Deadlines</h2>
+              <span className="ml-auto text-[11px]" style={{ color: VS.text2 }}>Next 14 days</span>
+            </div>
+            {upcoming.length === 0 ? (
+              <div className="py-6 text-center">
+                <CheckCircle2 className="h-6 w-6 mx-auto mb-2 opacity-40" style={{ color: VS.teal }} />
+                <p className="text-[12px]" style={{ color: VS.text2 }}>No upcoming deadlines — you're all clear!</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {upcoming.map((t, i) => {
+                  const isUrgent = t.daysLeft <= 2;
+                  const isSoon = t.daysLeft <= 5;
+                  const dueLabelColor = isUrgent ? VS.red : isSoon ? VS.yellow : VS.text2;
+                  const dueLabel = t.daysLeft === 0 ? 'Today' : t.daysLeft === 1 ? 'Tomorrow' : `${t.daysLeft} days`;
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors"
+                      style={{
+                        background: i % 2 === 0 ? 'transparent' : VS.bg2 + '44',
+                        borderLeft: `3px solid ${isUrgent ? VS.red : isSoon ? VS.yellow : VS.border2}`,
+                      }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium truncate" style={{ color: VS.text0 }}>{t.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {t.projectName && (
+                            <span className="text-[10px] flex items-center gap-1" style={{ color: VS.text2 }}>
+                              <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: t.projectColor || VS.accent }} />
+                              {t.projectName}
+                            </span>
+                          )}
+                          <span className="text-[10px]" style={{ color: VS.text2 }}>
+                            {new Date(t.dueDate!).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                        style={{
+                          background: `${dueLabelColor}15`,
+                          color: dueLabelColor,
+                          border: `1px solid ${dueLabelColor}33`,
+                        }}
+                      >
+                        {dueLabel}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* ── RIGHT (1/3) ── */}
