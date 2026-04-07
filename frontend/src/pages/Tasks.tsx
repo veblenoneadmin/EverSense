@@ -26,6 +26,7 @@ import {
   GanttChartSquare,
   Bookmark,
   BookmarkPlus,
+  Copy,
 } from 'lucide-react';
 import BrainDumpModal from '../components/BrainDumpModal';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
@@ -833,6 +834,26 @@ export function Tasks() {
     });
   };
 
+  const handleDuplicateTask = (task: Task) => {
+    setOpenMenuId(null);
+    setNewTaskColumnStatus('not_started');
+    setNewTaskForm({
+      title: `${task.title} (copy)`,
+      description: task.description,
+      priority: task.priority,
+      projectId: task.projectId || '',
+      estimatedHours: task.estimatedHours,
+      dueDate: '',
+      tags: Array.isArray(task.tags) ? task.tags.join(', ') : '',
+      assigneeIds: [],
+      isTeamTask: task.isTeamTask || false,
+      subTasks: [],
+      recurringPattern: '',
+      recurringEndDate: '',
+    });
+    setShowNewTaskForm(true);
+  };
+
   // ── filter + sort ──────────────────────────────────────────────────────────
   const priorityRank: Record<string, number> = { Urgent: 4, High: 3, Medium: 2, Low: 1 };
 
@@ -1571,6 +1592,13 @@ export function Tasks() {
                                       style={{ color: VS.text0 }}
                                     >
                                       <Edit2 className="h-3 w-3" /> Edit task
+                                    </button>
+                                    <button
+                                      onClick={() => handleDuplicateTask(task)}
+                                      className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-white/5 transition-colors"
+                                      style={{ color: VS.text0 }}
+                                    >
+                                      <Copy className="h-3 w-3" /> Duplicate
                                     </button>
                                     <div style={{ height: 1, background: VS.border, margin: '2px 0' }} />
                                     <button
