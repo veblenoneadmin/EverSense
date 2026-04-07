@@ -1280,6 +1280,7 @@ router.patch('/bulk', requireAuth, withOrgScope, async (req, res) => {
     }
 
     const { status, priority, assigneeId } = updates;
+    const { report } = req.body;
     let updated = 0;
 
     // Bulk status update
@@ -1291,6 +1292,34 @@ router.patch('/bulk', requireAuth, withOrgScope, async (req, res) => {
       );
       updated = taskIds.length;
       console.log(`📝 Bulk status update → ${status} for ${taskIds.length} tasks`);
+
+      // Save report for each completed task
+      if (status === 'completed' && report?.trim()) {
+        await ensureStatusReportsTable();
+        const userName = await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true, email: true } }).catch(() => null);
+        const displayName = userName?.name || userName?.email || 'Unknown';
+
+        for (const tid of taskIds) {
+          const taskInfo = await prisma.macroTask.findUnique({ where: { id: tid }, select: { title: true, projectId: true } }).catch(() => null);
+          // Save to task_status_reports
+          await prisma.$executeRawUnsafe(
+            'INSERT INTO task_status_reports (id, taskId, userId, orgId, fromStatus, toStatus, report, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3))',
+            randomUUID(), tid, req.user.id, req.orgId, 'unknown', 'completed', report.trim()
+          ).catch(() => {});
+          // Save to main reports table
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO reports (id, title, description, userName, image, projectId, userId, orgId, createdAt, updatedAt) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NOW(), NOW())`,
+            randomUUID(),
+            `Task Completed: ${taskInfo?.title || 'Untitled'}`,
+            report.trim(),
+            displayName,
+            taskInfo?.projectId || null,
+            req.user.id,
+            req.orgId
+          ).catch(() => {});
+        }
+        console.log(`📝 Bulk completion report saved for ${taskIds.length} tasks`);
+      }
     }
 
     // Bulk priority update

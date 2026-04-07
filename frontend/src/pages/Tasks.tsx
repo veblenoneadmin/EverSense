@@ -197,6 +197,8 @@ export function Tasks() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [showBulkAssignee, setShowBulkAssignee] = useState(false);
+  const [bulkReportModal, setBulkReportModal] = useState(false);
+  const [bulkAccomplishments, setBulkAccomplishments] = useState<string[]>(['']);
 
   // Brain Dump modal
   const [showBrainDump, setShowBrainDump] = useState(false);
@@ -804,6 +806,24 @@ export function Tasks() {
     finally { setBulkLoading(false); }
   };
 
+  const handleBulkCompleteWithReport = async () => {
+    const items = bulkAccomplishments.filter(a => a.trim());
+    if (items.length === 0) return;
+    const report = 'Accomplishments:\n' + items.map((a, i) => `${i + 1}. ${a}`).join('\n');
+    setBulkLoading(true);
+    try {
+      await apiClient.fetch('/api/tasks/bulk', {
+        method: 'PATCH',
+        body: JSON.stringify({ taskIds: [...selectedIds], updates: { status: 'completed' }, report }),
+      });
+      await fetchTasks(false);
+      clearSelection();
+      setBulkReportModal(false);
+      setBulkAccomplishments(['']);
+    } catch { alert('Bulk complete failed.'); }
+    finally { setBulkLoading(false); }
+  };
+
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
     if (!confirm(`Delete ${selectedIds.size} task(s)?`)) return;
@@ -1365,7 +1385,6 @@ export function Tasks() {
           {[
             { status: 'not_started', label: 'To Do', color: VS.blue },
             { status: 'in_progress', label: 'In Progress', color: VS.yellow },
-            { status: 'completed', label: 'Done', color: VS.teal },
             { status: 'on_hold', label: 'On Hold', color: VS.red },
           ].map(s => (
             <button key={s.status} onClick={() => handleBulkUpdate({ status: s.status })} disabled={bulkLoading}
@@ -1374,6 +1393,11 @@ export function Tasks() {
               {s.label}
             </button>
           ))}
+          <button onClick={() => setBulkReportModal(true)} disabled={bulkLoading}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+            style={{ background: `${VS.teal}18`, color: VS.teal, border: `1px solid ${VS.teal}33` }}>
+            Done + Report
+          </button>
 
           <div className="h-4 w-px" style={{ background: VS.accent + '44' }} />
 
@@ -2060,6 +2084,94 @@ export function Tasks() {
         </div>
         );
       })()}
+
+      {/* ── Bulk Complete Report Modal ── */}
+      {bulkReportModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={e => { if (e.target === e.currentTarget) setBulkReportModal(false); }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            style={{ background: VS.bg1, border: `1px solid ${VS.teal}44`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold" style={{ color: VS.text0 }}>Submit Report</h3>
+                <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
+                  Completing <span style={{ color: VS.teal, fontWeight: 600 }}>{selectedIds.size} task{selectedIds.size !== 1 ? 's' : ''}</span> at once
+                </p>
+              </div>
+              <button onClick={() => setBulkReportModal(false)}
+                className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
+                style={{ color: VS.text1 }}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>
+                What was accomplished?
+              </label>
+              <div className="space-y-2">
+                {bulkAccomplishments.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold w-5 text-center" style={{ color: VS.teal }}>{i + 1}.</span>
+                    <input
+                      type="text"
+                      value={a}
+                      onChange={e => {
+                        const updated = [...bulkAccomplishments];
+                        updated[i] = e.target.value;
+                        setBulkAccomplishments(updated);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && a.trim()) {
+                          e.preventDefault();
+                          setBulkAccomplishments(prev => [...prev, '']);
+                        }
+                      }}
+                      placeholder={i === 0 ? 'Main accomplishment...' : 'Another accomplishment...'}
+                      className="flex-1 px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1"
+                      style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text0 }}
+                      autoFocus={i === bulkAccomplishments.length - 1}
+                    />
+                    {bulkAccomplishments.length > 1 && (
+                      <button onClick={() => setBulkAccomplishments(prev => prev.filter((_, j) => j !== i))}
+                        className="p-1" style={{ color: VS.text2 }}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => setBulkAccomplishments(prev => [...prev, ''])}
+                  className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg transition-colors w-full justify-center"
+                  style={{ color: VS.teal, border: `1px dashed ${VS.teal}55`, background: 'transparent' }}
+                >
+                  <Plus className="h-3 w-3" /> Add accomplishment
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setBulkReportModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm transition-colors"
+                style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkCompleteWithReport}
+                disabled={bulkLoading || !bulkAccomplishments.some(a => a.trim())}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40"
+                style={{ background: VS.teal }}>
+                {bulkLoading ? 'Submitting...' : `Submit Report (${selectedIds.size})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── New Task Modal ── */}
       {showNewTaskForm && (
