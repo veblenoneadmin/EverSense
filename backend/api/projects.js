@@ -774,15 +774,33 @@ router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res)
     );
 
     // Fetch tasks for each milestone + unassigned tasks
-    const allTasks = await prisma.$queryRawUnsafe(
-      `SELECT t.id, t.title, t.status, t.priority, t.milestoneId,
-              u.name AS assigneeName, u.email AS assigneeEmail
-       FROM macro_tasks t
-       LEFT JOIN users u ON u.id = t.userId
-       WHERE t.projectId = ? AND t.orgId = ?
-       ORDER BY t.priority DESC, t.createdAt ASC`,
-      req.params.projectId, req.orgId
-    ).catch(() => []);
+    let allTasks = [];
+    try {
+      allTasks = await prisma.$queryRawUnsafe(
+        `SELECT t.id, t.title, t.status, t.priority, t.milestoneId,
+                u.name AS assigneeName, u.email AS assigneeEmail
+         FROM macro_tasks t
+         LEFT JOIN users u ON u.id = t.userId
+         WHERE t.projectId = ? AND t.orgId = ?
+         ORDER BY t.priority DESC, t.createdAt ASC`,
+        req.params.projectId, req.orgId
+      );
+    } catch (taskErr) {
+      // milestoneId column might not exist yet — try without it
+      console.warn('[Milestones] task query with milestoneId failed, retrying without:', taskErr.message);
+      try {
+        const rows = await prisma.$queryRawUnsafe(
+          `SELECT t.id, t.title, t.status, t.priority,
+                  u.name AS assigneeName, u.email AS assigneeEmail
+           FROM macro_tasks t
+           LEFT JOIN users u ON u.id = t.userId
+           WHERE t.projectId = ? AND t.orgId = ?
+           ORDER BY t.priority DESC, t.createdAt ASC`,
+          req.params.projectId, req.orgId
+        );
+        allTasks = rows.map(r => ({ ...r, milestoneId: null }));
+      } catch { allTasks = []; }
+    }
 
     // Group tasks by milestoneId
     const taskMap = {};
@@ -897,10 +915,11 @@ router.patch('/:projectId/milestones/:milestoneId/tasks', requireAuth, withOrgSc
         req.params.milestoneId, taskId, req.orgId
       );
     }
+    console.log(`📌 Task ${taskId} ${action === 'unassign' ? 'unassigned from' : 'assigned to'} milestone ${req.params.milestoneId}`);
     res.json({ success: true });
   } catch (e) {
     console.error('[Milestones] task assign error:', e.message);
-    res.status(500).json({ error: 'Failed to assign task to milestone' });
+    res.status(500).json({ error: `Failed to assign task: ${e.message}` });
   }
 });
 

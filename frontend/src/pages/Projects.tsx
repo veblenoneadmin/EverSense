@@ -184,22 +184,24 @@ function OverviewModal({
 
   const handleAssignTask = async (taskId: string, milestoneId: string) => {
     try {
-      await apiClient.fetch(`/api/projects/${project.id}/milestones/${milestoneId}/tasks`, {
+      const res = await apiClient.fetch(`/api/projects/${project.id}/milestones/${milestoneId}/tasks`, {
         method: 'PATCH',
         body: JSON.stringify({ taskId, action: 'assign' }),
       });
-      fetchMilestones();
-    } catch { /* ignore */ }
+      if (res.success) fetchMilestones();
+      else console.error('Assign failed:', res.error);
+    } catch (e: any) { console.error('Assign error:', e.message); }
   };
 
   const handleUnassignTask = async (taskId: string, milestoneId: string) => {
     try {
-      await apiClient.fetch(`/api/projects/${project.id}/milestones/${milestoneId}/tasks`, {
+      const res = await apiClient.fetch(`/api/projects/${project.id}/milestones/${milestoneId}/tasks`, {
         method: 'PATCH',
         body: JSON.stringify({ taskId, action: 'unassign' }),
       });
-      fetchMilestones();
-    } catch { /* ignore */ }
+      if (res.success) fetchMilestones();
+      else console.error('Unassign failed:', res.error);
+    } catch (e: any) { console.error('Unassign error:', e.message); }
   };
 
   useEffect(() => {
