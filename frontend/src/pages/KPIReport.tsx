@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
+import { exportCSV, exportPDF } from '../lib/export-utils';
+import { FileText, FileSpreadsheet } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface UserKPI {
@@ -193,22 +195,40 @@ export function KPIReport() {
       return b.taskCompletionRate - a.taskCompletionRate;
     });
 
-  const handleExport = () => {
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const kpiHeaders = ['Name', 'Role', 'Classification', 'Score', 'Hours', 'Utilization%', 'Completed', 'Completion%', 'Overdue', 'Billable%', 'Notes'];
+  const kpiRows = () => data ? data.users.map(u => [
+    u.user.name, u.role, u.classification, String(u.score ?? ''), String(u.currentHours),
+    String(u.utilizationRate), String(u.completedTasks), String(u.taskCompletionRate),
+    String(u.overdueTaskCount), String(u.billableRatio), u.classificationReason,
+  ]) : [];
+
+  const handleExportCSV = () => {
     if (!data) return;
-    const rows = [
-      ['Name', 'Role', 'Classification', 'Score', 'Hours', 'Utilization%', 'Completed', 'Completion%', 'Overdue', 'Billable%', 'Notes'],
-      ...data.users.map(u => [
-        u.user.name, u.role, u.classification, String(u.score ?? ''), String(u.currentHours),
-        String(u.utilizationRate), String(u.completedTasks), String(u.taskCompletionRate),
-        String(u.overdueTaskCount), String(u.billableRatio), u.classificationReason,
-      ]),
-    ];
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = `kpi-${period}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    exportCSV([kpiHeaders, ...kpiRows()], `kpi-report-${period}.csv`);
+    setShowExportMenu(false);
+  };
+
+  const handleExportPDF = () => {
+    if (!data) return;
+    const org = data.orgKPIs;
+    exportPDF({
+      title: `KPI Report — ${data.label}`,
+      subtitle: `${data.dateRange.start} to ${data.dateRange.end} · ${currentOrg?.name || 'Organization'}`,
+      filename: `kpi-report-${period}.pdf`,
+      headers: kpiHeaders,
+      rows: kpiRows(),
+      summaryCards: [
+        { label: 'Total Hours', value: String(org.totalHours) },
+        { label: 'Completion Rate', value: `${org.taskCompletionRate}%` },
+        { label: 'Tasks Completed', value: String(org.totalCompleted) },
+        { label: 'Active Members', value: String(org.activeMembers) },
+        { label: 'Billable Ratio', value: `${org.billableRatio}%` },
+      ],
+      orientation: 'landscape',
+    });
+    setShowExportMenu(false);
   };
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -273,11 +293,34 @@ export function KPIReport() {
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
           {!isStaff && (
-            <button onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
-              style={{ background: `${VS.accent}18`, color: VS.accent, border: `1px solid ${VS.accent}33` }}>
-              <Download className="h-3.5 w-3.5" /> Export CSV
-            </button>
+            <div className="relative">
+              <button onClick={() => setShowExportMenu(v => !v)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
+                style={{ background: `${VS.accent}18`, color: VS.accent, border: `1px solid ${VS.accent}33` }}>
+                <Download className="h-3.5 w-3.5" /> Export
+                <ChevronDown className="h-3 w-3" />
+              </button>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-20 rounded-lg overflow-hidden shadow-xl"
+                    style={{ background: VS.bg0, border: `1px solid ${VS.border2}`, minWidth: 160 }}>
+                    <button onClick={handleExportCSV}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left text-[12px] font-medium transition-colors hover:opacity-80"
+                      style={{ color: VS.text0, borderBottom: `1px solid ${VS.border}` }}>
+                      <FileSpreadsheet className="h-4 w-4" style={{ color: VS.teal }} />
+                      Export as CSV
+                    </button>
+                    <button onClick={handleExportPDF}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left text-[12px] font-medium transition-colors hover:opacity-80"
+                      style={{ color: VS.text0 }}>
+                      <FileText className="h-4 w-4" style={{ color: VS.red }} />
+                      Export as PDF
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px]"
             style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text2 }}>

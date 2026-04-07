@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
+import { exportCSV, exportPDF } from '../lib/export-utils';
+import { FileText, FileSpreadsheet, ChevronDown } from 'lucide-react';
 
 const DEFAULT_breakLimitSecs = 1800; // 30 minutes fallback
 
@@ -157,6 +159,9 @@ export function TimeLogs() {
     return stored;
   });
   const [breakElapsed, setBreakElapsed] = useState(0); // live seconds since break started
+
+  // Export
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Filters
   const [searchTerm, setSearchTerm]       = useState('');
@@ -424,6 +429,45 @@ export function TimeLogs() {
   const totalOvertimeSec = completedLogs.reduce((s, l) => s + (l.overtime || 0), 0);
   const overBreakCount  = completedLogs.filter(l => l.overBreak > 0).length;
 
+  // ── Export handlers ──────────────────────────────────────────────────────────
+  const timeLogHeaders = ['Name', 'Role', 'Date', 'Clock In', 'Clock Out', 'Work Duration', 'Break', 'Overtime', 'Notes'];
+  const timeLogRows = () => completedLogs.map(l => [
+    l.memberName,
+    l.memberRole,
+    l.date,
+    fmtTime(l.timeIn),
+    fmtTime(l.timeOut),
+    fmtDuration(l.duration),
+    fmtDuration(l.breakDuration),
+    fmtDuration(l.overtime),
+    l.notes || '',
+  ]);
+
+  const handleExportCSV = () => {
+    exportCSV([timeLogHeaders, ...timeLogRows()], `time-logs-${dateFrom || 'all'}.csv`);
+    setShowExportMenu(false);
+  };
+
+  const handleExportPDF = () => {
+    exportPDF({
+      title: 'Time Logs Report',
+      subtitle: dateFrom && dateTo
+        ? `${dateFrom} to ${dateTo} · ${currentOrg?.name || 'Organization'}`
+        : `All records · ${currentOrg?.name || 'Organization'}`,
+      filename: `time-logs-${dateFrom || 'all'}.pdf`,
+      headers: timeLogHeaders,
+      rows: timeLogRows(),
+      summaryCards: [
+        { label: 'Total Hours', value: totalHours },
+        { label: 'Records', value: String(completedLogs.length) },
+        { label: 'Overtime', value: fmtDuration(totalOvertimeSec) },
+        { label: 'Over Break', value: String(overBreakCount) },
+      ],
+      orientation: 'landscape',
+    });
+    setShowExportMenu(false);
+  };
+
   // Live break display inside the clock card
   const liveBreakTotal = breakAccum + (onBreak ? breakElapsed : 0);
   const isOverBreak    = liveBreakTotal > breakLimitSecs;
@@ -459,13 +503,37 @@ export function TimeLogs() {
               : 'Your attendance records'}
           </p>
         </div>
-        <button
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] transition-opacity hover:opacity-70"
-          style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text2 }}
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(v => !v)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-opacity hover:opacity-70"
+            style={{ background: `${VS.accent}18`, color: VS.accent, border: `1px solid ${VS.accent}33` }}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export
+            <ChevronDown className="h-3 w-3" />
+          </button>
+          {showExportMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 rounded-lg overflow-hidden shadow-xl"
+                style={{ background: VS.bg0, border: `1px solid ${VS.border2}`, minWidth: 160 }}>
+                <button onClick={handleExportCSV}
+                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left text-[12px] font-medium transition-colors hover:opacity-80"
+                  style={{ color: VS.text0, borderBottom: `1px solid ${VS.border}` }}>
+                  <FileSpreadsheet className="h-4 w-4" style={{ color: VS.teal }} />
+                  Export as CSV
+                </button>
+                <button onClick={handleExportPDF}
+                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left text-[12px] font-medium transition-colors hover:opacity-80"
+                  style={{ color: VS.text0 }}>
+                  <FileText className="h-4 w-4" style={{ color: VS.red }} />
+                  Export as PDF
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Clock card — hidden for CLIENT accounts ── */}
