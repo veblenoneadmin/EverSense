@@ -1390,17 +1390,35 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
       if (status === 'completed') {
         try {
           const userName = (await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true, email: true } }));
+          // Fetch task attachments to include as report images
+          let imageJson = null;
+          try {
+            const attachments = await prisma.taskAttachment.findMany({
+              where: { taskId, orgId: req.orgId },
+              select: { name: true, mimeType: true, data: true },
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+            });
+            if (attachments.length > 0) {
+              imageJson = JSON.stringify(attachments.map(a => ({
+                name: a.name,
+                type: a.mimeType,
+                dataUrl: `data:${a.mimeType};base64,${a.data}`,
+              })));
+            }
+          } catch (_) {}
           await prisma.$executeRawUnsafe(
-            `INSERT INTO reports (id, title, description, userName, image, projectId, userId, orgId, createdAt, updatedAt) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NOW(), NOW())`,
+            `INSERT INTO reports (id, title, description, userName, image, projectId, userId, orgId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
             randomUUID(),
             `Task Completed: ${currentTask?.title || 'Untitled'}`,
             report.trim(),
             userName?.name || userName?.email || 'Unknown',
+            imageJson,
             currentTask?.projectId || null,
             req.user.id,
             req.orgId
           );
-          console.log(`📝 Accomplishment report saved to reports table for task ${taskId}`);
+          console.log(`📝 Accomplishment report saved to reports table for task ${taskId}${imageJson ? ' (with attachments)' : ''}`);
         } catch (err) {
           console.error('[tasks] reports table insert error:', err.message);
         }
