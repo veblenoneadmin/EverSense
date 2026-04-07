@@ -724,4 +724,149 @@ router.get('/:id/overview', requireAuth, withOrgScope, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT FILE SHARING
+// ─────────────────────────────────────────────────────────────────────────────
+
+let projectAttachmentsReady = false;
+async function ensureProjectAttachmentsTable() {
+  if (projectAttachmentsReady) return;
+  try {
+    await prisma.$executeRawUnsafe(
+      'CREATE TABLE IF NOT EXISTS `project_attachments` (' +
+      '  `id` VARCHAR(191) NOT NULL,' +
+      '  `projectId` VARCHAR(50) NOT NULL,' +
+      '  `orgId` VARCHAR(191) NOT NULL,' +
+      '  `userId` VARCHAR(36) NOT NULL,' +
+      '  `name` VARCHAR(500) NOT NULL,' +
+      '  `mimeType` VARCHAR(100) NOT NULL DEFAULT \'application/octet-stream\',' +
+      '  `size` INT NOT NULL DEFAULT 0,' +
+      '  `data` LONGTEXT NOT NULL,' +
+      '  `category` VARCHAR(50) NOT NULL DEFAULT \'project_file\',' +
+      '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
+      '  PRIMARY KEY (`id`),' +
+      '  KEY `pa_projectId_idx` (`projectId`),' +
+      '  KEY `pa_orgId_idx` (`orgId`),' +
+      '  KEY `pa_userId_idx` (`userId`)' +
+      ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+  } catch (_) {}
+  projectAttachmentsReady = true;
+}
+
+import { randomUUID } from 'crypto';
+
+/** GET /api/projects/:projectId/files — list project files (no data field) */
+router.get('/:projectId/files', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureProjectAttachmentsTable();
+    const files = await prisma.$queryRawUnsafe(
+      `SELECT pa.id, pa.name, pa.mimeType, pa.size, pa.category, pa.createdAt, pa.userId,
+              u.name AS userName, u.email AS userEmail
+       FROM project_attachments pa
+       LEFT JOIN users u ON u.id = pa.userId
+       WHERE pa.projectId = ? AND pa.orgId = ?
+       ORDER BY pa.createdAt DESC`,
+      req.params.projectId, req.orgId
+    );
+    res.json({ success: true, files });
+  } catch (e) {
+    console.error('[Projects] files list error:', e.message);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+/** POST /api/projects/:projectId/files — upload a file */
+router.post('/:projectId/files', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureProjectAttachmentsTable();
+    const { name, mimeType, size, data, category } = req.body;
+    if (!name || !data) return res.status(400).json({ error: 'name and data are required' });
+
+    // Verify project belongs to org
+    const project = await prisma.project.findFirst({ where: { id: req.params.projectId, orgId: req.orgId } });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const id = randomUUID();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO project_attachments (id, projectId, orgId, userId, name, mimeType, size, data, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, req.params.projectId, req.orgId, req.user.id,
+      name, mimeType || 'application/octet-stream', size || 0, data, category || 'project_file'
+    );
+
+    console.log(`📎 Project file uploaded: "${name}" to ${project.name} by ${req.user.email}`);
+
+    // Notify project members (admins + assigned staff)
+    try {
+      const admins = await prisma.membership.findMany({
+        where: { orgId: req.orgId, role: { in: ['OWNER', 'ADMIN'] } },
+        select: { userId: true },
+      });
+      const uploaderName = (await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true } }))?.name || 'Someone';
+      for (const { userId } of admins) {
+        if (userId !== req.user.id) {
+          createNotification({
+            userId,
+            orgId: req.orgId,
+            title: `New File: ${name}`,
+            body: `${uploaderName} uploaded "${name}" to ${project.name}.`,
+            type: 'info',
+            link: '/projects',
+          });
+        }
+      }
+    } catch (_) {}
+
+    res.status(201).json({ success: true, file: { id, name, mimeType, size, category } });
+  } catch (e) {
+    console.error('[Projects] file upload error:', e.message);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
+/** GET /api/projects/:projectId/files/:fileId/download — download with data */
+router.get('/:projectId/files/:fileId/download', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureProjectAttachmentsTable();
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT * FROM project_attachments WHERE id = ? AND projectId = ? AND orgId = ? LIMIT 1',
+      req.params.fileId, req.params.projectId, req.orgId
+    );
+    if (!rows.length) return res.status(404).json({ error: 'File not found' });
+    res.json({ success: true, file: rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to download file' });
+  }
+});
+
+/** DELETE /api/projects/:projectId/files/:fileId — delete (uploader or admin) */
+router.delete('/:projectId/files/:fileId', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureProjectAttachmentsTable();
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT userId FROM project_attachments WHERE id = ? AND projectId = ? AND orgId = ? LIMIT 1',
+      req.params.fileId, req.params.projectId, req.orgId
+    );
+    if (!rows.length) return res.status(404).json({ error: 'File not found' });
+
+    // Allow uploader or admin/owner to delete
+    const membership = await prisma.membership.findUnique({
+      where: { userId_orgId: { userId: req.user.id, orgId: req.orgId } },
+      select: { role: true },
+    });
+    const isAdmin = ['OWNER', 'ADMIN'].includes(membership?.role || '');
+    if (rows[0].userId !== req.user.id && !isAdmin) {
+      return res.status(403).json({ error: 'Only the uploader or an admin can delete this file' });
+    }
+
+    await prisma.$executeRawUnsafe(
+      'DELETE FROM project_attachments WHERE id = ? AND orgId = ?',
+      req.params.fileId, req.orgId
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
 export default router;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
 import { useOrganization } from '../contexts/OrganizationContext';
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { ProjectModal } from '../components/ProjectModal';
 import GanttChart from '../components/GanttChart';
-import { LayoutList, GanttChartSquare } from 'lucide-react';
+import { LayoutList, GanttChartSquare, Paperclip, Upload, Download, FileText, Image, File as FileIcon } from 'lucide-react';
 
 import { VS } from '../lib/theme';
 
@@ -155,8 +155,74 @@ function OverviewModal({
   onRegenerate: () => void;
   regenerating: boolean;
 }) {
-  const [overviewTab, setOverviewTab] = useState<'list' | 'gantt'>('list');
+  const [overviewTab, setOverviewTab] = useState<'list' | 'gantt' | 'files'>('list');
+  const apiClient = useApiClient();
   const sCfg = PROJECT_STATUS[project.status] || PROJECT_STATUS.planning;
+
+  // Project files
+  const [files, setFiles] = useState<{ id: string; name: string; mimeType: string; size: number; category: string; createdAt: string; userId: string; userName: string; userEmail: string }[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchFiles = async () => {
+    setFilesLoading(true);
+    try {
+      const data = await apiClient.fetch(`/api/projects/${project.id}/files`);
+      if (data.success) setFiles(data.files || []);
+    } catch { /* ignore */ }
+    finally { setFilesLoading(false); }
+  };
+
+  useEffect(() => {
+    if (overviewTab === 'files') fetchFiles();
+  }, [overviewTab, project.id]);
+
+  const handleFileUpload = async (fileList: FileList | null) => {
+    if (!fileList) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(fileList)) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.includes(',') ? result.split(',')[1] : result);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        await apiClient.fetch(`/api/projects/${project.id}/files`, {
+          method: 'POST',
+          body: JSON.stringify({ name: file.name, mimeType: file.type, size: file.size, data: base64 }),
+        });
+      }
+      fetchFiles();
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  };
+
+  const handleFileDownload = async (fileId: string, fileName: string) => {
+    try {
+      const data = await apiClient.fetch(`/api/projects/${project.id}/files/${fileId}/download`);
+      if (data.success && data.file?.data) {
+        const byteChars = atob(data.file.data);
+        const byteArray = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([byteArray], { type: data.file.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleFileDelete = async (fileId: string) => {
+    try {
+      await apiClient.fetch(`/api/projects/${project.id}/files/${fileId}`, { method: 'DELETE' });
+      setFiles(f => f.filter(x => x.id !== fileId));
+    } catch { /* ignore */ }
+  };
 
   const taskStats = {
     total:      tasks.length,
@@ -222,31 +288,30 @@ function OverviewModal({
           ))}
         </div>
 
-        {/* List / Gantt toggle */}
-        {tasks.length > 0 && !loading && (
+        {/* List / Gantt / Files toggle */}
+        {!loading && (
           <div className="flex items-center gap-1.5 px-6 py-2 shrink-0" style={{ borderBottom: `1px solid ${VS.border}`, background: VS.bg2 }}>
-            <button
-              onClick={() => setOverviewTab('list')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
-              style={overviewTab === 'list'
-                ? { background: VS.accent, color: '#fff' }
-                : { background: VS.bg3, color: VS.text2 }
-              }
-            >
-              <LayoutList className="h-3.5 w-3.5" />
-              List
-            </button>
-            <button
-              onClick={() => setOverviewTab('gantt')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
-              style={overviewTab === 'gantt'
-                ? { background: VS.accent, color: '#fff' }
-                : { background: VS.bg3, color: VS.text2 }
-              }
-            >
-              <GanttChartSquare className="h-3.5 w-3.5" />
-              Gantt
-            </button>
+            {[
+              { id: 'list' as const, label: 'List', icon: LayoutList },
+              { id: 'gantt' as const, label: 'Gantt', icon: GanttChartSquare },
+              { id: 'files' as const, label: `Files${files.length ? ` (${files.length})` : ''}`, icon: Paperclip },
+            ].map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setOverviewTab(tab.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+                  style={overviewTab === tab.id
+                    ? { background: VS.accent, color: '#fff' }
+                    : { background: VS.bg3, color: VS.text2 }
+                  }
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -356,6 +421,79 @@ function OverviewModal({
                 })}
               </tbody>
             </table>
+          )}
+
+          {/* ── FILES TAB ── */}
+          {overviewTab === 'files' && (
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[13px] font-semibold" style={{ color: VS.text0 }}>
+                  Project Files
+                  <span className="ml-2 text-[11px] font-normal" style={{ color: VS.text2 }}>{files.length} files</span>
+                </h3>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ background: VS.accent, color: '#fff' }}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploading ? 'Uploading...' : 'Upload File'}
+                </button>
+                <input ref={fileInputRef} type="file" multiple className="hidden"
+                  onChange={e => handleFileUpload(e.target.files)} />
+              </div>
+
+              {filesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2" style={{ borderColor: VS.accent }} />
+                </div>
+              ) : files.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Paperclip className="h-8 w-8 mb-3 opacity-30" style={{ color: VS.text2 }} />
+                  <p className="text-[13px] font-medium" style={{ color: VS.text1 }}>No files yet</p>
+                  <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>Upload briefs, assets, or documents for this project</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {files.map((f, i) => {
+                    const isImage = f.mimeType?.startsWith('image/');
+                    const isPdf = f.mimeType === 'application/pdf' || f.name.endsWith('.pdf');
+                    const FIcon = isImage ? Image : isPdf ? FileText : FileIcon;
+                    const sizeStr = f.size < 1024 ? `${f.size} B` : f.size < 1048576 ? `${(f.size / 1024).toFixed(1)} KB` : `${(f.size / 1048576).toFixed(1)} MB`;
+                    return (
+                      <div key={f.id}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg group transition-colors"
+                        style={{ background: i % 2 === 0 ? VS.bg2 : 'transparent', border: `1px solid ${VS.border}22` }}
+                      >
+                        <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ background: `${isImage ? VS.purple : isPdf ? VS.red : VS.blue}15` }}>
+                          <FIcon className="h-4 w-4" style={{ color: isImage ? VS.purple : isPdf ? VS.red : VS.blue }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium truncate" style={{ color: VS.text0 }}>{f.name}</p>
+                          <p className="text-[10px]" style={{ color: VS.text2 }}>
+                            {f.userName || f.userEmail || 'Unknown'} · {sizeStr} · {new Date(f.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleFileDownload(f.id, f.name)}
+                            className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
+                            style={{ color: VS.accent, background: `${VS.accent}15` }} title="Download">
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => handleFileDelete(f.id)}
+                            className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
+                            style={{ color: VS.red, background: `${VS.red}15` }} title="Delete">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
