@@ -662,10 +662,10 @@ function OverviewModal({
                                       <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: tColor }} />
                                       <span className="text-[12px] flex-1 truncate" style={{ color: t.status === 'completed' ? VS.text2 : VS.text0, textDecoration: t.status === 'completed' ? 'line-through' : 'none' }}>{t.title}</span>
                                       {t.assigneeName && <span className="text-[10px] shrink-0" style={{ color: VS.text2 }}>{t.assigneeName}</span>}
-                                      <button onClick={() => handleUnassignTask(t.id, ms.id)}
-                                        className="opacity-0 group-hover/task:opacity-60 hover:!opacity-100 text-[10px] px-1.5 py-0.5 rounded transition-opacity"
-                                        style={{ color: VS.orange, background: `${VS.orange}15` }}>
-                                        Remove
+                                      <button onClick={e => { e.stopPropagation(); handleUnassignTask(t.id, ms.id); }}
+                                        className="text-[10px] px-2 py-0.5 rounded font-medium shrink-0 transition-colors hover:opacity-80"
+                                        style={{ color: VS.orange, background: `${VS.orange}15`, border: `1px solid ${VS.orange}33` }}>
+                                        ✕ Remove
                                       </button>
                                     </div>
                                   );
