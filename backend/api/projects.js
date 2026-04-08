@@ -780,7 +780,7 @@ router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res)
         `SELECT t.id, t.title, t.status, t.priority, t.milestoneId,
                 u.name AS assigneeName, u.email AS assigneeEmail
          FROM macro_tasks t
-         LEFT JOIN user u ON u.id = t.userId
+         LEFT JOIN User u ON u.id = t.userId
          WHERE t.projectId = ? AND t.orgId = ?
          ORDER BY t.priority DESC, t.createdAt ASC`,
         req.params.projectId, req.orgId
@@ -793,7 +793,7 @@ router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res)
           `SELECT t.id, t.title, t.status, t.priority,
                   u.name AS assigneeName, u.email AS assigneeEmail
            FROM macro_tasks t
-           LEFT JOIN user u ON u.id = t.userId
+           LEFT JOIN User u ON u.id = t.userId
            WHERE t.projectId = ? AND t.orgId = ?
            ORDER BY t.priority DESC, t.createdAt ASC`,
           req.params.projectId, req.orgId

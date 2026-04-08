@@ -673,24 +673,25 @@ function OverviewModal({
                               </div>
                             )}
                             {/* Assign unassigned tasks */}
-                            {unassignedTasks.length > 0 && (
-                              <div className="px-4 py-2" style={{ background: `${VS.accent}08` }}>
+                            <div className="px-4 py-2" style={{ background: `${VS.accent}08`, borderTop: `1px solid ${VS.border}22` }}>
+                              {unassignedTasks.length > 0 ? (
                                 <select
                                   value=""
                                   onChange={e => { if (e.target.value) handleAssignTask(e.target.value, ms.id); }}
                                   className="w-full px-2 py-1.5 rounded text-[11px] focus:outline-none"
                                   style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
                                 >
-                                  <option value="" disabled>+ Add task to this milestone...</option>
+                                  <option value="" disabled>+ Add task to this milestone ({unassignedTasks.length} available)</option>
                                   {unassignedTasks.map(t => (
                                     <option key={t.id} value={t.id}>{t.title}</option>
                                   ))}
                                 </select>
-                              </div>
-                            )}
-                            {ms.tasks.length === 0 && unassignedTasks.length === 0 && (
-                              <p className="px-4 py-3 text-[11px]" style={{ color: VS.text2 }}>No tasks in this project yet</p>
-                            )}
+                              ) : (
+                                <p className="text-[11px] py-1" style={{ color: VS.text2 }}>
+                                  {ms.tasks.length === 0 ? 'No unassigned tasks — create tasks for this project first' : 'All tasks assigned to milestones'}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
