@@ -136,6 +136,9 @@ router.delete('/:id', requireAuth, withOrgScope, async (req, res) => {
 
 export default router;
 
+// Types that warrant an email notification
+const EMAIL_TYPES = new Set(['task', 'comment', 'overdue', 'due_soon', 'reminder']);
+
 // ── Helper exported for other routes to create notifications ─────────────────
 export async function createNotification({ userId, orgId, title, body = null, link = null, type = 'info' }) {
   try {
@@ -145,8 +148,59 @@ export async function createNotification({ userId, orgId, title, body = null, li
       'INSERT INTO notifications (id, userId, orgId, title, body, link, type, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW(3))',
       id, userId, orgId, title, body, link, type
     );
+
+    // Send email for important notification types (non-blocking)
+    if (EMAIL_TYPES.has(type) && process.env.SMTP_HOST) {
+      sendNotificationEmail(userId, title, body, link, type).catch(() => {});
+    }
   } catch (e) {
     // Non-critical — don't throw
     console.error('[Notifications] createNotification error:', e.message);
+  }
+}
+
+async function sendNotificationEmail(userId, title, body, link, type) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+    if (!user?.email) return;
+
+    const { transporter } = await import('../lib/mailer.js');
+    const appUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || 'https://eversense.app';
+    const fullLink = link ? `${appUrl}${link}` : appUrl;
+
+    const iconMap = { task: '📋', comment: '💬', overdue: '⚠️', due_soon: '⏰', reminder: '🔔' };
+    const icon = iconMap[type] || '🔔';
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: user.email,
+      subject: `${icon} ${title}`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f4f4f7;">
+  <div style="max-width: 560px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1e1e2e, #2d2d3f); padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+      <span style="font-size: 28px; font-weight: 700; color: #fff;">EverSense</span>
+    </div>
+    <div style="background: #fff; padding: 28px 24px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+      <p style="margin: 0 0 6px; font-size: 13px; color: #888;">Hi ${user.name || 'there'},</p>
+      <h2 style="margin: 0 0 12px; font-size: 18px; color: #1a1a2e;">${icon} ${title}</h2>
+      ${body ? `<p style="margin: 0 0 20px; font-size: 14px; color: #555; line-height: 1.6;">${body}</p>` : ''}
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${fullLink}" style="display: inline-block; background: #007acc; color: #fff; text-decoration: none; padding: 11px 28px; border-radius: 6px; font-weight: 600; font-size: 14px;">View in EverSense</a>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 12px; color: #aaa; text-align: center;">You received this because of your notification settings in EverSense.</p>
+    </div>
+  </div>
+</body>
+</html>`,
+    });
+  } catch (e) {
+    console.error('[Notifications] email send error:', e.message);
   }
 }
