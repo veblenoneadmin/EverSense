@@ -395,51 +395,90 @@ function simulateTaskGeneration(name, description, priority) {
   const p    = { high: 'High', medium: 'Medium', low: 'Low' }[priority?.toLowerCase()] || 'Medium';
 
   const isWeb      = /web|website|frontend|react|angular|vue|ui|ux|portal/.test(text);
-  const isBackend  = /backend|api|server|database|node|python|django|rails/.test(text);
   const isMobile   = /mobile|app|ios|android|flutter|react native/.test(text);
   const isDesign   = /design|figma|brand|logo|graphic|visual/.test(text);
   const isMarketing = /marketing|campaign|social|seo|content|email/.test(text);
   const isData     = /data|analytics|report|dashboard|bi|machine learning|ml|ai/.test(text);
 
-  if (isWeb || isMobile) return [
-    { title: 'Design UI wireframes',            description: 'Create wireframes and mockups for key user flows', requiredSkills: ['UI Design'],        priority: p, estimatedHours: 8  },
-    { title: 'Set up project structure',        description: 'Initialize repository and configure dev environment', requiredSkills: ['Frontend Development'], priority: p, estimatedHours: 4 },
-    { title: 'Implement frontend components',   description: 'Build reusable UI components based on designs', requiredSkills: ['React'],             priority: p, estimatedHours: 16 },
-    { title: 'Develop backend API endpoints',   description: 'Create REST API endpoints to support all features', requiredSkills: ['Backend API'],      priority: p, estimatedHours: 12 },
-    { title: 'Database schema design',          description: 'Design and implement database models', requiredSkills: ['Database'],          priority: p, estimatedHours: 6  },
-    { title: 'QA testing and bug fixes',        description: 'Conduct end-to-end testing and resolve issues', requiredSkills: ['QA Testing'],        priority: p, estimatedHours: 8  },
-    { title: 'Deployment and monitoring setup', description: 'Deploy to production and configure monitoring alerts', requiredSkills: ['DevOps'],            priority: 'Low', estimatedHours: 4 },
-  ];
-  if (isDesign) return [
-    { title: 'Brand research and moodboard',   description: 'Research competitors and create design direction', requiredSkills: ['UI Design'],    priority: p, estimatedHours: 6  },
-    { title: 'Logo and identity design',       description: 'Create primary logo and brand identity system', requiredSkills: ['UI Design'],    priority: p, estimatedHours: 12 },
-    { title: 'Design system creation',         description: 'Build reusable component library and style guide', requiredSkills: ['UI Design'],    priority: p, estimatedHours: 10 },
-    { title: 'Client review and revisions',    description: 'Present designs and incorporate feedback', requiredSkills: ['Project Management'], priority: p, estimatedHours: 4  },
-    { title: 'Final asset export and delivery',description: 'Export all assets in required formats', requiredSkills: ['UI Design'],    priority: 'Low', estimatedHours: 3 },
-  ];
-  if (isMarketing) return [
-    { title: 'Campaign strategy and planning', description: 'Define target audience, goals, and KPIs', requiredSkills: ['Project Management'], priority: p, estimatedHours: 6  },
-    { title: 'Content creation',               description: 'Write copy and create visuals for campaign materials', requiredSkills: ['UI Design'],        priority: p, estimatedHours: 12 },
-    { title: 'SEO and keyword research',       description: 'Research and implement SEO strategy', requiredSkills: ['Backend API'],      priority: p, estimatedHours: 8  },
-    { title: 'Campaign launch and monitoring', description: 'Launch campaign and monitor performance metrics', requiredSkills: ['Project Management'], priority: p, estimatedHours: 4  },
-    { title: 'Results analysis and reporting', description: 'Analyse results and prepare performance report', requiredSkills: ['Project Management'], priority: 'Low', estimatedHours: 4 },
-  ];
-  if (isData) return [
-    { title: 'Data requirements gathering',    description: 'Define data sources, metrics, and reporting needs', requiredSkills: ['Project Management'], priority: p, estimatedHours: 4  },
-    { title: 'Database and pipeline setup',    description: 'Set up data ingestion and transformation pipelines', requiredSkills: ['Database'],          priority: p, estimatedHours: 10 },
-    { title: 'Dashboard design',               description: 'Design and build interactive data visualisations', requiredSkills: ['UI Design'],        priority: p, estimatedHours: 12 },
-    { title: 'Data validation and testing',    description: 'Validate data accuracy and test edge cases', requiredSkills: ['QA Testing'],        priority: p, estimatedHours: 6  },
-    { title: 'Documentation and handover',     description: 'Document data models and prepare user guide', requiredSkills: ['Project Management'], priority: 'Low', estimatedHours: 3 },
-  ];
-  // General fallback
-  return [
-    { title: `Define ${name} requirements`,   description: 'Document detailed requirements and acceptance criteria', requiredSkills: ['Project Management'], priority: p,     estimatedHours: 4  },
-    { title: 'Create project plan',            description: 'Break down work into milestones and assign responsibilities', requiredSkills: ['Project Management'], priority: p,     estimatedHours: 3  },
-    { title: 'Solution architecture design',  description: 'Design technical approach and component interactions', requiredSkills: ['Backend API'],      priority: p,     estimatedHours: 6  },
-    { title: 'Core implementation – Phase 1', description: 'Implement the primary features and core functionality', requiredSkills: ['Backend API'],      priority: p,     estimatedHours: 16 },
-    { title: 'Testing and quality assurance', description: 'Conduct thorough testing across all features', requiredSkills: ['QA Testing'],        priority: p,     estimatedHours: 8  },
-    { title: 'Deployment and handover',        description: 'Deploy to production and prepare handover documentation', requiredSkills: ['DevOps'],            priority: 'Low', estimatedHours: 4  },
-  ];
+  let milestones;
+
+  if (isWeb || isMobile) {
+    milestones = [
+      { name: 'Planning & Design', description: 'Define requirements and create designs', tasks: [
+        { title: 'Design UI wireframes',          description: 'Create wireframes and mockups for key user flows', requiredSkills: ['UI Design'],  priority: p, estimatedHours: 8 },
+        { title: 'Set up project structure',       description: 'Initialize repository and configure dev environment', requiredSkills: ['DevOps'],   priority: p, estimatedHours: 4 },
+      ]},
+      { name: 'Development', description: 'Build frontend and backend', tasks: [
+        { title: 'Implement frontend components',  description: 'Build reusable UI components based on designs', requiredSkills: ['React'],        priority: p, estimatedHours: 16 },
+        { title: 'Develop backend API endpoints',  description: 'Create REST API endpoints for all features', requiredSkills: ['Backend API'], priority: p, estimatedHours: 12 },
+        { title: 'Database schema design',         description: 'Design and implement database models', requiredSkills: ['Database'],     priority: p, estimatedHours: 6  },
+      ]},
+      { name: 'Testing & Launch', description: 'Test and deploy to production', tasks: [
+        { title: 'QA testing and bug fixes',       description: 'Conduct end-to-end testing and resolve issues', requiredSkills: ['QA Testing'], priority: p, estimatedHours: 8  },
+        { title: 'Deployment and monitoring setup', description: 'Deploy to production and configure monitoring', requiredSkills: ['DevOps'],      priority: 'Low', estimatedHours: 4 },
+      ]},
+    ];
+  } else if (isDesign) {
+    milestones = [
+      { name: 'Research', description: 'Competitor analysis and direction', tasks: [
+        { title: 'Brand research and moodboard', description: 'Research competitors and create design direction', requiredSkills: ['UI Design'], priority: p, estimatedHours: 6 },
+      ]},
+      { name: 'Design', description: 'Create identity and design system', tasks: [
+        { title: 'Logo and identity design',     description: 'Create primary logo and brand identity system', requiredSkills: ['UI Design'], priority: p, estimatedHours: 12 },
+        { title: 'Design system creation',       description: 'Build reusable component library and style guide', requiredSkills: ['UI Design'], priority: p, estimatedHours: 10 },
+      ]},
+      { name: 'Delivery', description: 'Review and final delivery', tasks: [
+        { title: 'Client review and revisions',  description: 'Present designs and incorporate feedback', requiredSkills: ['Project Management'], priority: p, estimatedHours: 4 },
+        { title: 'Final asset export',           description: 'Export all assets in required formats', requiredSkills: ['UI Design'], priority: 'Low', estimatedHours: 3 },
+      ]},
+    ];
+  } else if (isMarketing) {
+    milestones = [
+      { name: 'Strategy', description: 'Define campaign strategy', tasks: [
+        { title: 'Campaign strategy and planning', description: 'Define target audience, goals, and KPIs', requiredSkills: ['Project Management'], priority: p, estimatedHours: 6 },
+        { title: 'SEO and keyword research',       description: 'Research and implement SEO strategy', requiredSkills: ['Backend API'], priority: p, estimatedHours: 8 },
+      ]},
+      { name: 'Execution', description: 'Create and launch campaign', tasks: [
+        { title: 'Content creation',               description: 'Write copy and create visuals', requiredSkills: ['UI Design'], priority: p, estimatedHours: 12 },
+        { title: 'Campaign launch and monitoring',  description: 'Launch campaign and monitor metrics', requiredSkills: ['Project Management'], priority: p, estimatedHours: 4 },
+      ]},
+      { name: 'Analysis', description: 'Measure and report results', tasks: [
+        { title: 'Results analysis and reporting',  description: 'Analyse results and prepare report', requiredSkills: ['Project Management'], priority: 'Low', estimatedHours: 4 },
+      ]},
+    ];
+  } else if (isData) {
+    milestones = [
+      { name: 'Discovery', description: 'Gather requirements and plan', tasks: [
+        { title: 'Data requirements gathering', description: 'Define data sources, metrics, and needs', requiredSkills: ['Project Management'], priority: p, estimatedHours: 4 },
+      ]},
+      { name: 'Build', description: 'Set up data infrastructure', tasks: [
+        { title: 'Database and pipeline setup', description: 'Set up data ingestion and transformation', requiredSkills: ['Database'], priority: p, estimatedHours: 10 },
+        { title: 'Dashboard design',           description: 'Design and build data visualisations', requiredSkills: ['UI Design'], priority: p, estimatedHours: 12 },
+      ]},
+      { name: 'Validate & Deliver', description: 'Test and hand over', tasks: [
+        { title: 'Data validation and testing', description: 'Validate accuracy and test edge cases', requiredSkills: ['QA Testing'], priority: p, estimatedHours: 6 },
+        { title: 'Documentation and handover',  description: 'Document data models and prepare guide', requiredSkills: ['Project Management'], priority: 'Low', estimatedHours: 3 },
+      ]},
+    ];
+  } else {
+    milestones = [
+      { name: 'Planning', description: 'Define requirements and architecture', tasks: [
+        { title: `Define ${name} requirements`, description: 'Document detailed requirements and criteria', requiredSkills: ['Project Management'], priority: p, estimatedHours: 4 },
+        { title: 'Solution architecture design', description: 'Design technical approach and interactions', requiredSkills: ['Backend API'], priority: p, estimatedHours: 6 },
+      ]},
+      { name: 'Implementation', description: 'Build core functionality', tasks: [
+        { title: 'Core implementation – Phase 1', description: 'Implement primary features and core functionality', requiredSkills: ['Backend API'], priority: p, estimatedHours: 16 },
+      ]},
+      { name: 'Testing & Delivery', description: 'Test and deploy', tasks: [
+        { title: 'Testing and quality assurance', description: 'Conduct thorough testing across all features', requiredSkills: ['QA Testing'], priority: p, estimatedHours: 8 },
+        { title: 'Deployment and handover',       description: 'Deploy to production and prepare documentation', requiredSkills: ['DevOps'], priority: 'Low', estimatedHours: 4 },
+      ]},
+    ];
+  }
+
+  // Flatten tasks with milestone name tag
+  const tasks = milestones.flatMap(m => (m.tasks || []).map(t => ({ ...t, _milestoneName: m.name })));
+  return { milestones, tasks };
 }
 
 // ── POST /api/projects/:id/generate-tasks ────────────────────────────────────
@@ -456,27 +495,36 @@ router.post('/:id/generate-tasks', requireAuth, withOrgScope, async (req, res) =
 
     // 1. Generate task list — AI if key available, else simulation ─────────────
     let generatedTasks;
+    let generatedMilestones = [];
     const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
     const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY;
 
     if (OPENROUTER_KEY || ANTHROPIC_KEY) {
-      const prompt = `You are a project management assistant. Generate a practical, specific task list for this project.
+      const prompt = `You are a project management assistant. Generate milestones with tasks grouped under them for this project.
 
 Project Name: ${project.name}
 Description:  ${project.description || 'No description provided'}
 Priority:     ${project.priority}
 
-Return ONLY a JSON array — no markdown, no extra text:
-[
-  {
-    "title": "Task title",
-    "description": "One sentence describing what needs to be done",
-    "requiredSkills": ["Skill name"],
-    "priority": "high|medium|low",
-    "estimatedHours": <number>
-  }
-]
-Rules: 4-8 tasks, 1-2 skills each (use: React, UI Design, Backend API, QA Testing, Project Management, Database, DevOps), estimatedHours 1-16.`;
+Return ONLY a JSON object — no markdown, no extra text:
+{
+  "milestones": [
+    {
+      "name": "Milestone name",
+      "description": "One sentence about this phase",
+      "tasks": [
+        {
+          "title": "Task title",
+          "description": "One sentence describing what needs to be done",
+          "requiredSkills": ["Skill name"],
+          "priority": "high|medium|low",
+          "estimatedHours": <number>
+        }
+      ]
+    }
+  ]
+}
+Rules: 3-5 milestones, 2-4 tasks per milestone, 1-2 skills each task (use: React, UI Design, Backend API, QA Testing, Project Management, Database, DevOps), estimatedHours 1-16. Order milestones chronologically (planning → implementation → testing → delivery).`;
 
       let aiRaw = null;
       try {
@@ -508,17 +556,27 @@ Rules: 4-8 tasks, 1-2 skills each (use: React, UI Design, Backend API, QA Testin
 
       if (aiRaw) {
         try {
-          generatedTasks = JSON.parse(aiRaw.replace(/```json|```/g, '').trim());
+          const parsed = JSON.parse(aiRaw.replace(/```json|```/g, '').trim());
+          // New format: { milestones: [...] }
+          if (parsed.milestones && Array.isArray(parsed.milestones)) {
+            generatedMilestones = parsed.milestones;
+            generatedTasks = parsed.milestones.flatMap(m => (m.tasks || []).map(t => ({ ...t, _milestoneName: m.name })));
+          } else if (Array.isArray(parsed)) {
+            // Old format: flat task array (backward compat)
+            generatedTasks = parsed;
+          }
         } catch {
           console.warn('[Projects] AI response parse failed, using simulation');
         }
       }
     }
 
-    // Simulation fallback
+    // Simulation fallback — also generates milestones
     if (!generatedTasks || !Array.isArray(generatedTasks) || generatedTasks.length === 0) {
       console.log('[Projects] Using keyword-based simulation for task generation');
-      generatedTasks = simulateTaskGeneration(project.name, project.description, project.priority);
+      const sim = simulateTaskGeneration(project.name, project.description, project.priority);
+      generatedMilestones = sim.milestones || [];
+      generatedTasks = sim.tasks || sim;
     }
 
     // 2. Fetch all staff with their skills ────────────────────────────────────
@@ -565,6 +623,30 @@ Rules: 4-8 tasks, 1-2 skills each (use: React, UI Design, Backend API, QA Testin
     }
 
     const WORKLOAD_LIMIT = 10; // open tasks before considered overloaded
+
+    // 2b. Create milestones if generated ────────────────────────────────────
+    const milestoneMap = {}; // name → id
+    if (generatedMilestones.length > 0) {
+      await ensureMilestonesTable();
+      // Clear existing milestones for this project (regenerate = fresh)
+      await prisma.$executeRawUnsafe(
+        'UPDATE macro_tasks SET milestoneId = NULL WHERE projectId = ? AND orgId = ?', id, orgId
+      ).catch(() => {});
+      await prisma.$executeRawUnsafe(
+        'DELETE FROM project_milestones WHERE projectId = ? AND orgId = ?', id, orgId
+      ).catch(() => {});
+
+      for (let i = 0; i < generatedMilestones.length; i++) {
+        const ms = generatedMilestones[i];
+        const msId = randomUUID();
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO project_milestones (id, projectId, orgId, name, description, sortOrder) VALUES (?, ?, ?, ?, ?, ?)`,
+          msId, id, orgId, ms.name, ms.description || null, i
+        ).catch(e => console.error('[Projects] milestone create error:', e.message));
+        milestoneMap[ms.name] = msId;
+      }
+      console.log(`[Projects] Created ${generatedMilestones.length} milestones for "${project.name}"`);
+    }
 
     // 3. Assign + create each task ────────────────────────────────────────────
     const createdTasks = [];
@@ -622,6 +704,14 @@ Rules: 4-8 tasks, 1-2 skills each (use: React, UI Design, Backend API, QA Testin
             tags:           reqSkills,
           },
         });
+
+        // Link task to milestone if generated with one
+        const msId = taskDef._milestoneName ? milestoneMap[taskDef._milestoneName] : null;
+        if (msId) {
+          await prisma.$executeRawUnsafe(
+            'UPDATE macro_tasks SET milestoneId = ? WHERE id = ?', msId, task.id
+          ).catch(() => {});
+        }
 
         if (assignee) workloadMap[assignee.userId] = (workloadMap[assignee.userId] || 0) + 1;
 
