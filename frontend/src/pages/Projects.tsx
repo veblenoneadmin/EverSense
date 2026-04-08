@@ -208,6 +208,14 @@ function OverviewModal({
     } catch (e: any) { console.error('Unassign error:', e.message); }
   };
 
+  const handleDeleteProjectTask = async (taskId: string) => {
+    if (!confirm('Delete this task?')) return;
+    try {
+      await apiClient.fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      fetchMilestones();
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     if (overviewTab === 'milestones') fetchMilestones();
   }, [overviewTab, project.id]);
@@ -439,7 +447,7 @@ function OverviewModal({
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${VS.border}` }}>
-                  {['Task', 'Skills', 'Priority', 'Assignee', 'Hours', 'Status'].map(h => (
+                  {['Task', 'Skills', 'Priority', 'Assignee', 'Hours', 'Status', ''].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left font-medium" style={{ color: VS.text2 }}>{h}</th>
                   ))}
                 </tr>
@@ -507,6 +515,13 @@ function OverviewModal({
                           style={{ background: `${tStatus.color}18`, color: tStatus.color, border: `1px solid ${tStatus.color}44` }}>
                           {tStatus.label}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => handleDeleteProjectTask(task.id)}
+                          className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors hover:opacity-80"
+                          style={{ color: VS.red, background: `${VS.red}15`, border: `1px solid ${VS.red}33` }}>
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   );
@@ -639,6 +654,11 @@ function OverviewModal({
                                   {milestones.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                               )}
+                              <button onClick={e => { e.stopPropagation(); handleDeleteProjectTask(t.id); }}
+                                className="text-[10px] px-2 py-0.5 rounded font-medium shrink-0 transition-colors hover:opacity-80"
+                                style={{ color: VS.red, background: `${VS.red}15`, border: `1px solid ${VS.red}33` }}>
+                                Delete
+                              </button>
                             </div>
                           );
                         })}
@@ -727,6 +747,11 @@ function OverviewModal({
                                         className="text-[10px] px-2 py-0.5 rounded font-medium shrink-0 transition-colors hover:opacity-80"
                                         style={{ color: VS.orange, background: `${VS.orange}15`, border: `1px solid ${VS.orange}33` }}>
                                         ✕ Remove
+                                      </button>
+                                      <button onClick={e => { e.stopPropagation(); handleDeleteProjectTask(t.id); }}
+                                        className="text-[10px] px-2 py-0.5 rounded font-medium shrink-0 transition-colors hover:opacity-80"
+                                        style={{ color: VS.red, background: `${VS.red}15`, border: `1px solid ${VS.red}33` }}>
+                                        Delete
                                       </button>
                                     </div>
                                   );
