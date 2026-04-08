@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
+import GoogleDrivePicker from './GoogleDrivePicker';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Task {
@@ -135,6 +136,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
   const [attachLoading, setAL]        = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading]     = useState(false);
+  const [showDrivePicker, setShowDrivePicker] = useState(false);
 
   // Report modal
   const [showReport, setShowReport]       = useState(false);
@@ -329,6 +331,27 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
           body: JSON.stringify({ name: file.name, mimeType: file.type, size: file.size, data, category: 'attachment' }),
         });
       }
+      await fetchAttachments();
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  };
+
+  // ── Attach from Google Drive ──────────────────────────────────────────────
+  const handleDriveSelect = async (file: { id: string; name: string; mimeType: string; webViewLink: string; size?: string }) => {
+    setShowDrivePicker(false);
+    setUploading(true);
+    try {
+      // Save as attachment with the Drive link as the data (prefixed so we know it's a link)
+      await api.fetch(`/api/tasks/${task.id}/attachments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: file.name,
+          mimeType: file.mimeType,
+          size: parseInt(file.size || '0') || 0,
+          data: `gdrive:${file.webViewLink}`,
+          category: 'attachment',
+        }),
+      });
       await fetchAttachments();
     } catch { /* ignore */ }
     finally { setUploading(false); }
@@ -812,24 +835,41 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
           {tab === 'attachments' && (
             <div className="p-5 space-y-6">
 
-              {/* Upload button */}
+              {/* Upload buttons */}
               <div className="flex items-center justify-between">
                 <h3 className="text-[13px] font-semibold" style={{ color: VS.text0 }}>
                   Attachments
                   <span className="ml-2 text-[11px] font-normal" style={{ color: VS.text2 }}>{regularAttachments.length} files</span>
                 </h3>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 disabled:opacity-50"
-                  style={{ background: VS.accent, color: '#fff' }}
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  {uploading ? 'Uploading…' : 'Upload File'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowDrivePicker(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90"
+                    style={{ background: `${VS.teal}18`, color: VS.teal, border: `1px solid ${VS.teal}33` }}
+                  >
+                    Google Drive
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 disabled:opacity-50"
+                    style={{ background: VS.accent, color: '#fff' }}
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    {uploading ? 'Uploading…' : 'Upload'}
+                  </button>
+                </div>
                 <input ref={fileInputRef} type="file" multiple className="hidden"
                   onChange={e => handleFileUpload(e.target.files)} />
               </div>
+
+              {/* Google Drive Picker */}
+              {showDrivePicker && (
+                <GoogleDrivePicker
+                  onSelect={handleDriveSelect}
+                  onClose={() => setShowDrivePicker(false)}
+                />
+              )}
 
               {/* Regular attachments */}
               {attachLoading ? (

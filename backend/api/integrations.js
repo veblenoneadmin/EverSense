@@ -134,7 +134,7 @@ router.get('/google/connect', requireAuth, withOrgScope, (req, res) => {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
+    scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
     access_type: 'offline',
     prompt: 'consent',
     state,
@@ -235,5 +235,81 @@ export async function getOrgFirefliesKey(orgId) {
     return null;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOOGLE DRIVE
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { getGoogleAuthClient } from '../lib/google-calendar.js';
+import { google as googleapis } from 'googleapis';
+
+/** GET /api/integrations/drive/files — list files from user's Google Drive */
+router.get('/drive/files', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const authClient = await getGoogleAuthClient(req.user.id);
+    if (!authClient) return res.status(401).json({ error: 'Google not connected. Go to Settings → Integrations to connect.' });
+
+    const drive = googleapis.drive({ version: 'v3', auth: authClient });
+    const { q, pageToken } = req.query;
+
+    const query = q
+      ? `name contains '${String(q).replace(/'/g, "\\'")}' and trashed = false`
+      : 'trashed = false';
+
+    const response = await drive.files.list({
+      q: query,
+      pageSize: 20,
+      pageToken: pageToken || undefined,
+      orderBy: 'modifiedTime desc',
+      fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, thumbnailLink)',
+    });
+
+    res.json({
+      success: true,
+      files: response.data.files || [],
+      nextPageToken: response.data.nextPageToken || null,
+    });
+  } catch (e) {
+    console.error('[Drive] list files error:', e.message);
+    if (e.code === 401 || e.message?.includes('invalid_grant')) {
+      return res.status(401).json({ error: 'Google token expired. Please reconnect in Settings → Integrations.' });
+    }
+    res.status(500).json({ error: 'Failed to list Drive files' });
+  }
+});
+
+/** GET /api/integrations/drive/files/:fileId — get a single file's metadata + download link */
+router.get('/drive/files/:fileId', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const authClient = await getGoogleAuthClient(req.user.id);
+    if (!authClient) return res.status(401).json({ error: 'Google not connected' });
+
+    const drive = googleapis.drive({ version: 'v3', auth: authClient });
+    const file = await drive.files.get({
+      fileId: req.params.fileId,
+      fields: 'id, name, mimeType, size, modifiedTime, webViewLink, webContentLink, iconLink, thumbnailLink',
+    });
+
+    res.json({ success: true, file: file.data });
+  } catch (e) {
+    console.error('[Drive] get file error:', e.message);
+    res.status(500).json({ error: 'Failed to get file' });
+  }
+});
+
+/** GET /api/integrations/drive/status — check if Drive is connected */
+router.get('/drive/status', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const authClient = await getGoogleAuthClient(req.user.id);
+    if (!authClient) return res.json({ success: true, connected: false });
+
+    // Quick test — list 1 file to verify token works
+    const drive = googleapis.drive({ version: 'v3', auth: authClient });
+    await drive.files.list({ pageSize: 1, fields: 'files(id)' });
+    res.json({ success: true, connected: true });
+  } catch {
+    res.json({ success: true, connected: false });
+  }
+});
 
 export default router;
