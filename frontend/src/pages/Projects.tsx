@@ -169,6 +169,8 @@ function OverviewModal({
   const [addingMilestone, setAddingMilestone] = useState(false);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
   const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(null);
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [dragOverMilestoneId, setDragOverMilestoneId] = useState<string | null>(null);
 
   const fetchMilestones = async () => {
     setMilestonesLoading(true);
@@ -591,7 +593,20 @@ function OverviewModal({
                     const isExpanded = expandedMilestoneId === ms.id;
                     const doneTasks = ms.tasks.filter(t => t.status === 'completed').length;
                     return (
-                      <div key={ms.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${isDone ? VS.teal + '33' : VS.border}`, background: VS.bg2 }}>
+                      <div key={ms.id} className="rounded-xl overflow-hidden transition-all"
+                        style={{
+                          border: `1px solid ${dragOverMilestoneId === ms.id ? VS.accent : isDone ? VS.teal + '33' : VS.border}`,
+                          background: dragOverMilestoneId === ms.id ? `${VS.accent}12` : VS.bg2,
+                          boxShadow: dragOverMilestoneId === ms.id ? `0 0 0 2px ${VS.accent}33` : 'none',
+                        }}
+                        onDragOver={e => { e.preventDefault(); setDragOverMilestoneId(ms.id); }}
+                        onDragLeave={() => setDragOverMilestoneId(null)}
+                        onDrop={e => {
+                          e.preventDefault();
+                          setDragOverMilestoneId(null);
+                          if (dragTaskId) { handleAssignTask(dragTaskId, ms.id); setDragTaskId(null); }
+                        }}
+                      >
                         {/* Milestone header */}
                         <div className="flex items-center gap-3 px-4 py-3 group cursor-pointer"
                           onClick={() => setExpandedMilestoneId(isExpanded ? null : ms.id)}>
@@ -637,7 +652,13 @@ function OverviewModal({
                                 {ms.tasks.map(t => {
                                   const tColor = t.status === 'completed' ? VS.teal : t.status === 'in_progress' ? VS.yellow : VS.text2;
                                   return (
-                                    <div key={t.id} className="flex items-center gap-2 px-4 py-2 group/task">
+                                    <div key={t.id}
+                                      draggable
+                                      onDragStart={() => setDragTaskId(t.id)}
+                                      onDragEnd={() => { setDragTaskId(null); setDragOverMilestoneId(null); }}
+                                      className="flex items-center gap-2 px-4 py-2 group/task cursor-grab active:cursor-grabbing"
+                                      style={{ opacity: dragTaskId === t.id ? 0.4 : 1 }}
+                                    >
                                       <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: tColor }} />
                                       <span className="text-[12px] flex-1 truncate" style={{ color: t.status === 'completed' ? VS.text2 : VS.text0, textDecoration: t.status === 'completed' ? 'line-through' : 'none' }}>{t.title}</span>
                                       {t.assigneeName && <span className="text-[10px] shrink-0" style={{ color: VS.text2 }}>{t.assigneeName}</span>}
@@ -678,16 +699,41 @@ function OverviewModal({
 
                   {/* Unassigned tasks pool */}
                   {unassignedTasks.length > 0 && (
-                    <div className="rounded-xl overflow-hidden" style={{ border: `1px dashed ${VS.border2}`, background: 'transparent' }}>
+                    <div className="rounded-xl overflow-hidden transition-all"
+                      style={{
+                        border: `1px dashed ${dragOverMilestoneId === '__unassigned__' ? VS.orange : VS.border2}`,
+                        background: dragOverMilestoneId === '__unassigned__' ? `${VS.orange}08` : 'transparent',
+                      }}
+                      onDragOver={e => { e.preventDefault(); setDragOverMilestoneId('__unassigned__'); }}
+                      onDragLeave={() => setDragOverMilestoneId(null)}
+                      onDrop={e => {
+                        e.preventDefault();
+                        setDragOverMilestoneId(null);
+                        if (dragTaskId) {
+                          // Find which milestone this task is in and unassign
+                          const fromMs = milestones.find(m => m.tasks.some(t => t.id === dragTaskId));
+                          if (fromMs) handleUnassignTask(dragTaskId, fromMs.id);
+                          setDragTaskId(null);
+                        }
+                      }}
+                    >
                       <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: VS.bg2 }}>
-                        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: VS.text2 }}>Unassigned Tasks</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: VS.text2 }}>
+                          {dragTaskId ? 'Drop here to unassign' : 'Unassigned Tasks'}
+                        </span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: VS.bg3, color: VS.text2 }}>{unassignedTasks.length}</span>
                       </div>
                       <div className="divide-y" style={{ borderColor: VS.border + '22' }}>
                         {unassignedTasks.slice(0, 10).map(t => {
                           const tColor = t.status === 'completed' ? VS.teal : t.status === 'in_progress' ? VS.yellow : VS.text2;
                           return (
-                            <div key={t.id} className="flex items-center gap-2 px-4 py-2">
+                            <div key={t.id}
+                              draggable
+                              onDragStart={() => setDragTaskId(t.id)}
+                              onDragEnd={() => { setDragTaskId(null); setDragOverMilestoneId(null); }}
+                              className="flex items-center gap-2 px-4 py-2 cursor-grab active:cursor-grabbing hover:bg-white/[0.03]"
+                              style={{ opacity: dragTaskId === t.id ? 0.4 : 1 }}
+                            >
                               <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: tColor }} />
                               <span className="text-[12px] flex-1 truncate" style={{ color: VS.text1 }}>{t.title}</span>
                               {milestones.length > 0 && (

@@ -780,26 +780,29 @@ router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res)
         `SELECT t.id, t.title, t.status, t.priority, t.milestoneId,
                 u.name AS assigneeName, u.email AS assigneeEmail
          FROM macro_tasks t
-         LEFT JOIN users u ON u.id = t.userId
+         LEFT JOIN user u ON u.id = t.userId
          WHERE t.projectId = ? AND t.orgId = ?
          ORDER BY t.priority DESC, t.createdAt ASC`,
         req.params.projectId, req.orgId
       );
     } catch (taskErr) {
       // milestoneId column might not exist yet — try without it
-      console.warn('[Milestones] task query with milestoneId failed, retrying without:', taskErr.message);
+      console.warn('[Milestones] task query failed, retrying without milestoneId:', taskErr.message);
       try {
         const rows = await prisma.$queryRawUnsafe(
           `SELECT t.id, t.title, t.status, t.priority,
                   u.name AS assigneeName, u.email AS assigneeEmail
            FROM macro_tasks t
-           LEFT JOIN users u ON u.id = t.userId
+           LEFT JOIN user u ON u.id = t.userId
            WHERE t.projectId = ? AND t.orgId = ?
            ORDER BY t.priority DESC, t.createdAt ASC`,
           req.params.projectId, req.orgId
         );
         allTasks = rows.map(r => ({ ...r, milestoneId: null }));
-      } catch { allTasks = []; }
+      } catch (e2) {
+        console.error('[Milestones] task query fallback also failed:', e2.message);
+        allTasks = [];
+      }
     }
 
     // Group tasks by milestoneId
