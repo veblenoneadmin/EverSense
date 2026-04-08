@@ -163,7 +163,6 @@ function OverviewModal({
   interface MilestoneTask { id: string; title: string; status: string; priority: string; milestoneId: string | null; assigneeName: string | null; assigneeEmail: string | null }
   interface Milestone { id: string; name: string; description: string | null; dueDate: string | null; status: string; sortOrder: number; createdAt: string; tasks: MilestoneTask[] }
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [unassignedTasks, setUnassignedTasks] = useState<MilestoneTask[]>([]);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
   const [newMilestone, setNewMilestone] = useState({ name: '', description: '', dueDate: '' });
   const [addingMilestone, setAddingMilestone] = useState(false);
@@ -172,16 +171,15 @@ function OverviewModal({
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dragOverMilestoneId, setDragOverMilestoneId] = useState<string | null>(null);
 
+  // Derive unassigned tasks from the tasks prop (same data as List tab)
+  const assignedTaskIds = new Set(milestones.flatMap(m => m.tasks.map(t => t.id)));
+  const unassignedTasks = tasks.filter(t => !assignedTaskIds.has(t.id));
+
   const fetchMilestones = async () => {
     setMilestonesLoading(true);
     try {
       const data = await apiClient.fetch(`/api/projects/${project.id}/milestones`);
-      console.log('[Milestones] API response:', data);
-      if (data.success) {
-        setMilestones(data.milestones || []);
-        setUnassignedTasks(data.unassignedTasks || []);
-        console.log('[Milestones] milestones:', data.milestones?.length, 'unassigned:', data.unassignedTasks?.length);
-      }
+      if (data.success) setMilestones(data.milestones || []);
     } catch (e: any) { console.error('[Milestones] fetch error:', e.message); }
     finally { setMilestonesLoading(false); }
   };
@@ -615,6 +613,7 @@ function OverviewModal({
                       <div className="divide-y" style={{ borderColor: VS.border + '22' }}>
                         {unassignedTasks.map(t => {
                           const tColor = t.status === 'completed' ? VS.teal : t.status === 'in_progress' ? VS.yellow : VS.text2;
+                          const aName = t.assignee?.name || null;
                           return (
                             <div key={t.id}
                               draggable
@@ -625,7 +624,7 @@ function OverviewModal({
                             >
                               <div className="h-2 w-2 rounded-full shrink-0" style={{ background: tColor }} />
                               <span className="text-[12px] font-medium flex-1 truncate" style={{ color: VS.text0 }}>{t.title}</span>
-                              {t.assigneeName && <span className="text-[10px] shrink-0" style={{ color: VS.text2 }}>{t.assigneeName}</span>}
+                              {aName && <span className="text-[10px] shrink-0" style={{ color: VS.text2 }}>{aName}</span>}
                               <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: `${tColor}18`, color: tColor }}>
                                 {t.status === 'completed' ? 'Done' : t.status === 'in_progress' ? 'Active' : 'To Do'}
                               </span>
