@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
-import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink } from 'lucide-react';
+import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink, Settings } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
 
 import { VS } from '../../lib/theme';
@@ -426,6 +426,18 @@ const MainLayout: React.FC = () => {
               </>
             )}
           </div>
+
+          {/* Settings gear icon */}
+          <button
+            onClick={() => navigate('/settings')}
+            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150"
+            style={{ color: VS.text1 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = VS.bg2; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
 
           <div className="relative">
             <button

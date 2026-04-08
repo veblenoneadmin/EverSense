@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   CheckSquare,
   Clock,
-  Settings,
   BarChart3,
   Building2,
   Users,
@@ -37,7 +36,6 @@ const navItems = [
   { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
-  { name: 'Settings',       href: '/settings',    icon: Settings,        roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
 ];
 
 interface SidebarProps {
