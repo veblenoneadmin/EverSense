@@ -522,6 +522,8 @@ app.use('/api/apikeys', apikeysRoutes);
 app.use('/api/ext', extRoutes);
 app.use('/api/integrations', integrationsRoutes);
 app.use('/api/super-admin', superAdminRoutes);
+import ownerAdminRoutes from './api/owner-admin.js';
+app.use('/api/owner-admin', ownerAdminRoutes);
 
 // Test routes for debugging (NO AUTH - REMOVE IN PRODUCTION)
 import testProjectsRoutes from './api/test-projects.js';

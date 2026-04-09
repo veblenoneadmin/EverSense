@@ -17,6 +17,7 @@ import {
   X,
   History,
   Timer,
+  Crown,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -36,6 +37,7 @@ const navItems = [
   { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
+  { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'] },
 ];
 
 interface SidebarProps {
