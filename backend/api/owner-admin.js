@@ -40,18 +40,15 @@ router.get('/check', requireAuth, async (req, res) => {
   res.json({ isOwnerAdmin: !!ownership });
 });
 
-// ── GET /api/owner-admin/orgs ───────────────────────────────────────────────
+// ── GET /api/owner-admin/orgs — returns ALL organizations ───────────────────
 router.get('/orgs', requireAuth, requireOwner, async (req, res) => {
   try {
-    const ph = req.ownedOrgIds.map(() => '?').join(',');
     const orgs = await prisma.$queryRawUnsafe(
       `SELECT o.id, o.name, o.slug, o.createdAt, COUNT(m.id) AS memberCount
        FROM organizations o
        LEFT JOIN memberships m ON m.orgId = o.id
-       WHERE o.id IN (${ph})
        GROUP BY o.id, o.name, o.slug, o.createdAt
-       ORDER BY o.createdAt DESC`,
-      ...req.ownedOrgIds
+       ORDER BY o.createdAt DESC`
     );
     res.json({ success: true, orgs: orgs.map(o => ({ ...o, memberCount: Number(o.memberCount) })) });
   } catch (e) {
@@ -59,18 +56,15 @@ router.get('/orgs', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
-// ── GET /api/owner-admin/users ──────────────────────────────────────────────
+// ── GET /api/owner-admin/users — returns ALL users across all orgs ──────────
 router.get('/users', requireAuth, requireOwner, async (req, res) => {
   try {
-    const ph = req.ownedOrgIds.map(() => '?').join(',');
     const members = await prisma.$queryRawUnsafe(
       `SELECT u.id, u.email, u.name, u.createdAt, m.role, o.id AS orgId, o.name AS orgName
        FROM memberships m
        JOIN User u ON u.id = m.userId
        JOIN organizations o ON o.id = m.orgId
-       WHERE m.orgId IN (${ph})
-       ORDER BY u.createdAt DESC`,
-      ...req.ownedOrgIds
+       ORDER BY u.createdAt DESC`
     );
     res.json({ success: true, users: members });
   } catch (e) {
