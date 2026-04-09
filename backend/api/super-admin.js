@@ -251,14 +251,21 @@ router.get('/pending-owner-invites', requireAuth, requireSuperAdminUser, async (
 });
 
 // ── POST /api/super-admin/invite ──────────────────────────────────────────────
+// Body: { email, role?, orgId? } — orgId selects target org, defaults to Veblen
 router.post('/invite', requireAuth, requireSuperAdminUser, async (req, res) => {
   try {
-    const { email, role = 'STAFF', name } = req.body;
+    const { email, role = 'STAFF', name, orgId: targetOrgId } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
 
-    // Find Veblen org
-    const org = await prisma.organization.findUnique({ where: { slug: 'veblen' } });
-    if (!org) return res.status(404).json({ error: 'Veblen organization not found' });
+    // Use specified org or fall back to Veblen
+    let org;
+    if (targetOrgId) {
+      org = await prisma.organization.findUnique({ where: { id: targetOrgId } });
+      if (!org) return res.status(404).json({ error: 'Organization not found' });
+    } else {
+      org = await prisma.organization.findUnique({ where: { slug: 'veblen' } });
+      if (!org) return res.status(404).json({ error: 'Default organization not found' });
+    }
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -267,12 +274,12 @@ router.post('/invite', requireAuth, requireSuperAdminUser, async (req, res) => {
         where: { userId_orgId: { userId: existingUser.id, orgId: org.id } },
       });
       if (existingMembership) {
-        return res.status(400).json({ error: 'User is already a member' });
+        return res.status(400).json({ error: `User is already a member of ${org.name}` });
       }
       await prisma.membership.create({
         data: { userId: existingUser.id, orgId: org.id, role },
       });
-      return res.json({ success: true, message: 'Existing user added to organization' });
+      return res.json({ success: true, message: `Existing user added to ${org.name}` });
     }
 
     // Create invitation record
@@ -287,8 +294,23 @@ router.post('/invite', requireAuth, requireSuperAdminUser, async (req, res) => {
       },
     });
 
-    console.log(`[SuperAdmin] Invitation created for ${email} token=${invitation.token}`);
-    res.json({ success: true, message: 'Invitation created', invitationId: invitation.id, token: invitation.token });
+    // Send invite email
+    try {
+      const baseUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || process.env.VITE_APP_URL || 'http://localhost:5173';
+      const acceptUrl = `${baseUrl}/invite?token=${invitation.token}`;
+      await sendInviteEmail(email, {
+        orgName: org.name,
+        role,
+        invitedBy: 'EverSense Admin',
+        acceptUrl,
+        expiresIn: formatDuration(7 * 24 * 60),
+      });
+    } catch (emailErr) {
+      console.warn('[SuperAdmin] invite email failed:', emailErr.message);
+    }
+
+    console.log(`[SuperAdmin] Invitation created for ${email} → ${org.name} as ${role} token=${invitation.token}`);
+    res.json({ success: true, message: `Invitation sent to join ${org.name}`, invitationId: invitation.id, token: invitation.token });
   } catch (err) {
     console.error('[SuperAdmin] invite error:', err);
     res.status(500).json({ error: 'Failed to create invitation' });

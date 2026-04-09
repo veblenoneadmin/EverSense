@@ -103,10 +103,11 @@ function ConfirmDialog({ title, body, onConfirm, onCancel }: {
   );
 }
 
-function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (msg: string) => void }) {
+function InviteModal({ onClose, onSuccess, orgs }: { onClose: () => void; onSuccess: (msg: string) => void; orgs: Org[] }) {
   const [email, setEmail] = useState('');
   const [name, setName]   = useState('');
   const [role, setRole]   = useState('STAFF');
+  const [orgId, setOrgId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -115,7 +116,7 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     try {
       const data = await saFetch('/api/super-admin/invite', {
         method: 'POST',
-        body: JSON.stringify({ email, name: name || undefined, role }),
+        body: JSON.stringify({ email, name: name || undefined, role, orgId: orgId || undefined }),
       });
       if (data.error) { setError(data.error); return; }
       onSuccess(data.message || 'Invitation sent'); onClose();
@@ -135,6 +136,13 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Organization *</label>
+            <select className={inputCls} style={inputStyle} value={orgId} onChange={e => setOrgId(e.target.value)}>
+              <option value="">Veblen (default)</option>
+              {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </div>
+          <div>
             <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Email *</label>
             <input className={inputCls} style={inputStyle} type="email" required placeholder="user@example.com" value={email} onChange={e => setEmail(e.target.value)} />
           </div>
@@ -145,6 +153,7 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           <div>
             <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Role</label>
             <select className={inputCls} style={inputStyle} value={role} onChange={e => setRole(e.target.value)}>
+              <option value="OWNER">Owner</option>
               <option value="ADMIN">Admin</option>
               <option value="STAFF">Staff</option>
               <option value="CLIENT">Client</option>
@@ -847,7 +856,7 @@ export function SuperAdmin() {
       </div>
 
       {/* ── Modals ── */}
-      {showInvite  && <InviteModal    onClose={() => setShowInvite(false)}  onSuccess={msg => { showToast(msg, true); loadAll(); }} />}
+      {showInvite  && <InviteModal    onClose={() => setShowInvite(false)}  onSuccess={msg => { showToast(msg, true); loadAll(); }} orgs={orgs} />}
       {showAddLead && <AddLeadModal   onClose={() => setShowAddLead(false)} onSuccess={msg => { showToast(msg, true); loadAll(); }} />}
       {confirm && (
         <ConfirmDialog
