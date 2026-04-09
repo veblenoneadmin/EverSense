@@ -159,24 +159,43 @@ router.get('/stats', requireAuth, requireSuperAdminUser, async (req, res) => {
 // ── GET /api/super-admin/users ────────────────────────────────────────────────
 router.get('/users', requireAuth, requireSuperAdminUser, async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        emailVerified: true,
-        createdAt: true,
-        memberships: {
-          select: {
-            role: true,
-            org: { select: { id: true, name: true, slug: true } },
-          },
-        },
-        _count: { select: { macroTasks: true } },
-      },
-      orderBy: { createdAt: 'desc' },
+    // Use raw SQL to avoid Prisma crashing on orphaned memberships (org deleted but membership remains)
+    const users = await prisma.$queryRawUnsafe(`
+      SELECT u.id, u.email, u.name, u.emailVerified, u.createdAt
+      FROM user u
+      ORDER BY u.createdAt DESC
+    `);
+
+    // Fetch memberships with org info separately (LEFT JOIN so orphans don't crash)
+    const memberships = await prisma.$queryRawUnsafe(`
+      SELECT m.userId, m.role, o.id AS orgId, o.name AS orgName, o.slug AS orgSlug
+      FROM memberships m
+      LEFT JOIN organizations o ON o.id = m.orgId
+    `);
+
+    // Fetch task counts
+    const taskCounts = await prisma.$queryRawUnsafe(`
+      SELECT userId, COUNT(*) AS count FROM macro_tasks GROUP BY userId
+    `);
+    const taskMap = {};
+    taskCounts.forEach(t => { taskMap[t.userId] = Number(t.count); });
+
+    // Group memberships by userId
+    const memberMap = {};
+    memberships.forEach(m => {
+      if (!memberMap[m.userId]) memberMap[m.userId] = [];
+      if (m.orgId) { // skip orphaned memberships where org was deleted
+        memberMap[m.userId].push({ role: m.role, org: { id: m.orgId, name: m.orgName, slug: m.orgSlug } });
+      }
     });
-    res.json({ users });
+
+    const enriched = users.map(u => ({
+      ...u,
+      memberships: memberMap[u.id] || [],
+      _count: { macroTasks: taskMap[u.id] || 0 },
+    }));
+
+    res.json({ users: enriched });
   } catch (err) {
     console.error('[SuperAdmin] users error:', err);
     res.status(500).json({ error: 'Failed to fetch users' });
