@@ -80,7 +80,12 @@ router.post('/register-and-accept', async (req, res) => {
     }
 
     // 3. Accept invite — create membership
+    console.log(`[Invite] Creating membership: userId=${userId} orgId=${invite.orgId} role=${invite.role} orgName=${invite.org?.name}`);
     try {
+      // Log ALL memberships BEFORE to detect any auto-created ones
+      const beforeMemberships = await prisma.membership.findMany({ where: { userId }, select: { orgId: true, role: true } });
+      console.log(`[Invite] Memberships BEFORE accept: ${JSON.stringify(beforeMemberships)}`);
+
       await prisma.$transaction(async (tx) => {
         const existing = await tx.membership.findUnique({
           where: { userId_orgId: { userId, orgId: invite.orgId } }
@@ -93,6 +98,10 @@ router.post('/register-and-accept', async (req, res) => {
           data: { status: 'ACCEPTED', acceptedById: userId }
         });
       });
+
+      // Log ALL memberships AFTER
+      const afterMemberships = await prisma.membership.findMany({ where: { userId }, select: { orgId: true, role: true } });
+      console.log(`[Invite] Memberships AFTER accept: ${JSON.stringify(afterMemberships)}`);
     } catch (err) {
       console.error('Failed to create membership:', err);
       return res.status(500).json({ error: 'Account created but failed to join organisation. Please contact support.' });
