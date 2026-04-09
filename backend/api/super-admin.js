@@ -370,6 +370,20 @@ router.post('/create-lead-account', requireAuth, requireSuperAdminUser, async (r
       await prisma.membership.create({
         data: { userId: existingUser.id, orgId: org.id, role: 'OWNER' },
       });
+      // Send welcome email to existing user
+      try {
+        const { sendWelcomeEmail } = await import('../lib/mailer.js');
+        const baseUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || 'http://localhost:5173';
+        await sendWelcomeEmail(email, {
+          name: existingUser.name || email,
+          orgName: companyName,
+          role: 'Owner',
+          dashboardUrl: `${baseUrl}/dashboard`,
+        });
+        console.log(`[SuperAdmin] Welcome email sent to existing user ${email}`);
+      } catch (emailErr) {
+        console.error('[SuperAdmin] Failed to send welcome email:', emailErr.message);
+      }
       return res.json({ success: true, message: 'Existing user added as owner of new organization', orgId: org.id, slug });
     }
 
