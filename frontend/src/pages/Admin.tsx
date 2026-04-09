@@ -217,7 +217,7 @@ export function Admin() {
 
   // ── Permission helpers ──────────────────────────────────────────────────────
   const myRole         = users.find(u => u.id === session?.user?.id)?.memberships[0]?.role ?? 'STAFF';
-  const isSuperAdmin   = session?.user?.email === 'admin@eversense.ai';
+  const isSuperAdmin   = session?.user?.email === 'admin@eversense.ai' || session?.user?.email === 'admin@veblengroup.com.au';
   const canUseDangerZone = isSuperAdmin || myRole === 'OWNER' || myRole === 'HALL_OF_JUSTICE';
 
   // ── Loading ──────────────────────────────────────────────────────────────────

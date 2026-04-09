@@ -10,7 +10,7 @@ import {
 
 import { VS } from '../lib/theme';
 
-const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
+const SUPER_ADMIN_EMAILS = new Set(['admin@eversense.ai', 'admin@veblengroup.com.au']);
 
 async function saFetch(url: string, options: RequestInit = {}) {
   const res = await fetch(url, { ...options, credentials: 'include', headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) } });
@@ -318,7 +318,7 @@ export function SuperAdmin() {
   const [showAddLead, setShowAddLead] = useState(false);
   const [confirm, setConfirm]         = useState<{ type: 'user'|'org'|'invite'; id: string; label: string } | null>(null);
 
-  const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
+  const isSuperAdmin = SUPER_ADMIN_EMAILS.has(session?.user?.email || '');
 
   const showToast = useCallback((msg: string, ok: boolean) => setToast({ msg, ok }), []);
 
@@ -612,7 +612,7 @@ export function SuperAdmin() {
                               <td className="px-5 py-3" style={{ color: u.emailVerified ? VS.teal : VS.orange }}>{u.emailVerified ? '✓' : '—'}</td>
                               <td className="px-5 py-3" style={{ color: VS.text2 }}>{new Date(u.createdAt).toLocaleDateString()}</td>
                               <td className="px-5 py-3 text-right" onClick={e => e.stopPropagation()}>
-                                {u.email !== SUPER_ADMIN_EMAIL && (
+                                {!SUPER_ADMIN_EMAILS.has(u.email) && (
                                   <button onClick={() => setConfirm({ type: 'user', id: u.id, label: u.email })}
                                     className="p-1.5 rounded-lg opacity-40 hover:opacity-100 transition-all" style={{ color: VS.red }}>
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -796,7 +796,7 @@ export function SuperAdmin() {
                                 <span style={{ color: VS.text1 }}>{new Date(u.createdAt).toLocaleDateString()}</span>
                               </div>
                             </div>
-                            {u.email !== SUPER_ADMIN_EMAIL && (
+                            {!SUPER_ADMIN_EMAILS.has(u.email) && (
                               <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${VS.border}` }}>
                                 <button onClick={() => setConfirm({ type: 'user', id: u.id, label: u.email })}
                                   className="flex items-center gap-1.5 text-[12px] opacity-50 hover:opacity-100 transition-all" style={{ color: VS.red }}>
@@ -871,7 +871,7 @@ export function SuperAdmin() {
                   <h2 className="text-[13px] font-bold mb-4" style={{ color: VS.text0 }}>Platform Info</h2>
                   <div className="space-y-3 text-[13px]">
                     {[
-                      { label: 'Super Admin Email', value: SUPER_ADMIN_EMAIL },
+                      { label: 'Super Admin Emails', value: [...SUPER_ADMIN_EMAILS].join(', ') },
                       { label: 'Primary Org Slug',  value: 'veblen' },
                       { label: 'Total Users',        value: stats?.totalUsers ?? '—' },
                       { label: 'Total Companies',    value: stats?.totalOrgs ?? '—' },

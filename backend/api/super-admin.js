@@ -41,7 +41,11 @@ const COOKIE_OPTS = {
   path:     '/',
 };
 
-const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
+const SUPER_ADMIN_EMAILS = new Set([
+  'admin@eversense.ai',
+  'admin@veblengroup.com.au',
+  ...(process.env.SUPER_ADMIN_EMAILS ? process.env.SUPER_ADMIN_EMAILS.split(',').map(e => e.trim()) : []),
+]);
 
 // ── In-memory error log (last 200 entries) ────────────────────────────────────
 const ERROR_LOG = [];
@@ -52,9 +56,9 @@ export function logError(level, source, message, detail = null) {
   if (ERROR_LOG.length > MAX_ERRORS) ERROR_LOG.length = MAX_ERRORS;
 }
 
-// Middleware: require logged-in user with the super-admin email
+// Middleware: require logged-in user with a super-admin email
 function requireSuperAdminUser(req, res, next) {
-  if (!req.user || req.user.email !== SUPER_ADMIN_EMAIL) {
+  if (!req.user || !SUPER_ADMIN_EMAILS.has(req.user.email)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   next();
