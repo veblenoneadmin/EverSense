@@ -18,12 +18,17 @@ async function requireOwner(req, res, next) {
     select: { orgId: true },
   });
   if (!ownership) return res.status(403).json({ error: 'Owner access required' });
-  // Attach all owned org IDs
+  // Attach all org IDs: orgs where user is OWNER/ADMIN + orgs they created (lead accounts)
   const allOwned = await prisma.membership.findMany({
     where: { userId: req.user.id, role: { in: ['OWNER', 'ADMIN'] } },
     select: { orgId: true },
   });
-  req.ownedOrgIds = allOwned.map(m => m.orgId);
+  const createdOrgs = await prisma.organization.findMany({
+    where: { createdById: req.user.id },
+    select: { id: true },
+  });
+  const orgIdSet = new Set([...allOwned.map(m => m.orgId), ...createdOrgs.map(o => o.id)]);
+  req.ownedOrgIds = [...orgIdSet];
   next();
 }
 
