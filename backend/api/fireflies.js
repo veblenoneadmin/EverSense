@@ -43,15 +43,20 @@ async function ensureTables() {
       '  `action_items` TEXT NULL,' +
       '  `keywords` VARCHAR(1000) NULL,' +
       '  `outline` TEXT NULL,' +
+      '  `orgId` VARCHAR(191) NULL,' +
       '  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),' +
       '  PRIMARY KEY (`id`),' +
       '  KEY `ft_date_idx` (`date`),' +
+      '  KEY `ft_orgId_idx` (`orgId`),' +
       '  KEY `ft_createdAt_idx` (`createdAt`)' +
       ') DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
     );
     tablesReady = true;
     console.log('  ✅ fireflies_transcripts table ready');
   } catch (_e) { /* tables likely exist */ }
+  // Add orgId column to existing tables
+  try { await prisma.$executeRawUnsafe("ALTER TABLE fireflies_transcripts ADD COLUMN `orgId` VARCHAR(191) NULL"); } catch (_) {}
+  try { await prisma.$executeRawUnsafe("CREATE INDEX `ft_orgId_idx` ON fireflies_transcripts (`orgId`)"); } catch (_) {}
   // Add notes column only if it doesn't already exist (prevents Prisma dup-column error log)
   try {
     const cols = await prisma.$queryRawUnsafe(
@@ -186,9 +191,23 @@ async function processTranscript(transcript) {
     return didUpdate; // only send notifications if summary was newly added
   }
 
+  // Resolve orgId from the first participant who's a member
+  let transcriptOrgId = null;
+  try {
+    const lcEmails2 = allParticipants.map(e => String(e).toLowerCase().trim()).filter(Boolean);
+    if (lcEmails2.length) {
+      const ph = lcEmails2.map(() => '?').join(',');
+      const matched = await prisma.$queryRawUnsafe(
+        `SELECT m.orgId FROM User u JOIN memberships m ON m.userId = u.id WHERE LOWER(u.email) IN (${ph}) LIMIT 1`,
+        ...lcEmails2
+      );
+      if (matched.length) transcriptOrgId = matched[0].orgId;
+    }
+  } catch (_) {}
+
   // New transcript — store it
   await prisma.$executeRawUnsafe(
-    'INSERT INTO fireflies_transcripts (id, title, date, duration, participants, overview, notes, action_items, keywords, outline, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+    'INSERT INTO fireflies_transcripts (id, title, date, duration, participants, overview, notes, action_items, keywords, outline, orgId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
     id,
     title?.trim() || 'Untitled Meeting',
     parsedDate,
@@ -199,6 +218,7 @@ async function processTranscript(transcript) {
     summary?.action_items || null,
     normaliseKeywords(summary?.keywords),
     summary?.outline      || null,
+    transcriptOrgId,
   );
 
   // Match participants to EverSense users — use emails from both sources
@@ -356,7 +376,8 @@ router.get('/transcripts', requireAuth, withOrgScope, async (req, res) => {
     await ensureTables();
     const rows = await prisma.$queryRawUnsafe(
       'SELECT id, title, date, duration, participants, overview, notes, action_items, keywords, outline, createdAt ' +
-      'FROM fireflies_transcripts ORDER BY date DESC, createdAt DESC LIMIT 50'
+      'FROM fireflies_transcripts WHERE orgId = ? OR orgId IS NULL ORDER BY date DESC, createdAt DESC LIMIT 50',
+      req.orgId
     );
     const transcripts = rows.map(r => ({
       ...r,
@@ -374,7 +395,7 @@ router.get('/transcripts/:id', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureTables();
     const rows = await prisma.$queryRawUnsafe(
-      'SELECT * FROM fireflies_transcripts WHERE id = ? LIMIT 1', req.params.id
+      'SELECT * FROM fireflies_transcripts WHERE id = ? AND (orgId = ? OR orgId IS NULL) LIMIT 1', req.params.id, req.orgId
     );
     if (!rows.length) return res.status(404).json({ success: false, error: 'Transcript not found' });
     const t = rows[0];
