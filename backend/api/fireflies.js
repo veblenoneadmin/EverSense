@@ -124,7 +124,7 @@ function mergeParticipants(participants = [], meeting_attendees = []) {
   return [...participants, ...extras];
 }
 
-async function processTranscript(transcript) {
+async function processTranscript(transcript, defaultOrgId = null) {
   const { id, title, date, duration, participants = [], meeting_attendees = [], summary } = transcript;
   if (!id) return false;
 
@@ -191,8 +191,8 @@ async function processTranscript(transcript) {
     return didUpdate; // only send notifications if summary was newly added
   }
 
-  // Resolve orgId from the first participant who's a member
-  let transcriptOrgId = null;
+  // Resolve orgId from the first participant who's a member, or use the polling org
+  let transcriptOrgId = defaultOrgId;
   try {
     const lcEmails2 = allParticipants.map(e => String(e).toLowerCase().trim()).filter(Boolean);
     if (lcEmails2.length) {
@@ -488,51 +488,88 @@ router.get('/diagnostics', requireAuth, async (req, res) => {
 });
 
 // ── Polling: check Fireflies every 30 minutes ─────────────────────────────────
-export async function startFirefliesPolling() {
-  if (!process.env.FIREFLIES_API_KEY) {
-    console.log('[Fireflies] No API key — polling disabled');
-    return;
-  }
+// Get Fireflies API key for a specific org
+async function getFirefliesApiKeyForOrg(orgId) {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      "SELECT `value` FROM org_integrations WHERE orgId = ? AND `key` = 'fireflies_api_key' LIMIT 1",
+      orgId
+    );
+    return rows[0]?.value || null;
+  } catch { return null; }
+}
 
-  const poll = async () => {
-    try {
-      console.log('[Fireflies] Polling for latest transcripts...');
-      const transcripts = await fetchLatestTranscripts();
-      let newCount = 0;
-      for (const t of transcripts) {
-        try {
-          const isNew = await processTranscript(t);
-          if (isNew) newCount++;
-        } catch (e) {
-          console.error('[Fireflies] Poll: error processing transcript:', t.id, e.message);
-        }
+// Get all Fireflies API keys — from env var and/or org_integrations table
+async function getAllFirefliesKeys() {
+  const keys = [];
+  // Env var (legacy)
+  if (process.env.FIREFLIES_API_KEY) {
+    keys.push({ apiKey: process.env.FIREFLIES_API_KEY, orgId: null });
+  }
+  // Per-org keys from database
+  try {
+    await ensureTables();
+    const rows = await prisma.$queryRawUnsafe(
+      "SELECT `value` AS apiKey, orgId FROM org_integrations WHERE `key` = 'fireflies_api_key' AND `value` IS NOT NULL AND `value` != ''"
+    );
+    for (const r of rows) {
+      if (r.apiKey && !keys.some(k => k.apiKey === r.apiKey)) {
+        keys.push({ apiKey: r.apiKey, orgId: r.orgId });
       }
-      if (newCount) console.log(`[Fireflies] Poll complete — ${newCount} new transcript(s)`);
-      else console.log('[Fireflies] Poll complete — no new transcripts');
-    } catch (err) {
-      console.error('[Fireflies] Poll error:', err.message);
+    }
+  } catch (_) {}
+  return keys;
+}
+
+export async function startFirefliesPolling() {
+  const poll = async () => {
+    const keys = await getAllFirefliesKeys();
+    if (!keys.length) return;
+
+    for (const { apiKey, orgId } of keys) {
+      try {
+        console.log(`[Fireflies] Polling${orgId ? ` for org ${orgId}` : ''}...`);
+        const transcripts = await fetchLatestTranscripts(apiKey);
+        let newCount = 0;
+        for (const t of transcripts) {
+          try {
+            // Pass orgId so new transcripts get tagged to the correct org
+            const isNew = await processTranscript(t, orgId);
+            if (isNew) newCount++;
+          } catch (e) {
+            console.error('[Fireflies] Poll: error processing transcript:', t.id, e.message);
+          }
+        }
+        if (newCount) console.log(`[Fireflies] Poll complete — ${newCount} new transcript(s)`);
+      } catch (err) {
+        console.error('[Fireflies] Poll error:', err.message);
+      }
     }
   };
 
   // Run once immediately, then every 30 minutes
   await poll();
   setInterval(poll, 30 * 60 * 1000);
+  console.log('[Fireflies] Polling started — checking every 30 min');
 }
 
 // ── POST /api/fireflies/sync — manual sync trigger ────────────────────────────
-router.post('/sync', requireAuth, async (req, res) => {
-  if (!process.env.FIREFLIES_API_KEY) {
-    return res.status(503).json({ success: false, error: 'FIREFLIES_API_KEY not configured' });
+router.post('/sync', requireAuth, withOrgScope, async (req, res) => {
+  // Get API key from org settings or env var
+  const orgKey = await getFirefliesApiKeyForOrg(req.orgId);
+  const apiKey = orgKey || process.env.FIREFLIES_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ success: false, error: 'No Fireflies API key configured. Add one in Settings → Integrations.' });
   }
   try {
     await ensureTables();
     let newCount = 0;
 
     // 1) Fetch latest 20 from Fireflies and process any new or summary-ready ones
-    const transcripts = await fetchLatestTranscripts();
+    const transcripts = await fetchLatestTranscripts(apiKey);
     for (const t of transcripts) {
       try {
-        const isNew = await processTranscript(t);
+        const isNew = await processTranscript(t, req.orgId);
         if (isNew) newCount++;
       } catch (e) {
         console.error('[Fireflies] Sync: error processing transcript:', t.id, e.message);
