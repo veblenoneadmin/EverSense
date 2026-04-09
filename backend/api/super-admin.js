@@ -275,16 +275,10 @@ router.post('/invite', requireAuth, requireSuperAdminUser, async (req, res) => {
   try {
     const { email, role = 'STAFF', name, orgId: targetOrgId } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
+    if (!targetOrgId) return res.status(400).json({ error: 'Organization is required — select which org to invite to' });
 
-    // Use specified org or fall back to Veblen
-    let org;
-    if (targetOrgId) {
-      org = await prisma.organization.findUnique({ where: { id: targetOrgId } });
-      if (!org) return res.status(404).json({ error: 'Organization not found' });
-    } else {
-      org = await prisma.organization.findUnique({ where: { slug: 'veblen' } });
-      if (!org) return res.status(404).json({ error: 'Default organization not found' });
-    }
+    const org = await prisma.organization.findUnique({ where: { id: targetOrgId } });
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });

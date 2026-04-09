@@ -138,7 +138,7 @@ function InviteModal({ onClose, onSuccess, orgs }: { onClose: () => void; onSucc
           <div>
             <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Organization *</label>
             <select className={inputCls} style={inputStyle} value={orgId} onChange={e => setOrgId(e.target.value)}>
-              <option value="">Veblen (default)</option>
+              <option value="" disabled>Select an organization...</option>
               {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </div>
