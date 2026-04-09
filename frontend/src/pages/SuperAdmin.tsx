@@ -104,24 +104,38 @@ function ConfirmDialog({ title, body, onConfirm, onCancel }: {
 }
 
 function InviteModal({ onClose, onSuccess, orgs }: { onClose: () => void; onSuccess: (msg: string) => void; orgs: Org[] }) {
-  const [email, setEmail] = useState('');
-  const [name, setName]   = useState('');
-  const [role, setRole]   = useState('STAFF');
-  const [orgId, setOrgId] = useState('');
+  const [emails, setEmails] = useState<string[]>(['']);
+  const [role, setRole]     = useState('STAFF');
+  const [orgId, setOrgId]   = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]   = useState('');
+  const [results, setResults] = useState<{ email: string; ok: boolean; msg: string }[]>([]);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setError(''); setLoading(true);
-    try {
-      const data = await saFetch('/api/super-admin/invite', {
-        method: 'POST',
-        body: JSON.stringify({ email, name: name || undefined, role, orgId: orgId || undefined }),
-      });
-      if (data.error) { setError(data.error); return; }
-      onSuccess(data.message || 'Invitation sent'); onClose();
-    } catch { setError('Failed to send invitation'); }
-    finally { setLoading(false); }
+    e.preventDefault(); setError(''); setResults([]);
+    const validEmails = emails.map(e => e.trim()).filter(e => e && e.includes('@'));
+    if (!validEmails.length) { setError('Enter at least one email'); return; }
+    if (!orgId) { setError('Select an organization'); return; }
+
+    setLoading(true);
+    const res: { email: string; ok: boolean; msg: string }[] = [];
+    for (const email of validEmails) {
+      try {
+        const data = await saFetch('/api/super-admin/invite', {
+          method: 'POST',
+          body: JSON.stringify({ email, role, orgId }),
+        });
+        res.push({ email, ok: !data.error, msg: data.message || data.error || 'Sent' });
+      } catch {
+        res.push({ email, ok: false, msg: 'Failed' });
+      }
+    }
+    setResults(res);
+    setLoading(false);
+    const successCount = res.filter(r => r.ok).length;
+    if (successCount > 0) {
+      setTimeout(() => { onSuccess(`${successCount} invite(s) sent`); onClose(); }, 1500);
+    }
   }
 
   return (
@@ -130,7 +144,7 @@ function InviteModal({ onClose, onSuccess, orgs }: { onClose: () => void; onSucc
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${VS.border}` }}>
           <div className="flex items-center gap-2">
             <UserPlus className="h-4 w-4" style={{ color: VS.accent }} />
-            <h2 className="text-[15px] font-bold" style={{ color: VS.text0 }}>Invite User</h2>
+            <h2 className="text-[15px] font-bold" style={{ color: VS.text0 }}>Invite Users</h2>
           </div>
           <button onClick={onClose} className="opacity-50 hover:opacity-100"><X className="h-4 w-4" style={{ color: VS.text1 }} /></button>
         </div>
@@ -143,12 +157,31 @@ function InviteModal({ onClose, onSuccess, orgs }: { onClose: () => void; onSucc
             </select>
           </div>
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Email *</label>
-            <input className={inputCls} style={inputStyle} type="email" required placeholder="user@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Name (optional)</label>
-            <input className={inputCls} style={inputStyle} type="text" placeholder="Full name" value={name} onChange={e => setName(e.target.value)} />
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>
+              Emails * <span className="font-normal" style={{ color: VS.text2 }}>({emails.filter(e => e.trim()).length})</span>
+            </label>
+            <div className="space-y-2">
+              {emails.map((em, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input className={inputCls} style={{ ...inputStyle, flex: 1 }} type="email" placeholder="user@example.com"
+                    value={em} onChange={e => { const u = [...emails]; u[i] = e.target.value; setEmails(u); }}
+                    onKeyDown={e => { if (e.key === 'Enter' && em.trim()) { e.preventDefault(); setEmails(p => [...p, '']); } }}
+                    autoFocus={i === emails.length - 1}
+                  />
+                  {emails.length > 1 && (
+                    <button type="button" onClick={() => setEmails(p => p.filter((_, j) => j !== i))}
+                      className="opacity-50 hover:opacity-100" style={{ color: VS.red }}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button type="button" onClick={() => setEmails(p => [...p, ''])}
+                className="text-[11px] font-medium w-full py-1.5 rounded-lg transition-colors"
+                style={{ color: VS.accent, border: `1px dashed ${VS.accent}55` }}>
+                + Add another email
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Role</label>
@@ -160,11 +193,22 @@ function InviteModal({ onClose, onSuccess, orgs }: { onClose: () => void; onSucc
             </select>
           </div>
           {error && <p className="text-[12px]" style={{ color: VS.red }}>{error}</p>}
+          {results.length > 0 && (
+            <div className="space-y-1">
+              {results.map((r, i) => (
+                <p key={i} className="text-[11px]" style={{ color: r.ok ? VS.teal : VS.red }}>
+                  {r.ok ? '✓' : '✕'} {r.email} — {r.msg}
+                </p>
+              ))}
+            </div>
+          )}
           <div className="flex gap-2 justify-end pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-white/[0.05] transition-all"
               style={{ border: `1px solid ${VS.border}`, color: VS.text1 }}>Cancel</button>
-            <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-50 transition-all"
-              style={{ background: VS.accent, color: '#fff', border: 'none' }}>{loading ? 'Sending…' : 'Send Invite'}</button>
+            <button type="submit" disabled={loading || !orgId} className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-50 transition-all"
+              style={{ background: VS.accent, color: '#fff', border: 'none' }}>
+              {loading ? 'Sending…' : `Send ${emails.filter(e => e.trim()).length} Invite(s)`}
+            </button>
           </div>
         </form>
       </div>
