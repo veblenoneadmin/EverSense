@@ -41,11 +41,22 @@ const COOKIE_OPTS = {
   path:     '/',
 };
 
-const SUPER_ADMIN_EMAILS = new Set([
-  'admin@eversense.ai',
+// Global super admin — sees ALL orgs
+const GLOBAL_SUPER_ADMIN = 'admin@eversense.ai';
+
+// Org-scoped super admins — see only their own org but can create leads, invite users
+const ORG_SUPER_ADMINS = new Set([
   'admin@veblengroup.com.au',
   ...(process.env.SUPER_ADMIN_EMAILS ? process.env.SUPER_ADMIN_EMAILS.split(',').map(e => e.trim()) : []),
 ]);
+
+function isSuperAdmin(email) {
+  return email === GLOBAL_SUPER_ADMIN || ORG_SUPER_ADMINS.has(email);
+}
+
+function isGlobalAdmin(email) {
+  return email === GLOBAL_SUPER_ADMIN;
+}
 
 // ── In-memory error log (last 200 entries) ────────────────────────────────────
 const ERROR_LOG = [];
@@ -56,11 +67,13 @@ export function logError(level, source, message, detail = null) {
   if (ERROR_LOG.length > MAX_ERRORS) ERROR_LOG.length = MAX_ERRORS;
 }
 
-// Middleware: require logged-in user with a super-admin email
+// Middleware: require logged-in user with super-admin access
 function requireSuperAdminUser(req, res, next) {
-  if (!req.user || !SUPER_ADMIN_EMAILS.has(req.user.email)) {
+  if (!req.user || !isSuperAdmin(req.user.email)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
+  // Tag whether this is a global or org-scoped admin
+  req.isGlobalAdmin = isGlobalAdmin(req.user.email);
   next();
 }
 
@@ -193,13 +206,25 @@ router.get('/users', requireAuth, requireSuperAdminUser, async (req, res) => {
       }
     });
 
-    const enriched = users.map(u => ({
+    let enriched = users.map(u => ({
       ...u,
       memberships: memberMap[u.id] || [],
       _count: { macroTasks: taskMap[u.id] || 0 },
     }));
 
-    res.json({ users: enriched });
+    // Org-scoped admin: only show users in their own org(s)
+    if (!req.isGlobalAdmin) {
+      const myOrgs = await prisma.membership.findMany({
+        where: { userId: req.user.id },
+        select: { orgId: true },
+      });
+      const myOrgIds = new Set(myOrgs.map(m => m.orgId));
+      enriched = enriched.filter(u =>
+        u.memberships.some(m => myOrgIds.has(m.org.id))
+      );
+    }
+
+    res.json({ users: enriched, isGlobal: req.isGlobalAdmin });
   } catch (err) {
     console.error('[SuperAdmin] users error:', err);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -232,7 +257,7 @@ router.get('/orgs-detailed', requireAuth, requireSuperAdminUser, async (req, res
       orderBy: { createdAt: 'desc' },
     });
 
-    const result = orgs.map(o => ({
+    let result = orgs.map(o => ({
       id: o.id,
       name: o.name,
       slug: o.slug,
@@ -242,7 +267,17 @@ router.get('/orgs-detailed', requireAuth, requireSuperAdminUser, async (req, res
       owner: o.memberships[0]?.user ?? null,
     }));
 
-    res.json({ orgs: result });
+    // Org-scoped admin: only show their own orgs
+    if (!req.isGlobalAdmin) {
+      const myOrgs = await prisma.membership.findMany({
+        where: { userId: req.user.id },
+        select: { orgId: true },
+      });
+      const myOrgIds = new Set(myOrgs.map(m => m.orgId));
+      result = result.filter(o => myOrgIds.has(o.id));
+    }
+
+    res.json({ orgs: result, isGlobal: req.isGlobalAdmin });
   } catch (err) {
     console.error('[SuperAdmin] orgs-detailed error:', err);
     res.status(500).json({ error: 'Failed to fetch orgs' });

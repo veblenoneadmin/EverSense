@@ -11,6 +11,7 @@ import {
 import { VS } from '../lib/theme';
 
 const SUPER_ADMIN_EMAILS = new Set(['admin@eversense.ai', 'admin@veblengroup.com.au']);
+const GLOBAL_ADMIN_EMAIL = 'admin@eversense.ai';
 
 async function saFetch(url: string, options: RequestInit = {}) {
   const res = await fetch(url, { ...options, credentials: 'include', headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) } });
@@ -319,6 +320,7 @@ export function SuperAdmin() {
   const [confirm, setConfirm]         = useState<{ type: 'user'|'org'|'invite'; id: string; label: string } | null>(null);
 
   const isSuperAdmin = SUPER_ADMIN_EMAILS.has(session?.user?.email || '');
+  const isGlobalAdmin = session?.user?.email === GLOBAL_ADMIN_EMAIL;
 
   const showToast = useCallback((msg: string, ok: boolean) => setToast({ msg, ok }), []);
 
@@ -403,10 +405,10 @@ export function SuperAdmin() {
   const navItems: { id: Section; label: string; icon: React.ElementType; badge?: number }[] = [
     { id: 'overview',   label: 'Overview',       icon: LayoutDashboard },
     { id: 'users',      label: 'User Management', icon: Users,     badge: users.length },
-    { id: 'companies',  label: 'Companies',       icon: Building2, badge: orgs.length },
+    ...(isGlobalAdmin ? [{ id: 'companies' as Section,  label: 'Companies',       icon: Building2, badge: orgs.length }] : []),
     { id: 'leads',      label: 'Lead Accounts',   icon: Crown,     badge: owners.length },
-    { id: 'errors',     label: 'Error Logs',      icon: Terminal,  badge: errors.length },
-    { id: 'settings',   label: 'Admin Settings',  icon: Settings },
+    ...(isGlobalAdmin ? [{ id: 'errors' as Section,     label: 'Error Logs',      icon: Terminal,  badge: errors.length }] : []),
+    ...(isGlobalAdmin ? [{ id: 'settings' as Section,   label: 'Admin Settings',  icon: Settings }] : []),
   ];
 
   return (
@@ -420,7 +422,7 @@ export function SuperAdmin() {
             <Crown className="h-3.5 w-3.5" style={{ color: VS.yellow }} />
           </div>
           <div>
-            <p className="text-[13px] font-bold leading-tight" style={{ color: VS.text0 }}>Super Admin</p>
+            <p className="text-[13px] font-bold leading-tight" style={{ color: VS.text0 }}>{isGlobalAdmin ? 'Super Admin' : 'Organization Admin'}</p>
             <p className="text-[10px] leading-tight" style={{ color: VS.text2 }}>EverSense Platform</p>
           </div>
         </div>
