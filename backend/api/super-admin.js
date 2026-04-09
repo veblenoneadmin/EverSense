@@ -162,7 +162,7 @@ router.get('/users', requireAuth, requireSuperAdminUser, async (req, res) => {
     // Use raw SQL to avoid Prisma crashing on orphaned memberships (org deleted but membership remains)
     const users = await prisma.$queryRawUnsafe(`
       SELECT u.id, u.email, u.name, u.emailVerified, u.createdAt
-      FROM user u
+      FROM User u
       ORDER BY u.createdAt DESC
     `);
 
