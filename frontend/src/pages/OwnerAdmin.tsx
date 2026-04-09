@@ -50,9 +50,10 @@ export function OwnerAdmin() {
     </div>
   );
 
-  if (!isOwner) return (
+  const ALLOWED_EMAIL = 'admin@veblengroup.com.au';
+  if (!isOwner || session?.user?.email !== ALLOWED_EMAIL) return (
     <div className="flex items-center justify-center h-64">
-      <p style={{ color: VS.text2 }}>Owner access required.</p>
+      <p style={{ color: VS.text2 }}>Access restricted.</p>
     </div>
   );
 

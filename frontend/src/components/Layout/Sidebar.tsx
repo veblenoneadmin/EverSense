@@ -37,7 +37,7 @@ const navItems = [
   { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
-  { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'] },
+  { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'], email: 'admin@veblengroup.com.au' },
 ];
 
 interface SidebarProps {
@@ -65,7 +65,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Close sidebar on route change (mobile)
   useEffect(() => { onClose(); }, [location.pathname]);
 
-  const visible = navItems.filter(item => item.roles.includes(userRole));
+  const visible = navItems.filter(item => {
+    if (!item.roles.includes(userRole)) return false;
+    if ((item as any).email && (item as any).email !== session?.user?.email) return false;
+    return true;
+  });
 
   return (
     <>
