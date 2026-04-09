@@ -59,9 +59,16 @@ export function OwnerAdmin() {
   );
 
   // Derived data
+  // Lead accounts = orgs that are NOT Veblen and NOT the admin's own orgs
+  const adminEmails = new Set([ALLOWED_EMAIL, 'admin@eversense.ai']);
   const leadAccounts = orgs.filter(o => {
+    // Skip orgs where the admin is the owner
     const ownerUser = users.find(u => u.orgId === o.id && u.role === 'OWNER');
-    return ownerUser && ownerUser.email !== ALLOWED_EMAIL && ownerUser.email !== 'admin@eversense.ai';
+    if (ownerUser && adminEmails.has(ownerUser.email)) return false;
+    // Skip the Veblen org itself
+    if (o.slug === 'veblen') return false;
+    // Everything else is a lead account (including orgs with pending invites)
+    return true;
   });
 
   const orgMembers = (orgId: string) => users.filter(u => u.orgId === orgId);
