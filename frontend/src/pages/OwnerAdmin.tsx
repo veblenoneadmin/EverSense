@@ -43,7 +43,22 @@ export function OwnerAdmin() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { if (session?.user?.id) loadAll(); }, [session?.user?.id]);
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    loadAll();
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(() => {
+      // Silent refresh — don't show loading spinner
+      Promise.all([
+        api.fetch('/api/owner-admin/users'),
+        api.fetch('/api/owner-admin/orgs'),
+      ]).then(([usersRes, orgsRes]) => {
+        setUsers(usersRes.users || []);
+        setOrgs(orgsRes.orgs || []);
+      }).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [session?.user?.id]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
