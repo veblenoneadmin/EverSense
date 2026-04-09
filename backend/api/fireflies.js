@@ -376,7 +376,7 @@ router.get('/transcripts', requireAuth, withOrgScope, async (req, res) => {
     await ensureTables();
     const rows = await prisma.$queryRawUnsafe(
       'SELECT id, title, date, duration, participants, overview, notes, action_items, keywords, outline, createdAt ' +
-      'FROM fireflies_transcripts WHERE orgId = ? OR orgId IS NULL ORDER BY date DESC, createdAt DESC LIMIT 50',
+      'FROM fireflies_transcripts WHERE orgId = ? ORDER BY date DESC, createdAt DESC LIMIT 50',
       req.orgId
     );
     const transcripts = rows.map(r => ({
@@ -395,7 +395,7 @@ router.get('/transcripts/:id', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureTables();
     const rows = await prisma.$queryRawUnsafe(
-      'SELECT * FROM fireflies_transcripts WHERE id = ? AND (orgId = ? OR orgId IS NULL) LIMIT 1', req.params.id, req.orgId
+      'SELECT * FROM fireflies_transcripts WHERE id = ? AND orgId = ? LIMIT 1', req.params.id, req.orgId
     );
     if (!rows.length) return res.status(404).json({ success: false, error: 'Transcript not found' });
     const t = rows[0];
