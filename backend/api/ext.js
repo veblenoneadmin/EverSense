@@ -542,4 +542,138 @@ router.post('/tasks/:id/assign', async (req, res) => {
   }
 });
 
+// ─── POST /api/ext/invite-user — provision a client user in one call ─────────
+// Used by n8n to auto-create client accounts after onboarding.
+// Creates user + membership + client record + project link + sends invite email.
+router.post('/invite-user', async (req, res) => {
+  try {
+    const orgId = req.orgId;
+    const { email, name, projectId, role = 'CLIENT' } = req.body;
+
+    if (!email) return res.status(400).json({ error: 'email is required' });
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const validRoles = ['CLIENT', 'STAFF', 'ADMIN'];
+    const normalizedRole = role.toUpperCase();
+    if (!validRoles.includes(normalizedRole)) {
+      return res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
+    }
+
+    // 1. Check if user already exists
+    const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+
+    let userId = null;
+    let isNewUser = false;
+    let inviteToken = null;
+
+    if (existingUser) {
+      userId = existingUser.id;
+
+      // Check if already in this org
+      const existingMembership = await prisma.membership.findUnique({
+        where: { userId_orgId: { userId, orgId } },
+      });
+      if (existingMembership) {
+        return res.json({
+          success: true,
+          message: 'User already exists in this organization',
+          userId,
+          alreadyMember: true,
+        });
+      }
+
+      // Add to org
+      await prisma.membership.create({ data: { userId, orgId, role: normalizedRole } });
+      console.log(`[ext] invite-user: existing user ${email} added to org as ${normalizedRole}`);
+    } else {
+      // 2. Create invitation for new user
+      isNewUser = true;
+      inviteToken = `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      await prisma.invite.create({
+        data: {
+          email: email.toLowerCase(),
+          orgId,
+          invitedById: req.user.id,
+          role: normalizedRole,
+          token: inviteToken,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        },
+      });
+      console.log(`[ext] invite-user: invitation created for ${email} token=${inviteToken}`);
+    }
+
+    // 3. Auto-create Client record for CLIENT role
+    if (normalizedRole === 'CLIENT') {
+      try {
+        const existing = await prisma.$queryRawUnsafe(
+          'SELECT id FROM clients WHERE email = ? AND orgId = ? LIMIT 1',
+          email.toLowerCase(), orgId
+        );
+        if (!existing.length) {
+          const clientId = randomUUID();
+          await prisma.$executeRawUnsafe(
+            'INSERT INTO clients (id, name, email, orgId, createdAt, updatedAt) VALUES (?, ?, ?, ?, NOW(), NOW())',
+            clientId, name, email.toLowerCase(), orgId
+          );
+          console.log(`[ext] invite-user: client record created for ${email}`);
+
+          // 4. Link client to project if projectId provided
+          if (projectId) {
+            await prisma.$executeRawUnsafe(
+              'UPDATE projects SET clientId = ?, clientName = ? WHERE id = ? AND orgId = ?',
+              clientId, name, projectId, orgId
+            ).catch(e => console.warn('[ext] project link error:', e.message));
+            console.log(`[ext] invite-user: linked client to project ${projectId}`);
+          }
+        }
+      } catch (e) {
+        console.warn('[ext] invite-user: client record error:', e.message);
+      }
+    }
+
+    // 5. Send invite email
+    try {
+      const { sendInviteEmail, sendWelcomeEmail, formatDuration } = await import('../lib/mailer.js');
+      const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+      const baseUrl = process.env.APP_URL || process.env.BETTER_AUTH_URL || 'https://eversense-ai.up.railway.app';
+
+      if (isNewUser && inviteToken) {
+        await sendInviteEmail(email, {
+          orgName: org?.name || 'the organization',
+          role: normalizedRole,
+          invitedBy: 'EverSense',
+          acceptUrl: `${baseUrl}/invite?token=${inviteToken}`,
+          expiresIn: formatDuration(30 * 24 * 60),
+        });
+        console.log(`[ext] invite-user: invite email sent to ${email}`);
+      } else if (existingUser) {
+        await sendWelcomeEmail(email, {
+          name,
+          orgName: org?.name || 'the organization',
+          role: normalizedRole,
+          dashboardUrl: `${baseUrl}/dashboard`,
+        });
+        console.log(`[ext] invite-user: welcome email sent to ${email}`);
+      }
+    } catch (e) {
+      console.warn('[ext] invite-user: email send error:', e.message);
+    }
+
+    // 6. Return result
+    res.status(201).json({
+      success: true,
+      message: isNewUser ? 'Invitation created and email sent' : 'User added to organization',
+      userId: userId || null,
+      isNewUser,
+      inviteToken: isNewUser ? inviteToken : undefined,
+      role: normalizedRole,
+      projectLinked: !!projectId,
+    });
+  } catch (err) {
+    console.error('[ext] invite-user error:', err);
+    res.status(500).json({ error: 'Failed to provision user' });
+  }
+});
+
 export default router;
