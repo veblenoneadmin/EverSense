@@ -24,6 +24,7 @@ import { VS } from '../../lib/theme';
 const accentBg = 'rgba(0,122,204,0.15)';
 
 const navItems = [
+  { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'], email: 'admin@veblengroup.com.au' },
   { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Tasks',          href: '/tasks',        icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Task History',   href: '/task-history', icon: History,         roles: ['OWNER', 'ADMIN', 'STAFF'] },
@@ -37,7 +38,6 @@ const navItems = [
   { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
-  { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'], email: 'admin@veblengroup.com.au' },
 ];
 
 interface SidebarProps {

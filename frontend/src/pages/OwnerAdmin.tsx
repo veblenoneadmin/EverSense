@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { Users, Building2, X, Crown, UserPlus } from 'lucide-react';
+import { Users, Building2, X, Crown, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 interface OrgUser { id: string; email: string; name: string | null; role: string; orgId: string; orgName: string; createdAt: string }
@@ -20,10 +20,11 @@ export function OwnerAdmin() {
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<'users' | 'orgs' | 'leads'>('users');
+  const [tab, setTab] = useState<'users' | 'orgs' | 'leads'>('orgs');
   const [showInvite, setShowInvite] = useState(false);
   const [showLead, setShowLead] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [expandedOrg, setExpandedOrg] = useState<string | null>(null);
 
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); } }, [toast]);
 
@@ -57,6 +58,20 @@ export function OwnerAdmin() {
     </div>
   );
 
+  // Derived data
+  const leadAccounts = orgs.filter(o => {
+    const ownerUser = users.find(u => u.orgId === o.id && u.role === 'OWNER');
+    return ownerUser && ownerUser.email !== ALLOWED_EMAIL && ownerUser.email !== 'admin@eversense.ai';
+  });
+
+  const orgMembers = (orgId: string) => users.filter(u => u.orgId === orgId);
+
+  const tabs = [
+    { id: 'orgs' as const, label: 'Organizations', icon: Building2, badge: orgs.length },
+    { id: 'users' as const, label: 'All Users', icon: Users, badge: users.length },
+    { id: 'leads' as const, label: 'Lead Accounts', icon: Crown, badge: leadAccounts.length },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Toast */}
@@ -68,41 +83,134 @@ export function OwnerAdmin() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: VS.text0 }}>Owner Admin</h1>
-          <p className="text-[12px] mt-0.5" style={{ color: VS.text2 }}>Manage your organizations, users, and lead accounts</p>
+          <div className="flex items-center gap-2">
+            <Crown className="h-5 w-5" style={{ color: VS.yellow }} />
+            <h1 className="text-xl font-bold" style={{ color: VS.text0 }}>Owner Admin</h1>
+          </div>
+          <p className="text-[12px] mt-1" style={{ color: VS.text2 }}>Manage organizations, users, and lead accounts</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowInvite(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-semibold text-white transition-all hover:opacity-90"
             style={{ background: VS.accent }}>
             <UserPlus className="h-3.5 w-3.5" /> Invite User
           </button>
           <button onClick={() => setShowLead(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-semibold text-white transition-all hover:opacity-90"
             style={{ background: VS.teal }}>
             <Crown className="h-3.5 w-3.5" /> Create Lead
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1.5">
+      {/* Stats strip */}
+      <div className="grid grid-cols-3 gap-4">
         {[
-          { id: 'users' as const, label: 'Users', icon: Users, badge: users.length },
-          { id: 'orgs' as const, label: 'Organizations', icon: Building2, badge: orgs.length },
-        ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-semibold transition-all"
-            style={tab === t.id ? { background: VS.accent, color: '#fff' } : { background: VS.bg1, color: VS.text2, border: `1px solid ${VS.border}` }}>
-            <t.icon className="h-3.5 w-3.5" /> {t.label}
-            <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full" style={{ background: tab === t.id ? 'rgba(255,255,255,0.2)' : VS.bg3 }}>{t.badge}</span>
-          </button>
-        ))}
+          { label: 'Organizations', value: orgs.length, color: VS.blue, icon: Building2 },
+          { label: 'Total Users', value: users.length, color: VS.teal, icon: Users },
+          { label: 'Lead Accounts', value: leadAccounts.length, color: VS.yellow, icon: Crown },
+        ].map(s => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className="rounded-xl p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: VS.text2 }}>{s.label}</span>
+                <Icon className="h-4 w-4" style={{ color: s.color }} />
+              </div>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: s.color }}>{s.value}</div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Users Tab */}
+      {/* Tabs */}
+      <div className="flex gap-1.5" style={{ borderBottom: `2px solid ${VS.border}`, paddingBottom: 0 }}>
+        {tabs.map(t => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className="flex items-center gap-1.5 px-5 py-2.5 text-[13px] font-semibold transition-all"
+              style={{
+                color: active ? VS.accent : VS.text2,
+                borderBottom: active ? `2px solid ${VS.accent}` : '2px solid transparent',
+                marginBottom: -2,
+              }}>
+              <Icon className="h-4 w-4" /> {t.label}
+              <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full"
+                style={{ background: active ? `${VS.accent}22` : VS.bg3, color: active ? VS.accent : VS.text2 }}>{t.badge}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Organizations Tab ── */}
+      {tab === 'orgs' && (
+        <div className="space-y-3">
+          {orgs.map(o => {
+            const members = orgMembers(o.id);
+            const isExpanded = expandedOrg === o.id;
+            const owner = members.find(m => m.role === 'OWNER');
+            return (
+              <div key={o.id} className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+                <div className="flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors hover:bg-white/[0.02]"
+                  onClick={() => setExpandedOrg(isExpanded ? null : o.id)}>
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: `${VS.blue}15` }}>
+                    <Building2 className="h-5 w-5" style={{ color: VS.blue }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-[14px] font-bold" style={{ color: VS.text0 }}>{o.name}</h3>
+                    <p className="text-[11px]" style={{ color: VS.text2 }}>
+                      {o.slug} · {o.memberCount} members
+                      {owner && ` · Owner: ${owner.name || owner.email}`}
+                    </p>
+                  </div>
+                  <span className="text-[10px]" style={{ color: VS.text2 }}>
+                    {new Date(o.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  {isExpanded ? <ChevronUp className="h-4 w-4" style={{ color: VS.text2 }} /> : <ChevronDown className="h-4 w-4" style={{ color: VS.text2 }} />}
+                </div>
+                {isExpanded && (
+                  <div style={{ borderTop: `1px solid ${VS.border}` }}>
+                    <div className="px-5 py-2" style={{ background: VS.bg2 }}>
+                      <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: VS.text2 }}>Members ({members.length})</span>
+                    </div>
+                    {members.length === 0 ? (
+                      <p className="px-5 py-4 text-[12px]" style={{ color: VS.text2 }}>No members</p>
+                    ) : members.map((m, i) => (
+                      <div key={`${m.id}-${m.orgId}`} className="flex items-center gap-3 px-5 py-2.5"
+                        style={{ borderBottom: `1px solid ${VS.border}22`, background: i % 2 === 0 ? 'transparent' : `${VS.bg2}44` }}>
+                        <div className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                          style={{ background: ROLE_COLORS[m.role] || VS.text2 }}>
+                          {(m.name || m.email || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium truncate" style={{ color: VS.text0 }}>{m.name || '—'}</p>
+                          <p className="text-[10px] truncate" style={{ color: VS.text2 }}>{m.email}</p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold"
+                          style={{ background: `${ROLE_COLORS[m.role] || VS.text2}18`, color: ROLE_COLORS[m.role] || VS.text2 }}>
+                          {m.role}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {orgs.length === 0 && (
+            <div className="rounded-xl p-12 text-center" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+              <Building2 className="h-8 w-8 mx-auto mb-3 opacity-30" style={{ color: VS.text2 }} />
+              <p className="text-[13px]" style={{ color: VS.text2 }}>No organizations yet</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── All Users Tab ── */}
       {tab === 'users' && (
         <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
           <table className="w-full text-[12px]">
@@ -135,24 +243,53 @@ export function OwnerAdmin() {
         </div>
       )}
 
-      {/* Orgs Tab */}
-      {tab === 'orgs' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {orgs.map(o => (
-            <div key={o.id} className="rounded-xl p-5" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-              <h3 className="text-[14px] font-bold" style={{ color: VS.text0 }}>{o.name}</h3>
-              <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>{o.slug}</p>
-              <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5" style={{ color: VS.blue }} />
-                  <span className="text-[12px] font-medium" style={{ color: VS.text1 }}>{o.memberCount} members</span>
-                </div>
-                <span className="text-[10px]" style={{ color: VS.text2 }}>
-                  Created {new Date(o.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
-              </div>
+      {/* ── Lead Accounts Tab ── */}
+      {tab === 'leads' && (
+        <div className="space-y-3">
+          {leadAccounts.length === 0 ? (
+            <div className="rounded-xl p-12 text-center" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+              <Crown className="h-8 w-8 mx-auto mb-3 opacity-30" style={{ color: VS.yellow }} />
+              <p className="text-[13px] font-medium" style={{ color: VS.text1 }}>No lead accounts yet</p>
+              <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>Click "Create Lead" to create a new organization for a client</p>
             </div>
-          ))}
+          ) : leadAccounts.map(o => {
+            const members = orgMembers(o.id);
+            const owner = members.find(m => m.role === 'OWNER');
+            return (
+              <div key={o.id} className="rounded-xl p-5" style={{ background: VS.bg1, border: `1px solid ${VS.yellow}33` }}>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: `${VS.yellow}15` }}>
+                    <Crown className="h-5 w-5" style={{ color: VS.yellow }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-[14px] font-bold" style={{ color: VS.text0 }}>{o.name}</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {owner && <span className="text-[11px]" style={{ color: VS.text1 }}>Owner: {owner.name || owner.email}</span>}
+                      <span className="text-[10px]" style={{ color: VS.text2 }}>· {o.memberCount} members</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px]" style={{ color: VS.text2 }}>
+                    {new Date(o.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                {members.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {members.map(m => (
+                      <div key={`${m.id}-${m.orgId}`} className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px]"
+                        style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
+                        <div className="h-4 w-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                          style={{ background: ROLE_COLORS[m.role] || VS.text2 }}>
+                          {(m.name || m.email || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <span style={{ color: VS.text1 }}>{m.name || m.email}</span>
+                        <span className="font-bold" style={{ color: ROLE_COLORS[m.role] || VS.text2 }}>{m.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
