@@ -241,7 +241,7 @@ function OverviewModal({
   };
 
   const handleToggleMilestone = async (ms: Milestone) => {
-    const newStatus = ms.status === 'completed' ? 'pending' : 'completed';
+    const newStatus = ms.status === 'completed' ? 'active' : 'completed';
     try {
       await apiClient.fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
         method: 'PATCH',

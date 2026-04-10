@@ -888,20 +888,27 @@ router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) =
 
     // Fix any projects with all-pending milestones (promote first one to active)
     try {
-      const needsFix = await prisma.$queryRawUnsafe(
-        `SELECT pm.id, pm.projectId FROM project_milestones pm
-         WHERE pm.orgId = ? AND pm.status = 'pending'
-         AND pm.sortOrder = (
-           SELECT MIN(pm2.sortOrder) FROM project_milestones pm2 WHERE pm2.projectId = pm.projectId AND pm2.status = 'pending'
-         )
-         AND pm.projectId NOT IN (
-           SELECT pm3.projectId FROM project_milestones pm3 WHERE pm3.status = 'active'
-         )`,
-        orgId
+      // Step 1: find projectIds that have milestones but none are 'active'
+      const projectsWithActive = await prisma.$queryRawUnsafe(
+        `SELECT DISTINCT projectId FROM project_milestones WHERE orgId = ? AND status = 'active'`, orgId
       );
-      for (const row of needsFix) {
-        await prisma.$executeRawUnsafe(`UPDATE project_milestones SET status = 'active' WHERE id = ?`, row.id);
-        console.log(`🏁 Auto-activated milestone ${row.id} for project ${row.projectId}`);
+      const activeProjectIds = new Set(projectsWithActive.map(r => r.projectId));
+
+      const allProjects = await prisma.$queryRawUnsafe(
+        `SELECT DISTINCT projectId FROM project_milestones WHERE orgId = ?`, orgId
+      );
+
+      for (const { projectId } of allProjects) {
+        if (activeProjectIds.has(projectId)) continue; // already has an active milestone
+        // Promote the first pending milestone (lowest sortOrder)
+        const first = await prisma.$queryRawUnsafe(
+          `SELECT id FROM project_milestones WHERE projectId = ? AND status = 'pending' ORDER BY sortOrder ASC LIMIT 1`,
+          projectId
+        );
+        if (first.length > 0) {
+          await prisma.$executeRawUnsafe(`UPDATE project_milestones SET status = 'active' WHERE id = ?`, first[0].id);
+          console.log(`🏁 Auto-activated milestone ${first[0].id} for project ${projectId}`);
+        }
       }
     } catch (e) { console.warn('[Milestones] inline auto-fix error:', e.message); }
 
