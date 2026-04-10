@@ -173,7 +173,9 @@ export function Milestones() {
       {/* Header */}
       <div className="px-3 md:px-6 py-3 md:py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${VS.border}` }}>
         <div className="flex items-center gap-3">
-          <Flag className="h-5 w-5" style={{ color: VS.accent }} />
+          <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ background: `${VS.accent}20` }}>
+            <Flag className="h-4 w-4" style={{ color: VS.accent }} />
+          </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight" style={{ color: VS.text0 }}>
               Milestones
@@ -405,7 +407,10 @@ function MilestoneCard({ milestone: ms, variant }: { milestone: MilestoneItem; v
             </span>
           </div>
           <h3 className="text-sm font-semibold flex items-center gap-1.5" style={{ color: VS.text0 }}>
-            {isCompleted && <CheckCircle2 className="inline h-3 w-3 flex-shrink-0" style={{ color: VS.teal }} />}
+            {isCompleted
+              ? <CheckCircle2 className="inline h-3.5 w-3.5 flex-shrink-0" style={{ color: VS.teal }} />
+              : <Flag className="inline h-3.5 w-3.5 flex-shrink-0" style={{ color: isActive ? VS.accent : VS.text2 }} />
+            }
             {ms.name}
             {isUpcoming && (
               <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: VS.bg3, color: VS.text2 }}>
