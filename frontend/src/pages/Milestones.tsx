@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Flag,
   Circle,
+  FolderOpen,
 } from 'lucide-react';
 import { VS } from '../lib/theme';
 
@@ -77,8 +78,20 @@ export function Milestones() {
   const [expandedUpcoming, setExpandedUpcoming] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [showAllMembers, setShowAllMembers] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [projects, setProjects] = useState<{ id: string; name: string; color: string | null }[]>([]);
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
   const canToggle = isAdminOrOwner || currentOrg?.role === 'STAFF';
+
+  // Fetch projects for selector
+  useEffect(() => {
+    if (!currentOrg?.id) return;
+    apiClient.fetch('/api/projects', { method: 'GET' })
+      .then((data: any) => {
+        if (data.success) setProjects((data.projects || []).map((p: any) => ({ id: p.id, name: p.name, color: p.color })));
+      })
+      .catch(() => {});
+  }, [currentOrg?.id]);
 
   const fetchMilestones = async (showLoader = true) => {
     if (!session?.user?.id || !currentOrg?.id) return;
@@ -126,7 +139,11 @@ export function Milestones() {
     );
   }
 
-  const noMilestones = currently.length === 0 && completed.length === 0 && upcoming.length === 0;
+  // Filter by selected project
+  const filteredCurrently = selectedProject ? currently.filter(m => m.projectId === selectedProject) : currently;
+  const filteredCompleted = selectedProject ? completed.filter(m => m.projectId === selectedProject) : completed;
+  const filteredUpcoming = selectedProject ? upcoming.filter(m => m.projectId === selectedProject) : upcoming;
+  const noMilestones = filteredCurrently.length === 0 && filteredCompleted.length === 0 && filteredUpcoming.length === 0;
 
   return (
     <div className="flex flex-col h-full" style={{ minHeight: 'calc(100vh - 56px)' }}>
@@ -144,11 +161,26 @@ export function Milestones() {
               </span>
             </h1>
             <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
-              {currently.length} active · {completed.length} completed · {upcoming.length} upcoming
+              {filteredCurrently.length} active · {filteredCompleted.length} completed · {filteredUpcoming.length} upcoming
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Project selector */}
+          <div className="relative">
+            <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
+            <select
+              value={selectedProject}
+              onChange={e => setSelectedProject(e.target.value)}
+              className="pl-8 pr-6 py-1.5 rounded-lg text-[12px] font-medium appearance-none cursor-pointer focus:outline-none"
+              style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1, minWidth: 140 }}
+            >
+              <option value="">All Projects</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
           {canToggle && (
             <button
               onClick={() => setShowAllMembers(v => !v)}
@@ -187,14 +219,14 @@ export function Milestones() {
         )}
 
         {/* ── Currently Working ── */}
-        {currently.length > 0 && (
+        {filteredCurrently.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Zap className="h-4 w-4" style={{ color: '#dcdcaa' }} />
               <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: VS.text0 }}>Currently Working</h2>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {currently.map(ms => (
+              {filteredCurrently.map(ms => (
                 <MilestoneCard key={ms.id} milestone={ms} variant="active" />
               ))}
             </div>
@@ -202,7 +234,7 @@ export function Milestones() {
         )}
 
         {/* ── Completed ── */}
-        {completed.length > 0 && (
+        {filteredCompleted.length > 0 && (
           <section>
             <button
               onClick={() => setExpandedCompleted(v => !v)}
@@ -210,7 +242,7 @@ export function Milestones() {
             >
               <CheckCircle2 className="h-4 w-4" style={{ color: VS.teal }} />
               <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: VS.text2 }}>
-                Completed ({completed.length})
+                Completed ({filteredCompleted.length})
               </h2>
               {expandedCompleted
                 ? <ChevronDown className="h-3.5 w-3.5" style={{ color: VS.text2 }} />
@@ -219,7 +251,7 @@ export function Milestones() {
             </button>
             {expandedCompleted && (
               <div className="space-y-2">
-                {completed.map(ms => (
+                {filteredCompleted.map(ms => (
                   <MilestoneCard key={ms.id} milestone={ms} variant="completed" />
                 ))}
               </div>
@@ -228,7 +260,7 @@ export function Milestones() {
         )}
 
         {/* ── Upcoming ── */}
-        {upcoming.length > 0 && (
+        {filteredUpcoming.length > 0 && (
           <section>
             <button
               onClick={() => setExpandedUpcoming(v => !v)}
@@ -236,7 +268,7 @@ export function Milestones() {
             >
               <Lock className="h-4 w-4" style={{ color: VS.text2 }} />
               <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: VS.text2 }}>
-                Upcoming ({upcoming.length})
+                Upcoming ({filteredUpcoming.length})
               </h2>
               {expandedUpcoming
                 ? <ChevronDown className="h-3.5 w-3.5" style={{ color: VS.text2 }} />
@@ -245,7 +277,7 @@ export function Milestones() {
             </button>
             {expandedUpcoming && (
               <div className={showAll ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-2'}>
-                {upcoming.map(ms => (
+                {filteredUpcoming.map(ms => (
                   <MilestoneCard key={ms.id} milestone={ms} variant={showAll ? 'active' : 'upcoming'} />
                 ))}
               </div>
