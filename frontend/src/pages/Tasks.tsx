@@ -54,6 +54,9 @@ interface Task {
   isTeamTask?: boolean;
   mainAssigneeId?: string | null;
   parentTaskId?: string | null;
+  milestoneId?: string | null;
+  milestoneName?: string | null;
+  milestoneStatus?: string | null;
   checklistTotal?: number;
   checklistDone?: number;
 }
@@ -879,6 +882,10 @@ export function Tasks() {
 
   const filtered = tasks
     .filter(t => {
+      // Progressive milestone reveal: only show tasks from active milestones (or tasks with no milestone)
+      if (t.milestoneId && t.milestoneStatus && t.milestoneStatus !== 'active' && t.milestoneStatus !== 'completed') return false;
+      // Hide completed milestone tasks unless they're recently completed (within the completed filter)
+      if (t.milestoneId && t.milestoneStatus === 'completed' && t.status === 'completed' && !filterCompleted) return false;
       if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase()) && !(t.description ?? '').toLowerCase().includes(searchTerm.toLowerCase())) return false;
       if (filterPriorities.length > 0 && !filterPriorities.includes(t.priority)) return false;
       if (filterProject && t.projectId !== filterProject) return false;
@@ -998,6 +1005,12 @@ export function Tasks() {
             </h1>
             <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
               {filtered.length}{filtered.length !== tasks.length ? ` / ${tasks.length}` : ''} tasks · {COLUMNS.length} stages
+              {(() => {
+                const activeMilestones = [...new Set(filtered.filter(t => t.milestoneId && t.milestoneStatus === 'active').map(t => t.milestoneName))].filter(Boolean);
+                return activeMilestones.length > 0 ? (
+                  <span className="ml-1" style={{ color: VS.accent }}> · Active: {activeMilestones.join(', ')}</span>
+                ) : null;
+              })()}
             </p>
           </div>
           {/* Active staff filter chip */}

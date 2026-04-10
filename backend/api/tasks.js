@@ -368,6 +368,9 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       isTeamTask: !!(task.isTeamTask),
       mainAssigneeId: task.mainAssigneeId || null,
       parentTaskId: task.parentTaskId || null,
+      milestoneId: null,
+      milestoneName: null,
+      milestoneStatus: null,
       checklistTotal: 0,
       checklistDone: 0,
     }));
@@ -380,7 +383,7 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       try {
         await ensureTeamTaskSchema();
         const extraRows = await prisma.$queryRawUnsafe(
-          `SELECT id, isTeamTask, mainAssigneeId, parentTaskId FROM macro_tasks WHERE id IN (${ph})`,
+          `SELECT id, isTeamTask, mainAssigneeId, parentTaskId, milestoneId FROM macro_tasks WHERE id IN (${ph})`,
           ...taskIds
         );
         const extraMap = {};
@@ -391,6 +394,7 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
             t.isTeamTask = !!(ex.isTeamTask);
             t.mainAssigneeId = ex.mainAssigneeId || null;
             t.parentTaskId = ex.parentTaskId || null;
+            t.milestoneId = ex.milestoneId || null;
           }
         }
       } catch (_) {}
@@ -503,6 +507,27 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
           }
           for (const t of formattedTasks) {
             if (t.isTeamTask && subAMap[t.id]) t.assignees = subAMap[t.id];
+          }
+        }
+      } catch (_) {}
+
+      // Enrich milestone names + status
+      try {
+        const msIds = [...new Set(formattedTasks.map(t => t.milestoneId).filter(Boolean))];
+        if (msIds.length) {
+          const msph = msIds.map(() => '?').join(',');
+          const milestones = await prisma.$queryRawUnsafe(
+            `SELECT id, name, status FROM project_milestones WHERE id IN (${msph})`,
+            ...msIds
+          );
+          const msMap = {};
+          for (const m of milestones) msMap[m.id] = m;
+          for (const t of formattedTasks) {
+            const ms = msMap[t.milestoneId];
+            if (ms) {
+              t.milestoneName = ms.name;
+              t.milestoneStatus = ms.status;
+            }
           }
         }
       } catch (_) {}
@@ -1534,6 +1559,59 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
           }
         }
       }).catch(() => {});
+    }
+
+    // ── Auto-promote milestone: if all tasks in the active milestone are completed ──
+    if (status === 'completed') {
+      try {
+        // Get this task's milestoneId
+        const taskRow = await prisma.$queryRawUnsafe(
+          'SELECT milestoneId FROM macro_tasks WHERE id = ?', taskId
+        ).catch(() => []);
+        const milestoneId = taskRow[0]?.milestoneId;
+
+        if (milestoneId) {
+          // Check if ALL tasks in this milestone are completed
+          const incomplete = await prisma.$queryRawUnsafe(
+            `SELECT COUNT(*) as cnt FROM macro_tasks WHERE milestoneId = ? AND status NOT IN ('completed', 'cancelled')`,
+            milestoneId
+          );
+          const remaining = Number(incomplete[0]?.cnt || 0);
+
+          if (remaining === 0) {
+            // Mark this milestone as completed
+            await prisma.$executeRawUnsafe(
+              `UPDATE project_milestones SET status = 'completed', updatedAt = NOW(3) WHERE id = ?`,
+              milestoneId
+            );
+            console.log(`🏁 Milestone ${milestoneId} completed — all tasks done`);
+
+            // Auto-promote the next milestone (by sortOrder) to 'active'
+            const currentMs = await prisma.$queryRawUnsafe(
+              'SELECT projectId, orgId, sortOrder FROM project_milestones WHERE id = ?', milestoneId
+            );
+            if (currentMs[0]) {
+              const { projectId: msProjectId, orgId: msOrgId, sortOrder } = currentMs[0];
+              const nextMs = await prisma.$queryRawUnsafe(
+                `SELECT id, name FROM project_milestones WHERE projectId = ? AND orgId = ? AND sortOrder > ? AND status = 'pending' ORDER BY sortOrder ASC LIMIT 1`,
+                msProjectId, msOrgId, sortOrder
+              );
+              if (nextMs[0]) {
+                await prisma.$executeRawUnsafe(
+                  `UPDATE project_milestones SET status = 'active', updatedAt = NOW(3) WHERE id = ?`,
+                  nextMs[0].id
+                );
+                console.log(`🔓 Milestone "${nextMs[0].name}" auto-promoted to active`);
+
+                // Notify org admins about milestone promotion
+                broadcast(req.orgId, 'milestone', { action: 'promoted', milestoneId: nextMs[0].id, name: nextMs[0].name });
+              }
+            }
+          }
+        }
+      } catch (msErr) {
+        console.error('[tasks] milestone auto-promote error:', msErr.message);
+      }
     }
 
     broadcast(req.orgId, 'task', { action: 'status', taskId, status, userId: req.user.id });

@@ -24,6 +24,7 @@ import { Onboarding } from './pages/Onboarding';
 import { TaskHistory } from './pages/TaskHistory';
 import { OwnerAdmin } from './pages/OwnerAdmin';
 import { EstimatesReport } from './pages/EstimatesReport';
+import { Milestones } from './pages/Milestones';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingGuard } from './components/OnboardingGuard';
@@ -69,6 +70,7 @@ function AppContent() {
                 <Route path="brain-dump" element={<BrainDump />} />
                 <Route path="tasks" element={<Tasks />} />
                 <Route path="timer" element={<Timer />} />
+                <Route path="milestones" element={<Milestones />} />
                 <Route path="projects" element={<Projects />} />
                 <Route path="timesheets" element={<TimeLogs />} />
                 <Route path="clients" element={<Clients />} />

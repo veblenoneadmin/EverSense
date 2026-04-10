@@ -18,6 +18,7 @@ import {
   History,
   Timer,
   Crown,
+  Flag,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -27,6 +28,7 @@ const navItems = [
   { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'], email: 'admin@veblengroup.com.au' },
   { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Tasks',          href: '/tasks',        icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
+  { name: 'Milestones',     href: '/milestones',   icon: Flag,            roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Task History',   href: '/task-history', icon: History,         roles: ['OWNER', 'ADMIN', 'STAFF'] },
   { name: 'Calendar',       href: '/calendar',    icon: CalendarDays,    roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
   { name: 'Meetings',       href: '/meetings',    icon: Video,           roles: ['OWNER', 'ADMIN', 'STAFF'] },
