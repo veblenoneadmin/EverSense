@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
 import { useOrganization } from '../contexts/OrganizationContext';
@@ -82,6 +82,20 @@ export function Milestones() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [projects, setProjects] = useState<{ id: string; name: string; color: string | null }[]>([]);
   const [orgMembers, setOrgMembers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const projectDropdownRef = useRef<HTMLDivElement>(null);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(e.target as Node)) setProjectDropdownOpen(false);
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target as Node)) setUserDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
   const canToggle = isAdminOrOwner || currentOrg?.role === 'STAFF';
 
@@ -174,36 +188,87 @@ export function Milestones() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Project selector */}
-          <div className="relative">
-            <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
-            <select
-              value={selectedProject}
-              onChange={e => setSelectedProject(e.target.value)}
-              className="pl-8 pr-6 py-1.5 rounded-lg text-[12px] font-medium appearance-none cursor-pointer focus:outline-none"
-              style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1, minWidth: 140 }}
+          {/* Project selector (custom dropdown — always opens downward) */}
+          <div className="relative" ref={projectDropdownRef}>
+            <button
+              onClick={() => { setProjectDropdownOpen(v => !v); setUserDropdownOpen(false); }}
+              className="flex items-center gap-2 pl-8 pr-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer"
+              style={{ background: VS.bg1, border: `1px solid ${selectedProject ? VS.accent : VS.border}`, color: VS.text1, minWidth: 140 }}
             >
-              <option value="">All Projects</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-          {/* User selector (admin only) */}
-          {isAdminOrOwner && orgMembers.length > 0 && (
-            <div className="relative">
-              <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
-              <select
-                value={selectedUserId}
-                onChange={e => { setSelectedUserId(e.target.value); if (e.target.value) setShowAllMembers(true); }}
-                className="pl-8 pr-6 py-1.5 rounded-lg text-[12px] font-medium appearance-none cursor-pointer focus:outline-none"
-                style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1, minWidth: 140 }}
+              <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
+              <span className="truncate">{selectedProject ? projects.find(p => p.id === selectedProject)?.name : 'All Projects'}</span>
+              <ChevronDown className="h-3 w-3 ml-auto flex-shrink-0" style={{ color: VS.text2 }} />
+            </button>
+            {projectDropdownOpen && (
+              <div
+                className="absolute top-full left-0 mt-1 rounded-lg overflow-y-auto z-50 shadow-lg"
+                style={{ background: VS.bg1, border: `1px solid ${VS.border}`, minWidth: 180, maxHeight: 240 }}
               >
-                <option value="">All Users</option>
-                {orgMembers.map(m => (
-                  <option key={m.id} value={m.id}>{m.name || m.email}</option>
+                <button
+                  onClick={() => { setSelectedProject(''); setProjectDropdownOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-[12px] hover:opacity-80 transition-opacity"
+                  style={{ color: !selectedProject ? VS.accent : VS.text1, background: !selectedProject ? `${VS.accent}15` : 'transparent' }}
+                >
+                  All Projects
+                </button>
+                {projects.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setSelectedProject(p.id); setProjectDropdownOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-[12px] hover:opacity-80 transition-opacity flex items-center gap-2"
+                    style={{
+                      color: selectedProject === p.id ? VS.accent : VS.text1,
+                      background: selectedProject === p.id ? `${VS.accent}15` : 'transparent',
+                      borderTop: `1px solid ${VS.border}`,
+                    }}
+                  >
+                    {p.color && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />}
+                    <span className="truncate">{p.name}</span>
+                  </button>
                 ))}
-              </select>
+              </div>
+            )}
+          </div>
+          {/* User selector (admin only — custom dropdown) */}
+          {isAdminOrOwner && orgMembers.length > 0 && (
+            <div className="relative" ref={userDropdownRef}>
+              <button
+                onClick={() => { setUserDropdownOpen(v => !v); setProjectDropdownOpen(false); }}
+                className="flex items-center gap-2 pl-8 pr-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer"
+                style={{ background: VS.bg1, border: `1px solid ${selectedUserId ? VS.accent : VS.border}`, color: VS.text1, minWidth: 140 }}
+              >
+                <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
+                <span className="truncate">{selectedUserId ? (orgMembers.find(m => m.id === selectedUserId)?.name || 'User') : 'All Users'}</span>
+                <ChevronDown className="h-3 w-3 ml-auto flex-shrink-0" style={{ color: VS.text2 }} />
+              </button>
+              {userDropdownOpen && (
+                <div
+                  className="absolute top-full left-0 mt-1 rounded-lg overflow-y-auto z-50 shadow-lg"
+                  style={{ background: VS.bg1, border: `1px solid ${VS.border}`, minWidth: 180, maxHeight: 240 }}
+                >
+                  <button
+                    onClick={() => { setSelectedUserId(''); setShowAllMembers(false); setUserDropdownOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-[12px] hover:opacity-80 transition-opacity"
+                    style={{ color: !selectedUserId ? VS.accent : VS.text1, background: !selectedUserId ? `${VS.accent}15` : 'transparent' }}
+                  >
+                    All Users
+                  </button>
+                  {orgMembers.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedUserId(m.id); setShowAllMembers(true); setUserDropdownOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-[12px] hover:opacity-80 transition-opacity"
+                      style={{
+                        color: selectedUserId === m.id ? VS.accent : VS.text1,
+                        background: selectedUserId === m.id ? `${VS.accent}15` : 'transparent',
+                        borderTop: `1px solid ${VS.border}`,
+                      }}
+                    >
+                      {m.name || m.email}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {canToggle && (
