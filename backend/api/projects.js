@@ -754,6 +754,138 @@ Rules: 3-5 milestones, 2-4 tasks per milestone, 1-2 skills each task (use: React
   }
 });
 
+// ── GET /api/projects/milestones/overview ─────────────────────────────────────
+// NOTE: MUST be defined BEFORE any /:id routes to prevent Express matching "milestones" as an :id
+router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureMilestonesTable();
+    const orgId = req.orgId;
+    console.log(`[Milestones] overview request — orgId: ${orgId}`);
+
+    // Fix any projects with all-pending milestones (promote first one to active)
+    try {
+      const projectsWithActive = await prisma.$queryRawUnsafe(
+        `SELECT DISTINCT projectId FROM project_milestones WHERE orgId = ? AND status = 'active'`, orgId
+      );
+      const activeProjectIds = new Set(projectsWithActive.map(r => r.projectId));
+
+      const allProjects = await prisma.$queryRawUnsafe(
+        `SELECT DISTINCT projectId FROM project_milestones WHERE orgId = ?`, orgId
+      );
+
+      for (const { projectId } of allProjects) {
+        if (activeProjectIds.has(projectId)) continue;
+        const first = await prisma.$queryRawUnsafe(
+          `SELECT id FROM project_milestones WHERE projectId = ? AND status = 'pending' ORDER BY sortOrder ASC LIMIT 1`,
+          projectId
+        );
+        if (first.length > 0) {
+          await prisma.$executeRawUnsafe(`UPDATE project_milestones SET status = 'active' WHERE id = ?`, first[0].id);
+          console.log(`🏁 Auto-activated milestone ${first[0].id} for project ${projectId}`);
+        }
+      }
+    } catch (e) { console.warn('[Milestones] inline auto-fix error:', e.message); }
+
+    // Fetch all milestones with project info
+    const milestones = await prisma.$queryRawUnsafe(
+      `SELECT pm.id, pm.projectId, pm.name, pm.description, pm.dueDate, pm.status, pm.sortOrder, pm.createdAt, pm.updatedAt,
+              p.name AS projectName, p.color AS projectColor, p.priority AS projectPriority
+       FROM project_milestones pm
+       JOIN projects p ON p.id = pm.projectId
+       WHERE pm.orgId = ?
+       ORDER BY pm.status ASC, pm.sortOrder ASC`,
+      orgId
+    );
+
+    // Fetch task counts per milestone
+    let taskCounts = [];
+    try {
+      taskCounts = await prisma.$queryRawUnsafe(
+        `SELECT milestoneId,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgress
+         FROM macro_tasks
+         WHERE milestoneId IS NOT NULL AND orgId = ?
+         GROUP BY milestoneId`,
+        orgId
+      );
+    } catch (_) {}
+
+    const countMap = {};
+    for (const tc of taskCounts) {
+      countMap[tc.milestoneId] = {
+        total: Number(tc.total),
+        completed: Number(tc.completed),
+        inProgress: Number(tc.inProgress),
+      };
+    }
+
+    // Fetch task previews
+    const showAll = req.query.showAll === 'true';
+    const previewStatuses = showAll ? ['active', 'pending'] : ['active'];
+    const activeMilestoneIds = milestones.filter(m => previewStatuses.includes(m.status)).map(m => m.id);
+    let taskPreviews = {};
+    if (activeMilestoneIds.length > 0) {
+      try {
+        const aph = activeMilestoneIds.map(() => '?').join(',');
+        const previewRows = await prisma.$queryRawUnsafe(
+          `SELECT t.id, t.title, t.status, t.priority, t.milestoneId,
+                  u.name AS assigneeName, u.image AS assigneeImage
+           FROM macro_tasks t
+           LEFT JOIN User u ON u.id = t.userId
+           WHERE t.milestoneId IN (${aph}) AND t.status != 'completed' AND t.status != 'cancelled'
+           ORDER BY t.priority DESC, t.createdAt ASC`,
+          ...activeMilestoneIds
+        );
+        for (const row of previewRows) {
+          if (!taskPreviews[row.milestoneId]) taskPreviews[row.milestoneId] = [];
+          if (taskPreviews[row.milestoneId].length < 3) {
+            taskPreviews[row.milestoneId].push(row);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Group by status
+    const currently = [];
+    const completed = [];
+    const upcoming = [];
+
+    for (const m of milestones) {
+      const counts = countMap[m.id] || { total: 0, completed: 0, inProgress: 0 };
+      const enriched = {
+        id: m.id,
+        projectId: m.projectId,
+        projectName: m.projectName,
+        projectColor: m.projectColor,
+        projectPriority: m.projectPriority,
+        name: m.name,
+        description: m.description,
+        dueDate: m.dueDate,
+        status: m.status,
+        sortOrder: m.sortOrder,
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt,
+        taskTotal: counts.total,
+        taskCompleted: counts.completed,
+        taskInProgress: counts.inProgress,
+        taskPreviews: taskPreviews[m.id] || [],
+      };
+
+      if (m.status === 'active') currently.push(enriched);
+      else if (m.status === 'completed') completed.push(enriched);
+      else upcoming.push(enriched);
+    }
+
+    console.log(`[Milestones] overview result — active: ${currently.length}, completed: ${completed.length}, upcoming: ${upcoming.length}, total milestones: ${milestones.length}`);
+    res.json({ success: true, currently, completed, upcoming });
+  } catch (e) {
+    console.error('[Milestones] overview error:', e.message);
+    res.status(500).json({ error: 'Failed to fetch milestones overview' });
+  }
+});
+
 // ── GET /api/projects/:id/overview ───────────────────────────────────────────
 // Returns project + all its tasks with assignee info.
 router.get('/:id/overview', requireAuth, withOrgScope, async (req, res) => {
@@ -877,141 +1009,6 @@ async function ensureMilestonesTable() {
 
   milestonesReady = true;
 }
-
-/** GET /api/projects/milestones/overview — all milestones across all projects, grouped by status */
-/** NOTE: this route MUST be defined BEFORE /:projectId/milestones to avoid Express matching "milestones" as a projectId */
-router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) => {
-  try {
-    await ensureMilestonesTable();
-    const orgId = req.orgId;
-    console.log(`[Milestones] overview request — orgId: ${orgId}`);
-
-    // Fix any projects with all-pending milestones (promote first one to active)
-    try {
-      // Step 1: find projectIds that have milestones but none are 'active'
-      const projectsWithActive = await prisma.$queryRawUnsafe(
-        `SELECT DISTINCT projectId FROM project_milestones WHERE orgId = ? AND status = 'active'`, orgId
-      );
-      const activeProjectIds = new Set(projectsWithActive.map(r => r.projectId));
-
-      const allProjects = await prisma.$queryRawUnsafe(
-        `SELECT DISTINCT projectId FROM project_milestones WHERE orgId = ?`, orgId
-      );
-
-      for (const { projectId } of allProjects) {
-        if (activeProjectIds.has(projectId)) continue; // already has an active milestone
-        // Promote the first pending milestone (lowest sortOrder)
-        const first = await prisma.$queryRawUnsafe(
-          `SELECT id FROM project_milestones WHERE projectId = ? AND status = 'pending' ORDER BY sortOrder ASC LIMIT 1`,
-          projectId
-        );
-        if (first.length > 0) {
-          await prisma.$executeRawUnsafe(`UPDATE project_milestones SET status = 'active' WHERE id = ?`, first[0].id);
-          console.log(`🏁 Auto-activated milestone ${first[0].id} for project ${projectId}`);
-        }
-      }
-    } catch (e) { console.warn('[Milestones] inline auto-fix error:', e.message); }
-
-    // Fetch all milestones with project info
-    const milestones = await prisma.$queryRawUnsafe(
-      `SELECT pm.id, pm.projectId, pm.name, pm.description, pm.dueDate, pm.status, pm.sortOrder, pm.createdAt, pm.updatedAt,
-              p.name AS projectName, p.color AS projectColor, p.priority AS projectPriority
-       FROM project_milestones pm
-       JOIN projects p ON p.id = pm.projectId
-       WHERE pm.orgId = ?
-       ORDER BY pm.status ASC, pm.sortOrder ASC`,
-      orgId
-    );
-
-    // Fetch task counts per milestone
-    let taskCounts = [];
-    try {
-      taskCounts = await prisma.$queryRawUnsafe(
-        `SELECT milestoneId,
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgress
-         FROM macro_tasks
-         WHERE milestoneId IS NOT NULL AND orgId = ?
-         GROUP BY milestoneId`,
-        orgId
-      );
-    } catch (_) {}
-
-    const countMap = {};
-    for (const tc of taskCounts) {
-      countMap[tc.milestoneId] = {
-        total: Number(tc.total),
-        completed: Number(tc.completed),
-        inProgress: Number(tc.inProgress),
-      };
-    }
-
-    // Fetch task previews for active milestones (up to 3 per milestone)
-    // If showAll=true (admin view), also fetch previews for upcoming milestones
-    const showAll = req.query.showAll === 'true';
-    const previewStatuses = showAll ? ['active', 'pending'] : ['active'];
-    const activeMilestoneIds = milestones.filter(m => previewStatuses.includes(m.status)).map(m => m.id);
-    let taskPreviews = {};
-    if (activeMilestoneIds.length > 0) {
-      try {
-        const aph = activeMilestoneIds.map(() => '?').join(',');
-        const previewRows = await prisma.$queryRawUnsafe(
-          `SELECT t.id, t.title, t.status, t.priority, t.milestoneId,
-                  u.name AS assigneeName, u.image AS assigneeImage
-           FROM macro_tasks t
-           LEFT JOIN User u ON u.id = t.userId
-           WHERE t.milestoneId IN (${aph}) AND t.status != 'completed' AND t.status != 'cancelled'
-           ORDER BY t.priority DESC, t.createdAt ASC`,
-          ...activeMilestoneIds
-        );
-        for (const row of previewRows) {
-          if (!taskPreviews[row.milestoneId]) taskPreviews[row.milestoneId] = [];
-          if (taskPreviews[row.milestoneId].length < 3) {
-            taskPreviews[row.milestoneId].push(row);
-          }
-        }
-      } catch (_) {}
-    }
-
-    // Group by status
-    const currently = [];
-    const completed = [];
-    const upcoming = [];
-
-    for (const m of milestones) {
-      const counts = countMap[m.id] || { total: 0, completed: 0, inProgress: 0 };
-      const enriched = {
-        id: m.id,
-        projectId: m.projectId,
-        projectName: m.projectName,
-        projectColor: m.projectColor,
-        projectPriority: m.projectPriority,
-        name: m.name,
-        description: m.description,
-        dueDate: m.dueDate,
-        status: m.status,
-        sortOrder: m.sortOrder,
-        createdAt: m.createdAt,
-        updatedAt: m.updatedAt,
-        taskTotal: counts.total,
-        taskCompleted: counts.completed,
-        taskInProgress: counts.inProgress,
-        taskPreviews: taskPreviews[m.id] || [],
-      };
-
-      if (m.status === 'active') currently.push(enriched);
-      else if (m.status === 'completed') completed.push(enriched);
-      else upcoming.push(enriched);
-    }
-
-    console.log(`[Milestones] overview result — active: ${currently.length}, completed: ${completed.length}, upcoming: ${upcoming.length}, total milestones: ${milestones.length}`);
-    res.json({ success: true, currently, completed, upcoming });
-  } catch (e) {
-    console.error('[Milestones] overview error:', e.message);
-    res.status(500).json({ error: 'Failed to fetch milestones overview' });
-  }
-});
 
 /** GET /api/projects/:projectId/milestones — includes tasks per milestone */
 router.get('/:projectId/milestones', requireAuth, withOrgScope, async (req, res) => {
