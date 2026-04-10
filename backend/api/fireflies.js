@@ -353,6 +353,16 @@ router.get('/debug/:id', requireAuth, async (req, res) => {
 
 // ── POST /api/fireflies/webhook ───────────────────────────────────────────────
 router.post('/webhook', async (req, res) => {
+  // Validate webhook secret to prevent unauthorized calls
+  const webhookSecret = process.env.FIREFLIES_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const provided = req.headers['x-webhook-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+    if (provided !== webhookSecret) {
+      console.warn(`🚫 [Fireflies] Unauthorized webhook attempt — IP: ${req.ip}`);
+      return res.status(401).json({ error: 'Unauthorized webhook' });
+    }
+  }
+
   res.json({ received: true }); // respond immediately so Fireflies doesn't retry
 
   try {
@@ -408,12 +418,12 @@ router.get('/transcripts/:id', requireAuth, withOrgScope, async (req, res) => {
 
 // ── GET /api/fireflies/status ─────────────────────────────────────────────────
 // Quick check used by the frontend badge — just needs to know key is present
-router.get('/status', async (req, res) => {
+router.get('/status', requireAuth, async (req, res) => {
   res.json({ connected: !!process.env.FIREFLIES_API_KEY });
 });
 
 // ── GET /api/fireflies/diagnostics — full connection + data check ─────────────
-router.get('/diagnostics', requireAuth, async (req, res) => {
+router.get('/diagnostics', requireAuth, withOrgScope, async (req, res) => {
   const result = {
     apiKeySet:      !!process.env.FIREFLIES_API_KEY,
     apiKeyPrefix:   process.env.FIREFLIES_API_KEY ? process.env.FIREFLIES_API_KEY.slice(0, 8) + '...' : null,
@@ -476,7 +486,8 @@ router.get('/diagnostics', requireAuth, async (req, res) => {
   try {
     await ensureTables();
     const rows = await prisma.$queryRawUnsafe(
-      'SELECT id, title, overview IS NOT NULL as hasSummary, createdAt FROM fireflies_transcripts ORDER BY createdAt DESC LIMIT 10'
+      'SELECT id, title, overview IS NOT NULL as hasSummary, createdAt FROM fireflies_transcripts WHERE orgId = ? ORDER BY createdAt DESC LIMIT 10',
+      req.orgId
     );
     result.dbRowCount = rows.length;
     result.dbRows = rows;

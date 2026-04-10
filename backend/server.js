@@ -41,12 +41,22 @@ import { startNotificationScheduler } from './services/notificationScheduler.js'
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler.js';
 import { startAttendanceCron } from './lib/attendance-cron.js';
 import {
-  blockPublicRegistration, 
-  addInternalBranding, 
+  blockPublicRegistration,
+  addInternalBranding,
   validateInvitationOnSignup,
   enforceUserLimits,
-  getInternalSystemInfo 
+  getInternalSystemInfo
 } from './middleware/internal-security.js';
+import {
+  securityHeaders,
+  generalLimiter,
+  authLimiter,
+  passwordResetLimiter,
+  extApiLimiter,
+  parameterPollution,
+  inputSanitizer,
+  antiBypass,
+} from './middleware/security.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,8 +167,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Mount express json middleware BEFORE auth routes for request logging  
+// Mount express json middleware BEFORE auth routes for request logging
 app.use(express.json({ limit: '10mb' }));
+
+// ── Security middleware ─────────────────────────────────────────────────────
+app.use(securityHeaders);      // Helmet: XSS, clickjacking, MIME sniffing headers
+app.use(parameterPollution);   // Block HTTP parameter pollution
+app.use(antiBypass);           // Block path traversal, null bytes, double-encoding
+app.use(inputSanitizer);       // Reject SQL injection, XSS, code injection in body/query
+app.use(generalLimiter);       // 200 req/min per IP
 
 
 // Simple health check for Railway (at root path)
@@ -178,7 +195,8 @@ app.get('/run-clockout', async (req, res) => {
   const log = [];
   try {
     const overdue = await prisma.$queryRawUnsafe(
-      `SELECT id, userId, orgId FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${Math.floor(threshSec)}`
+      `SELECT id, userId, orgId FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ?`,
+      Math.floor(threshSec)
     );
     log.push(`found ${overdue.length} overdue sessions (threshold: ${hours}h)`);
     for (const row of overdue) {
@@ -250,7 +268,8 @@ app.post('/force-clockout', async (req, res) => {
               TIMESTAMPDIFF(SECOND, timeIn, NOW()) as elapsedSeconds
        FROM attendance_logs
        WHERE timeOut IS NULL
-         AND timeIn <= DATE_SUB(NOW(), INTERVAL ${thresholdSeconds} SECOND)`
+         AND timeIn <= DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+      Math.floor(thresholdSeconds)
     );
     const results = [];
     for (const row of open) {
@@ -332,7 +351,7 @@ app.get("/api/auth", (req, res) => {
 
 // Password reset must be registered BEFORE the Better Auth catch-all
 // so these specific routes are not intercepted by Better Auth
-app.use('/api/auth', passwordResetRoutes);
+app.use('/api/auth', authLimiter, passwordResetRoutes);
 
 // Use a catch-all route for Better Auth sub-paths
 app.all(["/api/auth/*", "/api/auth/*splat"], (req, res) => {
@@ -507,7 +526,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/user-reports', userReportsRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/password-reset', passwordResetRoutes);
+app.use('/api/password-reset', passwordResetLimiter, passwordResetRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/attendance', attendanceRoutes);
@@ -519,7 +538,7 @@ app.use('/api/fireflies', firefliesRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/leaves', leavesRoutes);
 app.use('/api/apikeys', apikeysRoutes);
-app.use('/api/ext', extRoutes);
+app.use('/api/ext', extApiLimiter, extRoutes);
 app.use('/api/integrations', integrationsRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 import ownerAdminRoutes from './api/owner-admin.js';
@@ -531,7 +550,7 @@ app.use('/api/test-projects', testProjectsRoutes);
 
 // Additional custom auth routes (password reset, etc.)
 // Note: Better Auth routes are handled above
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 
 // ==================== TEMPORARY FIX ENDPOINT ====================
 // REMOVE THIS AFTER FIXING TONY'S MEMBERSHIP!
