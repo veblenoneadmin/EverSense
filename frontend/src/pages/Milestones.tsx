@@ -76,13 +76,19 @@ export function Milestones() {
   const [expandedCompleted, setExpandedCompleted] = useState(false);
   const [expandedUpcoming, setExpandedUpcoming] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [showAllMembers, setShowAllMembers] = useState(false);
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
+  const canToggle = isAdminOrOwner || currentOrg?.role === 'STAFF';
 
   const fetchMilestones = async (showLoader = true) => {
     if (!session?.user?.id || !currentOrg?.id) return;
     try {
       if (showLoader) setLoading(true);
-      const data = await apiClient.fetch(`/api/projects/milestones/overview${showAll ? '?showAll=true' : ''}`, { method: 'GET' });
+      const params = new URLSearchParams();
+      if (showAll) params.set('showAll', 'true');
+      if (!showAllMembers) params.set('userId', session.user.id);
+      const qs = params.toString();
+      const data = await apiClient.fetch(`/api/projects/milestones/overview${qs ? '?' + qs : ''}`, { method: 'GET' });
       if (data.success) {
         setCurrently(data.currently || []);
         setCompleted(data.completed || []);
@@ -95,7 +101,7 @@ export function Milestones() {
     }
   };
 
-  useEffect(() => { fetchMilestones(); }, [session?.user?.id, currentOrg?.id, showAll]);
+  useEffect(() => { fetchMilestones(); }, [session?.user?.id, currentOrg?.id, showAll, showAllMembers]);
 
   // Real-time updates
   useSSE(currentOrg?.id || undefined, useCallback((event: string) => {
@@ -130,24 +136,44 @@ export function Milestones() {
         <div className="flex items-center gap-3">
           <Flag className="h-5 w-5" style={{ color: VS.accent }} />
           <div>
-            <h1 className="text-lg font-bold tracking-tight" style={{ color: VS.text0 }}>Milestones</h1>
+            <h1 className="text-lg font-bold tracking-tight" style={{ color: VS.text0 }}>
+              Milestones
+              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded align-middle"
+                style={{ background: VS.bg3, color: VS.text2, border: `1px solid ${VS.border}` }}>
+                {showAllMembers ? 'All Members' : 'My Milestones'}
+              </span>
+            </h1>
             <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
               {currently.length} active · {completed.length} completed · {upcoming.length} upcoming
             </p>
           </div>
         </div>
-        {isAdminOrOwner && (
-          <button
-            onClick={() => { setShowAll(v => !v); if (!showAll) { setExpandedCompleted(true); setExpandedUpcoming(true); } }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 active:scale-95"
-            style={showAll
-              ? { background: VS.accent, border: `1px solid ${VS.accent}`, color: '#fff' }
-              : { background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1 }
-            }
-          >
-            {showAll ? 'Active Only' : 'Show All'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canToggle && (
+            <button
+              onClick={() => setShowAllMembers(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 active:scale-95"
+              style={showAllMembers
+                ? { background: VS.blue, border: `1px solid ${VS.blue}`, color: '#fff' }
+                : { background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1 }
+              }
+            >
+              {showAllMembers ? 'My Milestones' : 'All Members'}
+            </button>
+          )}
+          {isAdminOrOwner && (
+            <button
+              onClick={() => { setShowAll(v => !v); if (!showAll) { setExpandedCompleted(true); setExpandedUpcoming(true); } }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 active:scale-95"
+              style={showAll
+                ? { background: VS.accent, border: `1px solid ${VS.accent}`, color: '#fff' }
+                : { background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1 }
+              }
+            >
+              {showAll ? 'Active Only' : 'Show All'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 md:px-6 py-4 space-y-6">

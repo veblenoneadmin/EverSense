@@ -786,16 +786,32 @@ router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) =
       }
     } catch (e) { console.warn('[Milestones] inline auto-fix error:', e.message); }
 
-    // Fetch all milestones with project info
-    const milestones = await prisma.$queryRawUnsafe(
-      `SELECT pm.id, pm.projectId, pm.name, pm.description, pm.dueDate, pm.status, pm.sortOrder, pm.createdAt, pm.updatedAt,
-              p.name AS projectName, p.color AS projectColor, p.priority AS projectPriority
-       FROM project_milestones pm
-       JOIN projects p ON p.id = pm.projectId
-       WHERE pm.orgId = ?
-       ORDER BY pm.status ASC, pm.sortOrder ASC`,
-      orgId
-    );
+    // Fetch milestones — optionally filtered to only projects where the user has tasks
+    const userId = req.query.userId;
+    let milestones;
+    if (userId) {
+      // Only milestones from projects where this user has at least one task assigned
+      milestones = await prisma.$queryRawUnsafe(
+        `SELECT pm.id, pm.projectId, pm.name, pm.description, pm.dueDate, pm.status, pm.sortOrder, pm.createdAt, pm.updatedAt,
+                p.name AS projectName, p.color AS projectColor, p.priority AS projectPriority
+         FROM project_milestones pm
+         JOIN projects p ON p.id = pm.projectId
+         WHERE pm.orgId = ?
+           AND pm.projectId IN (SELECT DISTINCT projectId FROM macro_tasks WHERE userId = ? AND orgId = ? AND projectId IS NOT NULL)
+         ORDER BY pm.status ASC, pm.sortOrder ASC`,
+        orgId, userId, orgId
+      );
+    } else {
+      milestones = await prisma.$queryRawUnsafe(
+        `SELECT pm.id, pm.projectId, pm.name, pm.description, pm.dueDate, pm.status, pm.sortOrder, pm.createdAt, pm.updatedAt,
+                p.name AS projectName, p.color AS projectColor, p.priority AS projectPriority
+         FROM project_milestones pm
+         JOIN projects p ON p.id = pm.projectId
+         WHERE pm.orgId = ?
+         ORDER BY pm.status ASC, pm.sortOrder ASC`,
+        orgId
+      );
+    }
 
     // Fetch task counts per milestone
     let taskCounts = [];
