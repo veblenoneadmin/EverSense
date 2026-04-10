@@ -75,12 +75,14 @@ export function Milestones() {
   const [loading, setLoading] = useState(true);
   const [expandedCompleted, setExpandedCompleted] = useState(false);
   const [expandedUpcoming, setExpandedUpcoming] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
 
   const fetchMilestones = async (showLoader = true) => {
     if (!session?.user?.id || !currentOrg?.id) return;
     try {
       if (showLoader) setLoading(true);
-      const data = await apiClient.fetch('/api/projects/milestones/overview', { method: 'GET' });
+      const data = await apiClient.fetch(`/api/projects/milestones/overview${showAll ? '?showAll=true' : ''}`, { method: 'GET' });
       if (data.success) {
         setCurrently(data.currently || []);
         setCompleted(data.completed || []);
@@ -93,7 +95,7 @@ export function Milestones() {
     }
   };
 
-  useEffect(() => { fetchMilestones(); }, [session?.user?.id, currentOrg?.id]);
+  useEffect(() => { fetchMilestones(); }, [session?.user?.id, currentOrg?.id, showAll]);
 
   // Real-time updates
   useSSE(currentOrg?.id || undefined, useCallback((event: string) => {
@@ -124,7 +126,7 @@ export function Milestones() {
     <div className="flex flex-col h-full" style={{ minHeight: 'calc(100vh - 56px)' }}>
 
       {/* Header */}
-      <div className="px-3 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${VS.border}` }}>
+      <div className="px-3 md:px-6 py-3 md:py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${VS.border}` }}>
         <div className="flex items-center gap-3">
           <Flag className="h-5 w-5" style={{ color: VS.accent }} />
           <div>
@@ -134,6 +136,18 @@ export function Milestones() {
             </p>
           </div>
         </div>
+        {isAdminOrOwner && (
+          <button
+            onClick={() => { setShowAll(v => !v); if (!showAll) { setExpandedCompleted(true); setExpandedUpcoming(true); } }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-90 active:scale-95"
+            style={showAll
+              ? { background: VS.accent, border: `1px solid ${VS.accent}`, color: '#fff' }
+              : { background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1 }
+            }
+          >
+            {showAll ? 'Active Only' : 'Show All'}
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 md:px-6 py-4 space-y-6">
@@ -204,9 +218,9 @@ export function Milestones() {
               }
             </button>
             {expandedUpcoming && (
-              <div className="space-y-2">
+              <div className={showAll ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-2'}>
                 {upcoming.map(ms => (
-                  <MilestoneCard key={ms.id} milestone={ms} variant="upcoming" />
+                  <MilestoneCard key={ms.id} milestone={ms} variant={showAll ? 'active' : 'upcoming'} />
                 ))}
               </div>
             )}

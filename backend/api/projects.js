@@ -1060,7 +1060,10 @@ router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) =
     }
 
     // Fetch task previews for active milestones (up to 3 per milestone)
-    const activeMilestoneIds = milestones.filter(m => m.status === 'active').map(m => m.id);
+    // If showAll=true (admin view), also fetch previews for upcoming milestones
+    const showAll = req.query.showAll === 'true';
+    const previewStatuses = showAll ? ['active', 'pending'] : ['active'];
+    const activeMilestoneIds = milestones.filter(m => previewStatuses.includes(m.status)).map(m => m.id);
     let taskPreviews = {};
     if (activeMilestoneIds.length > 0) {
       try {
