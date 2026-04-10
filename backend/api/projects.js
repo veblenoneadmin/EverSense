@@ -855,18 +855,25 @@ async function ensureMilestonesTable() {
 
   // Auto-fix: for projects that have milestones but none are 'active', promote the first pending one
   try {
-    await prisma.$executeRawUnsafe(
-      `UPDATE project_milestones pm
-       INNER JOIN (
-         SELECT MIN(sortOrder) as minSort, projectId
-         FROM project_milestones
-         WHERE status = 'pending'
-         AND projectId NOT IN (SELECT projectId FROM project_milestones WHERE status = 'active')
-         GROUP BY projectId
-       ) fix ON fix.projectId = pm.projectId AND fix.minSort = pm.sortOrder
-       SET pm.status = 'active'`
+    // Step 1: find projects with no active milestone
+    const needsFix = await prisma.$queryRawUnsafe(
+      `SELECT pm.id FROM project_milestones pm
+       WHERE pm.status = 'pending'
+       AND pm.sortOrder = (
+         SELECT MIN(pm2.sortOrder) FROM project_milestones pm2 WHERE pm2.projectId = pm.projectId AND pm2.status = 'pending'
+       )
+       AND pm.projectId NOT IN (
+         SELECT pm3.projectId FROM project_milestones pm3 WHERE pm3.status = 'active'
+       )`
     );
-  } catch (_) {}
+    // Step 2: promote them
+    for (const row of needsFix) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE project_milestones SET status = 'active' WHERE id = ?`, row.id
+      );
+    }
+    if (needsFix.length > 0) console.log(`🏁 Auto-activated ${needsFix.length} milestones for projects missing an active milestone`);
+  } catch (e) { console.warn('[Milestones] auto-fix error:', e.message); }
 
   milestonesReady = true;
 }
@@ -877,6 +884,7 @@ router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) =
   try {
     await ensureMilestonesTable();
     const orgId = req.orgId;
+    console.log(`[Milestones] overview request — orgId: ${orgId}`);
 
     // Fetch all milestones with project info
     const milestones = await prisma.$queryRawUnsafe(
@@ -971,6 +979,7 @@ router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) =
       else upcoming.push(enriched);
     }
 
+    console.log(`[Milestones] overview result — active: ${currently.length}, completed: ${completed.length}, upcoming: ${upcoming.length}, total milestones: ${milestones.length}`);
     res.json({ success: true, currently, completed, upcoming });
   } catch (e) {
     console.error('[Milestones] overview error:', e.message);
