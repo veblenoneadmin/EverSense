@@ -886,6 +886,25 @@ router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) =
     const orgId = req.orgId;
     console.log(`[Milestones] overview request — orgId: ${orgId}`);
 
+    // Fix any projects with all-pending milestones (promote first one to active)
+    try {
+      const needsFix = await prisma.$queryRawUnsafe(
+        `SELECT pm.id, pm.projectId FROM project_milestones pm
+         WHERE pm.orgId = ? AND pm.status = 'pending'
+         AND pm.sortOrder = (
+           SELECT MIN(pm2.sortOrder) FROM project_milestones pm2 WHERE pm2.projectId = pm.projectId AND pm2.status = 'pending'
+         )
+         AND pm.projectId NOT IN (
+           SELECT pm3.projectId FROM project_milestones pm3 WHERE pm3.status = 'active'
+         )`,
+        orgId
+      );
+      for (const row of needsFix) {
+        await prisma.$executeRawUnsafe(`UPDATE project_milestones SET status = 'active' WHERE id = ?`, row.id);
+        console.log(`🏁 Auto-activated milestone ${row.id} for project ${row.projectId}`);
+      }
+    } catch (e) { console.warn('[Milestones] inline auto-fix error:', e.message); }
+
     // Fetch all milestones with project info
     const milestones = await prisma.$queryRawUnsafe(
       `SELECT pm.id, pm.projectId, pm.name, pm.description, pm.dueDate, pm.status, pm.sortOrder, pm.createdAt, pm.updatedAt,
@@ -1059,18 +1078,26 @@ router.post('/:projectId/milestones', requireAuth, withOrgScope, async (req, res
     const { name, description, dueDate, sortOrder } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Milestone name is required' });
 
+    // If no active milestone exists for this project, set this one as active
+    const existing = await prisma.$queryRawUnsafe(
+      `SELECT id FROM project_milestones WHERE projectId = ? AND orgId = ? AND status = 'active' LIMIT 1`,
+      req.params.projectId, req.orgId
+    ).catch(() => []);
+    const msStatus = existing.length === 0 ? 'active' : 'pending';
+
     const id = randomUUID();
     await prisma.$executeRawUnsafe(
-      `INSERT INTO project_milestones (id, projectId, orgId, name, description, dueDate, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO project_milestones (id, projectId, orgId, name, description, dueDate, status, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       id, req.params.projectId, req.orgId,
       name.trim(),
       description || null,
       dueDate ? new Date(dueDate) : null,
+      msStatus,
       sortOrder ?? 0
     );
 
-    console.log(`📌 Milestone created: "${name.trim()}" for project ${req.params.projectId}`);
-    res.status(201).json({ success: true, milestone: { id, name: name.trim(), status: 'pending' } });
+    console.log(`📌 Milestone created: "${name.trim()}" (${msStatus}) for project ${req.params.projectId}`);
+    res.status(201).json({ success: true, milestone: { id, name: name.trim(), status: msStatus } });
   } catch (e) {
     console.error('[Milestones] POST error:', e.message);
     res.status(500).json({ error: 'Failed to create milestone' });
