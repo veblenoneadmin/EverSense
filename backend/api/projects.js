@@ -837,10 +837,9 @@ router.get('/milestones/overview', requireAuth, withOrgScope, async (req, res) =
       };
     }
 
-    // Fetch task previews
+    // Fetch task previews for all non-completed milestones
     const showAll = req.query.showAll === 'true';
-    const previewStatuses = showAll ? ['active', 'pending'] : ['active'];
-    const activeMilestoneIds = milestones.filter(m => previewStatuses.includes(m.status)).map(m => m.id);
+    const activeMilestoneIds = milestones.filter(m => m.status !== 'completed').map(m => m.id);
     let taskPreviews = {};
     if (activeMilestoneIds.length > 0) {
       try {

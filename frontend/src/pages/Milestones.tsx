@@ -6,7 +6,6 @@ import { useSSE } from '../hooks/useSSE';
 import {
   Zap,
   CheckCircle2,
-  Lock,
   ChevronDown,
   ChevronRight,
   Flag,
@@ -266,7 +265,7 @@ export function Milestones() {
               onClick={() => setExpandedUpcoming(v => !v)}
               className="flex items-center gap-2 mb-3 hover:opacity-80 transition-opacity"
             >
-              <Lock className="h-4 w-4" style={{ color: VS.text2 }} />
+              <Flag className="h-4 w-4" style={{ color: VS.text2 }} />
               <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: VS.text2 }}>
                 Upcoming ({filteredUpcoming.length})
               </h2>
@@ -276,16 +275,11 @@ export function Milestones() {
               }
             </button>
             {expandedUpcoming && (
-              <div className={showAll ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-2'}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {filteredUpcoming.map(ms => (
-                  <MilestoneCard key={ms.id} milestone={ms} variant={showAll ? 'active' : 'upcoming'} />
+                  <MilestoneCard key={ms.id} milestone={ms} variant="upcoming" />
                 ))}
               </div>
-            )}
-            {!expandedUpcoming && (
-              <p className="text-xs ml-6" style={{ color: VS.text2, fontStyle: 'italic' }}>
-                Complete current milestones to unlock
-              </p>
             )}
           </section>
         )}
@@ -306,7 +300,6 @@ function MilestoneCard({ milestone: ms, variant }: { milestone: MilestoneItem; v
       style={{
         background: isActive ? VS.bg1 : VS.bg2,
         border: `1px solid ${isActive ? VS.accent + '55' : VS.border}`,
-        opacity: isUpcoming ? 0.6 : 1,
       }}
     >
       {/* Project + Milestone name */}
@@ -320,10 +313,14 @@ function MilestoneCard({ milestone: ms, variant }: { milestone: MilestoneItem; v
               {ms.projectName}
             </span>
           </div>
-          <h3 className="text-sm font-semibold" style={{ color: VS.text0 }}>
-            {isUpcoming && <Lock className="inline h-3 w-3 mr-1.5" style={{ color: VS.text2 }} />}
-            {isCompleted && <CheckCircle2 className="inline h-3 w-3 mr-1.5" style={{ color: VS.teal }} />}
+          <h3 className="text-sm font-semibold flex items-center gap-1.5" style={{ color: VS.text0 }}>
+            {isCompleted && <CheckCircle2 className="inline h-3 w-3 flex-shrink-0" style={{ color: VS.teal }} />}
             {ms.name}
+            {isUpcoming && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: VS.bg3, color: VS.text2 }}>
+                Next
+              </span>
+            )}
           </h3>
           {ms.description && (
             <p className="text-xs mt-0.5 line-clamp-1" style={{ color: VS.text2 }}>{ms.description}</p>
@@ -348,8 +345,8 @@ function MilestoneCard({ milestone: ms, variant }: { milestone: MilestoneItem; v
         />
       </div>
 
-      {/* Task previews (active only) */}
-      {isActive && ms.taskPreviews.length > 0 && (
+      {/* Task previews */}
+      {!isCompleted && ms.taskPreviews.length > 0 && (
         <div className="space-y-1.5">
           {ms.taskPreviews.map(task => (
             <div
