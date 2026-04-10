@@ -126,8 +126,11 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
           };
         }
         for (const p of enrichedProjects) {
-          p.tasks = statsMap[p.id] || { total: 0, completed: 0, inProgress: 0, pending: 0, timeSpent: 0 };
-          p.hoursLogged = statsMap[p.id]?.timeSpent ?? p.hoursLogged;
+          const stats = statsMap[p.id] || { total: 0, completed: 0, inProgress: 0, pending: 0, timeSpent: 0 };
+          p.tasks = stats;
+          p.hoursLogged = stats.timeSpent ?? p.hoursLogged;
+          // Auto-compute progress from completed tasks
+          p.progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
         }
       } catch (statsErr) {
         console.warn('[Projects] task stats enrichment failed:', statsErr.message);
