@@ -1295,6 +1295,17 @@ export function Projects() {
                     <p className="text-[12px] mt-2.5 line-clamp-2 leading-relaxed" style={{ color: VS.text2 }}>
                       {desc || '\u00a0'}
                     </p>
+                    {(project as any).activeMilestone && (
+                      <div className="flex items-center gap-1.5 mt-2" style={{ color: VS.accent }}>
+                        <Flag className="h-3 w-3" />
+                        <span className="text-[11px] font-medium">
+                          {(project as any).activeMilestone.name}
+                        </span>
+                        <span className="text-[10px]" style={{ color: VS.text2 }}>
+                          ({(project as any).activeMilestone.current}/{(project as any).activeMilestone.total})
+                        </span>
+                      </div>
+                    )}
 
                     <div className="mt-2.5 flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full"

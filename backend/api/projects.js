@@ -132,6 +132,31 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       } catch (statsErr) {
         console.warn('[Projects] task stats enrichment failed:', statsErr.message);
       }
+
+      // Enrich with active milestone info
+      try {
+        await ensureMilestonesTable();
+        const projectIds = projects.map(p => p.id);
+        const ph = projectIds.map(() => '?').join(',');
+        const milestoneRows = await prisma.$queryRawUnsafe(
+          `SELECT pm.projectId, pm.name, pm.sortOrder,
+                  (SELECT COUNT(*) FROM project_milestones WHERE projectId = pm.projectId) as totalMilestones
+           FROM project_milestones pm
+           WHERE pm.projectId IN (${ph}) AND pm.status = 'active'`,
+          ...projectIds
+        );
+        const msMap = {};
+        for (const row of milestoneRows) {
+          msMap[row.projectId] = {
+            name: row.name,
+            current: Number(row.sortOrder) + 1,
+            total: Number(row.totalMilestones),
+          };
+        }
+        for (const p of enrichedProjects) {
+          p.activeMilestone = msMap[p.id] || null;
+        }
+      } catch (_) {}
     }
 
     res.json({
