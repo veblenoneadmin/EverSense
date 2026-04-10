@@ -6,7 +6,7 @@ import { useOrganization } from '../contexts/OrganizationContext';
 import {
   X, MessageSquare, Paperclip, Send, Trash2, Download,
   Calendar, Clock, Tag, Folder, User, Users, AlertTriangle,
-  FileText, Image, File, ChevronRight, ChevronLeft, Upload, CheckSquare, Check, AtSign,
+  FileText, Image, File, ChevronRight, ChevronLeft, Upload, CheckSquare, Check, AtSign, Flag,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -33,6 +33,8 @@ interface Task {
   parentTaskId?: string | null;
   assignees?: { id: string; name: string; email: string }[];
   createdByName?: string | null;
+  milestoneName?: string | null;
+  milestoneStatus?: string | null;
 }
 
 interface Comment {
@@ -537,6 +539,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
                 {[
                   { icon: Calendar, label: 'Due Date',        value: fmtDate(task.dueDate),    color: isOverdue ? VS.red : VS.text1 },
                   { icon: Folder,   label: 'Project',         value: task.project || '—',       color: VS.text1 },
+                  { icon: Flag,     label: 'Milestone',       value: task.milestoneName ? `${task.milestoneName} (${task.milestoneStatus})` : '—', color: task.milestoneStatus === 'active' ? VS.accent : VS.text1 },
                   { icon: Clock,    label: 'Est. Time',      value: (() => { const h = Math.floor(task.estimatedHours || 0); const m = Math.round(((task.estimatedHours || 0) % 1) * 60); return h && m ? `${h}h ${m}m` : h ? `${h}h` : m ? `${m}m` : '—'; })(), color: VS.text1 },
                   { icon: Clock,    label: 'Actual Hours',    value: `${task.actualHours}h`,    color: VS.text1 },
                   { icon: User,     label: 'Assignee',        value: task.assignee || '—',       color: VS.text1 },
