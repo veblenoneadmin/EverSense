@@ -11,6 +11,7 @@ import {
   Flag,
   Circle,
   FolderOpen,
+  User,
 } from 'lucide-react';
 import { VS } from '../lib/theme';
 
@@ -78,19 +79,26 @@ export function Milestones() {
   const [showAll, setShowAll] = useState(false);
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>('');
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [projects, setProjects] = useState<{ id: string; name: string; color: string | null }[]>([]);
+  const [orgMembers, setOrgMembers] = useState<{ id: string; name: string; email: string }[]>([]);
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
   const canToggle = isAdminOrOwner || currentOrg?.role === 'STAFF';
 
-  // Fetch projects for selector
+  // Fetch projects + org members for selectors
   useEffect(() => {
-    if (!currentOrg?.id) return;
+    if (!currentOrg?.id || !session?.user?.id) return;
     apiClient.fetch('/api/projects', { method: 'GET' })
       .then((data: any) => {
         if (data.success) setProjects((data.projects || []).map((p: any) => ({ id: p.id, name: p.name, color: p.color })));
       })
       .catch(() => {});
-  }, [currentOrg?.id]);
+    if (isAdminOrOwner) {
+      apiClient.fetch('/api/tasks/members')
+        .then((d: any) => { if (d.members) setOrgMembers(d.members); })
+        .catch(() => {});
+    }
+  }, [currentOrg?.id, session?.user?.id]);
 
   const fetchMilestones = async (showLoader = true) => {
     if (!session?.user?.id || !currentOrg?.id) return;
@@ -98,7 +106,8 @@ export function Milestones() {
       if (showLoader) setLoading(true);
       const params = new URLSearchParams();
       if (showAll) params.set('showAll', 'true');
-      if (!showAllMembers) params.set('userId', session.user.id);
+      if (selectedUserId) params.set('userId', selectedUserId);
+      else if (!showAllMembers) params.set('userId', session.user.id);
       const qs = params.toString();
       const data = await apiClient.fetch(`/api/projects/milestones/overview${qs ? '?' + qs : ''}`, { method: 'GET' });
       if (data.success) {
@@ -113,7 +122,7 @@ export function Milestones() {
     }
   };
 
-  useEffect(() => { fetchMilestones(); }, [session?.user?.id, currentOrg?.id, showAll, showAllMembers]);
+  useEffect(() => { fetchMilestones(); }, [session?.user?.id, currentOrg?.id, showAll, showAllMembers, selectedUserId]);
 
   // Real-time updates
   useSSE(currentOrg?.id || undefined, useCallback((event: string) => {
@@ -156,7 +165,7 @@ export function Milestones() {
               Milestones
               <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded align-middle"
                 style={{ background: VS.bg3, color: VS.text2, border: `1px solid ${VS.border}` }}>
-                {showAllMembers ? 'All Members' : 'My Milestones'}
+                {selectedUserId ? (orgMembers.find(m => m.id === selectedUserId)?.name || 'User') : (showAllMembers ? 'All Members' : 'My Milestones')}
               </span>
             </h1>
             <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
@@ -180,6 +189,23 @@ export function Milestones() {
               ))}
             </select>
           </div>
+          {/* User selector (admin only) */}
+          {isAdminOrOwner && orgMembers.length > 0 && (
+            <div className="relative">
+              <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
+              <select
+                value={selectedUserId}
+                onChange={e => { setSelectedUserId(e.target.value); if (e.target.value) setShowAllMembers(true); }}
+                className="pl-8 pr-6 py-1.5 rounded-lg text-[12px] font-medium appearance-none cursor-pointer focus:outline-none"
+                style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text1, minWidth: 140 }}
+              >
+                <option value="">All Users</option>
+                {orgMembers.map(m => (
+                  <option key={m.id} value={m.id}>{m.name || m.email}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {canToggle && (
             <button
               onClick={() => setShowAllMembers(v => !v)}
