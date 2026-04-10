@@ -882,9 +882,9 @@ export function Tasks() {
 
   const filtered = tasks
     .filter(t => {
-      // Progressive milestone reveal: only show tasks from active milestones (or tasks with no milestone)
-      // Tasks from pending milestones are hidden — they unlock when the milestone becomes active
-      if (t.milestoneId && t.milestoneStatus === 'pending') return false;
+      // Progressive milestone reveal: only show tasks from the ACTIVE milestone
+      // Tasks with no milestone always show. Pending and completed milestone tasks are hidden.
+      if (t.milestoneId && t.milestoneStatus !== 'active') return false;
       if (searchTerm && !t.title.toLowerCase().includes(searchTerm.toLowerCase()) && !(t.description ?? '').toLowerCase().includes(searchTerm.toLowerCase())) return false;
       if (filterPriorities.length > 0 && !filterPriorities.includes(t.priority)) return false;
       if (filterProject && t.projectId !== filterProject) return false;
