@@ -449,6 +449,40 @@ router.delete('/users/:userId', requireAuth, requireSuperAdminUser, async (req, 
   }
 });
 
+// ── POST /api/super-admin/users/:userId/change-password ──────────────────────
+router.post('/users/:userId/change-password', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const { hashPassword } = await import('better-auth/crypto');
+    const hashed = await hashPassword(password);
+
+    // Update all credential-type accounts for this user
+    const updated = await prisma.account.updateMany({
+      where: { userId, providerId: { in: ['credential', 'email-password', 'email'] } },
+      data: { password: hashed },
+    });
+
+    if (updated.count === 0) {
+      return res.status(400).json({ error: 'No credential account found for this user — they may use Google sign-in only' });
+    }
+
+    console.log(`[SuperAdmin] Password changed for ${user.email} by ${req.user.email} (${updated.count} account(s) updated)`);
+    res.json({ success: true, message: `Password updated for ${user.email}` });
+  } catch (err) {
+    console.error('[SuperAdmin] change-password error:', err);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 // ── GET /api/super-admin/errors ───────────────────────────────────────────────
 router.get('/errors', requireAuth, requireSuperAdminUser, (req, res) => {
   const { level, limit = 100 } = req.query;

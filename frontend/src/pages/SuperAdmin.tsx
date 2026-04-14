@@ -5,7 +5,7 @@ import {
   Users, Building2, CheckSquare, FolderOpen, UserPlus, Trash2,
   Crown, Shield, UserCog, X, AlertTriangle, LayoutDashboard,
   RefreshCw, ChevronDown, ChevronUp, Search, ArrowLeft,
-  Terminal, Settings, Activity, Trash,
+  Terminal, Settings, Activity, Trash, KeyRound, Eye, EyeOff,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -277,6 +277,98 @@ function AddLeadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   );
 }
 
+function ChangePasswordModal({ user, onClose, onSuccess }: { user: { id: string; email: string; name: string | null }; onClose: () => void; onSuccess: (msg: string) => void }) {
+  const [password, setPassword]         = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPw, setShowPw]             = useState(false);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault(); setError('');
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+
+    setLoading(true);
+    try {
+      const data = await saFetch(`/api/super-admin/users/${user.id}/change-password`, {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      });
+      if (data.error) { setError(data.error); return; }
+      onSuccess(data.message || `Password updated for ${user.email}`);
+      onClose();
+    } catch { setError('Failed to change password'); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)' }}>
+      <div className="w-full max-w-sm rounded-xl shadow-2xl" style={{ background: VS.bg1, border: `1px solid ${VS.border2}` }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${VS.border}` }}>
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4" style={{ color: VS.orange }} />
+            <h2 className="text-[15px] font-bold" style={{ color: VS.text0 }}>Change Password</h2>
+          </div>
+          <button onClick={onClose} className="opacity-50 hover:opacity-100"><X className="h-4 w-4" style={{ color: VS.text1 }} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: VS.bg3, color: VS.text2 }}>
+            Changing password for <span style={{ color: VS.text0, fontWeight: 600 }}>{user.name || user.email}</span>
+            {user.name && <span className="block" style={{ color: VS.text2 }}>{user.email}</span>}
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>New Password</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                className={inputCls}
+                style={{ ...inputStyle, paddingRight: 36 }}
+                type={showPw ? 'text' : 'password'}
+                name="new-password"
+                autoComplete="new-password"
+                placeholder="Min 6 characters"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                minLength={6}
+                autoFocus
+              />
+              <button type="button" onClick={() => setShowPw(p => !p)}
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: VS.text2 }}>
+                {showPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: VS.text2 }}>Confirm Password</label>
+            <input
+              className={inputCls}
+              style={inputStyle}
+              type={showPw ? 'text' : 'password'}
+              name="confirm-password"
+              autoComplete="new-password"
+              placeholder="Re-enter password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
+          {error && <p className="text-[12px]" style={{ color: VS.red }}>{error}</p>}
+          <div className="flex gap-2 justify-end pt-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-white/[0.05] transition-all"
+              style={{ border: `1px solid ${VS.border}`, color: VS.text1 }}>Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-50 transition-all"
+              style={{ background: `${VS.orange}22`, border: `1px solid ${VS.orange}55`, color: VS.orange }}>
+              {loading ? 'Updating…' : 'Change Password'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Sidebar nav item ───────────────────────────────────────────────────────────
 function NavItem({ icon: Icon, label, active, badge, onClick }: {
   icon: React.ElementType; label: string; active: boolean; badge?: number; onClick: () => void;
@@ -316,6 +408,7 @@ export function SuperAdmin() {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [showInvite, setShowInvite]   = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
+  const [changePwUser, setChangePwUser] = useState<{ id: string; email: string; name: string | null } | null>(null);
   const [confirm, setConfirm]         = useState<{ type: 'user'|'org'|'invite'; id: string; label: string } | null>(null);
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
@@ -612,12 +705,20 @@ export function SuperAdmin() {
                               <td className="px-5 py-3" style={{ color: u.emailVerified ? VS.teal : VS.orange }}>{u.emailVerified ? '✓' : '—'}</td>
                               <td className="px-5 py-3" style={{ color: VS.text2 }}>{new Date(u.createdAt).toLocaleDateString()}</td>
                               <td className="px-5 py-3 text-right" onClick={e => e.stopPropagation()}>
-                                {u.email !== SUPER_ADMIN_EMAIL && (
-                                  <button onClick={() => setConfirm({ type: 'user', id: u.id, label: u.email })}
-                                    className="p-1.5 rounded-lg opacity-40 hover:opacity-100 transition-all" style={{ color: VS.red }}>
-                                    <Trash2 className="h-3.5 w-3.5" />
+                                <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => setChangePwUser({ id: u.id, email: u.email, name: u.name })}
+                                    title="Change password"
+                                    className="p-1.5 rounded-lg opacity-40 hover:opacity-100 transition-all" style={{ color: VS.orange }}>
+                                    <KeyRound className="h-3.5 w-3.5" />
                                   </button>
-                                )}
+                                  {u.email !== SUPER_ADMIN_EMAIL && (
+                                    <button onClick={() => setConfirm({ type: 'user', id: u.id, label: u.email })}
+                                      title="Delete user"
+                                      className="p-1.5 rounded-lg opacity-40 hover:opacity-100 transition-all" style={{ color: VS.red }}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                             {exp && (
@@ -902,6 +1003,7 @@ export function SuperAdmin() {
       {/* ── Modals ── */}
       {showInvite  && <InviteModal    onClose={() => setShowInvite(false)}  onSuccess={msg => { showToast(msg, true); loadAll(); }} orgs={orgs} />}
       {showAddLead && <AddLeadModal   onClose={() => setShowAddLead(false)} onSuccess={msg => { showToast(msg, true); loadAll(); }} />}
+      {changePwUser && <ChangePasswordModal user={changePwUser} onClose={() => setChangePwUser(null)} onSuccess={msg => showToast(msg, true)} />}
       {confirm && (
         <ConfirmDialog
           title={confirm.type === 'user' ? 'Delete User' : confirm.type === 'org' ? 'Delete Company' : 'Delete Invitation'}

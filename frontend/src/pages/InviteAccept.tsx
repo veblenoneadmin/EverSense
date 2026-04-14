@@ -189,6 +189,22 @@ export function InviteAccept() {
         return;
       }
 
+      // Ask the browser (Chrome/Edge) to save credentials in its password manager.
+      // User can still dismiss — the prompt isn't forceable by web APIs.
+      try {
+        const PasswordCredentialCtor = (window as unknown as { PasswordCredential?: new (init: { id: string; password: string; name?: string }) => Credential }).PasswordCredential;
+        if (PasswordCredentialCtor && navigator.credentials?.store) {
+          const cred = new PasswordCredentialCtor({
+            id: invite.email,
+            password,
+            name: name.trim(),
+          });
+          await navigator.credentials.store(cred);
+        }
+      } catch {
+        // Dismissed or unsupported (Safari/Firefox rely on form autocomplete hints instead) — non-fatal
+      }
+
       // Full reload so the session cookie is picked up by the React app
       setSuccess(true);
       setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
@@ -302,6 +318,8 @@ export function InviteAccept() {
                 <label className="block text-xs mb-1" style={{ color: '#858585', fontFamily: 'monospace' }}>Email</label>
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="username"
                   value={invite.email}
                   readOnly
                   style={{ ...inp, color: '#6a9955', cursor: 'not-allowed', opacity: 0.8 }}
@@ -323,10 +341,13 @@ export function InviteAccept() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showPw ? 'text' : 'password'}
+                    name="new-password"
+                    autoComplete="new-password"
                     placeholder="Min 8 characters"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     required
+                    minLength={8}
                     style={{ ...inp, paddingRight: 36 }}
                   />
                   <button
@@ -343,10 +364,13 @@ export function InviteAccept() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showConfirmPw ? 'text' : 'password'}
+                    name="confirm-password"
+                    autoComplete="new-password"
                     placeholder="Re-enter password"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     required
+                    minLength={8}
                     style={{ ...inp, paddingRight: 36 }}
                   />
                   <button

@@ -179,6 +179,8 @@ export function ResetPassword() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 id="password"
+                name="new-password"
+                autoComplete="new-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -203,6 +205,8 @@ export function ResetPassword() {
               <input
                 type={showConfirmPassword ? 'text' : 'password'}
                 id="confirmPassword"
+                name="confirm-password"
+                autoComplete="new-password"
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

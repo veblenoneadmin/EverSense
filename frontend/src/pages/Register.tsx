@@ -188,6 +188,8 @@ export function Register() {
                   <Input
                     type="email"
                     id="email"
+                    name="email"
+                    autoComplete="username"
                     placeholder="john@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -207,6 +209,8 @@ export function Register() {
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     id="password"
+                    name="new-password"
+                    autoComplete="new-password"
                     placeholder="Create a strong password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -233,6 +237,8 @@ export function Register() {
                   <Input
                     type={showConfirmPassword ? 'text' : 'password'}
                     id="confirmPassword"
+                    name="confirm-password"
+                    autoComplete="new-password"
                     placeholder="Confirm your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
