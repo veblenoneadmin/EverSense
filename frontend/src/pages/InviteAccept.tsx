@@ -195,7 +195,7 @@ export function InviteAccept() {
         const PasswordCredentialCtor = (window as unknown as { PasswordCredential?: new (init: { id: string; password: string; name?: string }) => Credential }).PasswordCredential;
         if (PasswordCredentialCtor && navigator.credentials?.store) {
           const cred = new PasswordCredentialCtor({
-            id: invite.email,
+            id: invite!.email,
             password,
             name: name.trim(),
           });
