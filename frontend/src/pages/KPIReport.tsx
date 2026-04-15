@@ -267,10 +267,10 @@ export function KPIReport() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: VS.text0 }}>
-            {isStaff ? 'My KPI Report' : 'KPI Intelligence Report'}
+            {ownKpiOnly ? 'My KPI Report' : 'KPI Intelligence Report'}
           </h1>
           <p className="text-[13px] mt-1" style={{ color: VS.text2 }}>
-            {data?.label} · {currentOrg?.name} · {isStaff ? 'Your personal performance' : 'Auto-classifying team performance'}
+            {data?.label} · {currentOrg?.name} · {ownKpiOnly ? 'Your personal performance' : 'Auto-classifying team performance'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -293,7 +293,7 @@ export function KPIReport() {
             style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text2 }}>
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
-          {!isStaff && (
+          {!ownKpiOnly && (
             <div className="relative">
               <button onClick={() => setShowExportMenu(v => !v)}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
@@ -332,7 +332,7 @@ export function KPIReport() {
       </div>
 
       {/* ── KPI strip (org-wide — hidden for staff) ── */}
-      {!isStaff && <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      {!ownKpiOnly && <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {([
           { label: 'Total Hours',     value: `${kpi?.totalHours ?? 0}h`,        icon: Clock,         color: VS.blue,   trend: kpi?.hoursTrend ?? null },
           { label: 'Tasks Completed', value: `${kpi?.totalCompleted ?? 0}`,      icon: CheckSquare,   color: VS.teal,   trend: null },
@@ -367,7 +367,7 @@ export function KPIReport() {
         <div className="lg:col-span-2 space-y-4">
 
           {/* Filters panel — hidden for staff */}
-          {!isStaff && <div className="rounded-xl p-4 space-y-3" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+          {!ownKpiOnly && <div className="rounded-xl p-4 space-y-3" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" style={{ color: VS.accent }} />
               <h2 className="text-[13px] font-bold" style={{ color: VS.text0 }}>Filters</h2>
@@ -462,9 +462,9 @@ export function KPIReport() {
           {/* Sort + count */}
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: VS.text2 }}>
-              {isStaff ? 'My Performance' : `Team Members (${filteredUsers.length})`}
+              {ownKpiOnly ? 'My Performance' : `Team Members (${filteredUsers.length})`}
             </span>
-            {!isStaff && <div className="flex items-center gap-1">
+            {!ownKpiOnly && <div className="flex items-center gap-1">
               <span className="text-[11px] mr-1" style={{ color: VS.text2 }}>Sort:</span>
               {(['score', 'hours', 'completion'] as const).map(s => (
                 <button key={s} onClick={() => setSortBy(s)}
