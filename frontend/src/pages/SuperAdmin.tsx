@@ -23,6 +23,7 @@ const ROLE_CFG: Record<string, { color: string; label: string }> = {
   STAFF:           { color: VS.teal,    label: 'Staff'          },
   CLIENT:          { color: VS.text2,   label: 'Client'         },
   HALL_OF_JUSTICE: { color: '#f59e0b',  label: 'Hall of Justice' },
+  ACCOUNTANT:      { color: VS.purple,  label: 'Accountant'      },
 };
 
 const inputCls = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
@@ -189,6 +190,7 @@ function InviteModal({ onClose, onSuccess, orgs }: { onClose: () => void; onSucc
               <option value="OWNER">Owner</option>
               <option value="ADMIN">Admin</option>
               <option value="STAFF">Staff</option>
+              <option value="ACCOUNTANT">Accountant</option>
               <option value="CLIENT">Client</option>
             </select>
           </div>

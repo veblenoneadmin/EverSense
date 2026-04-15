@@ -38,18 +38,18 @@ const router = express.Router();
 // Validation schemas
 const inviteUserSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE'])
+  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE', 'ACCOUNTANT'])
 });
 
 const updateRoleSchema = z.object({
-  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE'])
+  role: z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE', 'ACCOUNTANT'])
 });
 
 const createUserSchema = z.object({
   name:     z.string().min(1).max(255),
   email:    z.string().email(),
   password: z.string().min(6).max(128),
-  role:     z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE']),
+  role:     z.enum(['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE', 'ACCOUNTANT']),
 });
 
 /**

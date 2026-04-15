@@ -6,6 +6,7 @@ export const RoleOrder = {
   OWNER: 4,
   ADMIN: 3,
   STAFF: 2,
+  ACCOUNTANT: 2,  // same level as STAFF — can see most things but not admin/milestones/estimates
   CLIENT: 1
 };
 

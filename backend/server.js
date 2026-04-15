@@ -3264,12 +3264,12 @@ async function ensureRoleEnumSchema() {
     // Idempotent: re-declares the ENUM with all values including HALL_OF_JUSTICE.
     // MySQL silently no-ops if the column already has all values.
     await prisma.$executeRawUnsafe(
-      "ALTER TABLE `memberships` MODIFY COLUMN `role` ENUM('OWNER','ADMIN','STAFF','CLIENT','HALL_OF_JUSTICE') NOT NULL DEFAULT 'STAFF'"
+      "ALTER TABLE `memberships` MODIFY COLUMN `role` ENUM('OWNER','ADMIN','STAFF','CLIENT','HALL_OF_JUSTICE','ACCOUNTANT') NOT NULL DEFAULT 'STAFF'"
     );
     await prisma.$executeRawUnsafe(
-      "ALTER TABLE `invites` MODIFY COLUMN `role` ENUM('OWNER','ADMIN','STAFF','CLIENT','HALL_OF_JUSTICE') NOT NULL DEFAULT 'STAFF'"
+      "ALTER TABLE `invites` MODIFY COLUMN `role` ENUM('OWNER','ADMIN','STAFF','CLIENT','HALL_OF_JUSTICE','ACCOUNTANT') NOT NULL DEFAULT 'STAFF'"
     );
-    console.log('  ✅ role enum columns ready (HALL_OF_JUSTICE included)');
+    console.log('  ✅ role enum columns ready (ACCOUNTANT + HALL_OF_JUSTICE included)');
   } catch (e) {
     console.warn('  ⚠️  ensureRoleEnumSchema:', e.message);
   }

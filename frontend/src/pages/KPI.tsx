@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { useSession } from '../lib/auth-client';
 import {
   BarChart3,
   Clock,
@@ -132,12 +133,28 @@ function ChangePill({ value }: { value: number | null }) {
 
 export function KPI() {
   const { currentOrg } = useOrganization();
+  const { data: session } = useSession();
   const [period, setPeriod] = useState<Period>('weekly');
   const [inputVal, setInputVal] = useState(() => defaultInputVal('weekly'));
   const [data, setData] = useState<KPIData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>('STAFF');
+
+  // Fetch current user's role — STAFF + ACCOUNTANT only see their own KPI row
+  useEffect(() => {
+    if (!session?.user?.id || !currentOrg?.id) return;
+    fetch('/api/organizations', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => {
+        const org = d?.organizations?.find((o: any) => o.id === currentOrg.id);
+        if (org?.role) setUserRole(org.role);
+      })
+      .catch(() => {});
+  }, [session?.user?.id, currentOrg?.id]);
+
+  const ownKpiOnly = userRole === 'STAFF' || userRole === 'ACCOUNTANT';
 
   const handlePeriodChange = (p: Period) => {
     setPeriod(p);
@@ -372,7 +389,7 @@ export function KPI() {
             <div style={{ padding: '14px 18px', borderBottom: `1px solid ${VS.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Users size={15} color={VS.text2} />
               <span style={{ fontSize: 14, fontWeight: 700, color: VS.text0 }}>Employee Performance</span>
-              <span style={{ fontSize: 11, color: VS.text2, marginLeft: 'auto' }}>{data.employees.length} members</span>
+              <span style={{ fontSize: 11, color: VS.text2, marginLeft: 'auto' }}>{(ownKpiOnly ? data.employees.filter(e => e.id === session?.user?.id) : data.employees).length} members</span>
             </div>
 
             {/* Table header */}
@@ -386,8 +403,8 @@ export function KPI() {
               <span style={{ textAlign: 'center' }}>Status</span>
             </div>
 
-            {/* Table rows */}
-            {data.employees.map((emp, i) => {
+            {/* Table rows — STAFF + ACCOUNTANT only see their own row */}
+            {(ownKpiOnly ? data.employees.filter(e => e.id === session?.user?.id) : data.employees).map((emp, i, arr) => {
               const isExpanded = expandedEmployee === emp.id;
               const statusColor = emp.hours > 6 ? VS.teal : emp.hours > 0 ? VS.yellow : VS.red;
               const statusLabel = emp.hours > 6 ? 'Active' : emp.hours > 0 ? 'Partial' : 'Inactive';
@@ -400,7 +417,7 @@ export function KPI() {
                       display: 'grid',
                       gridTemplateColumns: '1fr 90px 80px 80px 90px 70px 50px',
                       padding: '10px 18px',
-                      borderBottom: `1px solid ${i === data.employees.length - 1 && !isExpanded ? 'transparent' : VS.border}`,
+                      borderBottom: `1px solid ${i === arr.length - 1 && !isExpanded ? 'transparent' : VS.border}`,
                       background: isExpanded ? `${VS.accent}08` : 'transparent',
                       cursor: 'pointer',
                       alignItems: 'center',

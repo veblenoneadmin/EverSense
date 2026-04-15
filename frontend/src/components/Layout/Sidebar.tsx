@@ -24,20 +24,22 @@ import {
 import { VS } from '../../lib/theme';
 const accentBg = 'rgba(0,122,204,0.15)';
 
+// ACCOUNTANT role: sees everything EXCEPT Milestones, Estimates, and Administration.
+// ACCOUNTANT only sees their own KPI data (gated inside KPI page itself).
 const navItems = [
   { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'], email: 'admin@veblengroup.com.au' },
-  { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
-  { name: 'Tasks',          href: '/tasks',        icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
+  { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
+  { name: 'Tasks',          href: '/tasks',        icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
   { name: 'Milestones',     href: '/milestones',   icon: Flag,            roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
-  { name: 'Task History',   href: '/task-history', icon: History,         roles: ['OWNER', 'ADMIN', 'STAFF'] },
-  { name: 'Calendar',       href: '/calendar',    icon: CalendarDays,    roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
-  { name: 'Meetings',       href: '/meetings',    icon: Video,           roles: ['OWNER', 'ADMIN', 'STAFF'] },
-  { name: 'Skills',         href: '/skills',      icon: Star,            roles: ['OWNER', 'ADMIN', 'STAFF'] },
-  { name: 'Projects',       href: '/projects',    icon: Building2,       roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
-  { name: 'Time Logs',      href: '/timesheets',  icon: Clock,           roles: ['OWNER', 'ADMIN', 'STAFF'] },
-  { name: 'Clients',        href: '/clients',     icon: Users,           roles: ['OWNER', 'ADMIN'] },
-  { name: 'Reports',        href: '/reports',     icon: BarChart3,       roles: ['OWNER', 'ADMIN', 'STAFF'] },
-  { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF'] },
+  { name: 'Task History',   href: '/task-history', icon: History,         roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
+  { name: 'Calendar',       href: '/calendar',    icon: CalendarDays,    roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
+  { name: 'Meetings',       href: '/meetings',    icon: Video,           roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
+  { name: 'Skills',         href: '/skills',      icon: Star,            roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
+  { name: 'Projects',       href: '/projects',    icon: Building2,       roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
+  { name: 'Time Logs',      href: '/timesheets',  icon: Clock,           roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
+  { name: 'Clients',        href: '/clients',     icon: Users,           roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
+  { name: 'Reports',        href: '/reports',     icon: BarChart3,       roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
+  { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
 ];

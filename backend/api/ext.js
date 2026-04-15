@@ -127,7 +127,7 @@ router.post('/users/:userId/set-role', async (req, res) => {
     const { userId } = req.params;
     const { role } = req.body;
 
-    const validRoles = ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE'];
+    const validRoles = ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'HALL_OF_JUSTICE', 'ACCOUNTANT'];
     if (!role || !validRoles.includes(role)) {
       return res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
     }

@@ -17,7 +17,7 @@ interface OrgUser {
   createdAt: string;
   memberships: Array<{
     id: string;
-    role: 'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE';
+    role: 'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE' | 'ACCOUNTANT';
     org: { name: string; slug: string };
   }>;
   _count: { macroTasks: number };
@@ -26,7 +26,7 @@ interface OrgUser {
 interface Invite {
   id: string;
   email: string;
-  role: 'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE';
+  role: 'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE' | 'ACCOUNTANT';
   status: 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
   createdAt: string;
   expiresAt: string;
@@ -40,6 +40,7 @@ const ROLE_CFG: Record<string, { color: string; bg: string; icon: React.ElementT
   STAFF:           { color: VS.teal,    bg: 'rgba(78,201,176,0.12)',  icon: UserCog, label: 'Staff'          },
   CLIENT:          { color: VS.text2,   bg: 'rgba(144,144,144,0.12)', icon: Users,   label: 'Client'         },
   HALL_OF_JUSTICE: { color: '#f59e0b',  bg: 'rgba(245,158,11,0.12)',  icon: Crown,   label: 'Hall of Justice' },
+  ACCOUNTANT:      { color: VS.purple,  bg: 'rgba(197,134,192,0.12)', icon: UserCog, label: 'Accountant'     },
 };
 
 const inputCls = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
@@ -56,12 +57,12 @@ export function Admin() {
   // Invite form
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole]   = useState<'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE'>('STAFF');
+  const [inviteRole, setInviteRole]   = useState<'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE' | 'ACCOUNTANT'>('STAFF');
   const [inviting, setInviting]       = useState(false);
 
   // Edit role
   const [editingUser, setEditingUser] = useState<OrgUser | null>(null);
-  const [editingRole, setEditingRole] = useState<'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE'>('STAFF');
+  const [editingRole, setEditingRole] = useState<'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE' | 'ACCOUNTANT'>('STAFF');
   const [saving, setSaving]           = useState(false);
 
   // Remove member
@@ -75,7 +76,7 @@ export function Admin() {
   const [addName, setAddName]               = useState('');
   const [addEmail, setAddEmail]             = useState('');
   const [addPassword, setAddPassword]       = useState('');
-  const [addRole, setAddRole]               = useState<'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE'>('STAFF');
+  const [addRole, setAddRole]               = useState<'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE' | 'ACCOUNTANT'>('STAFF');
   const [showPassword, setShowPassword]     = useState(false);
   const [addingUser, setAddingUser]         = useState(false);
 
@@ -594,6 +595,7 @@ export function Admin() {
                   <option value="HALL_OF_JUSTICE">Hall of Justice — owner-level access</option>
                   <option value="ADMIN">Admin — manage members &amp; settings</option>
                   <option value="STAFF">Staff — standard member</option>
+                  <option value="ACCOUNTANT">Accountant — finance view, own KPI only</option>
                   <option value="CLIENT">Client — limited view access</option>
                 </select>
               </div>
@@ -654,6 +656,7 @@ export function Admin() {
                   <option value="HALL_OF_JUSTICE">Hall of Justice — owner-level access</option>
                   <option value="ADMIN">Admin — manage members &amp; settings</option>
                   <option value="STAFF">Staff — standard member</option>
+                  <option value="ACCOUNTANT">Accountant — finance view, own KPI only</option>
                   <option value="CLIENT">Client — limited view access</option>
                 </select>
               </div>
@@ -786,6 +789,7 @@ export function Admin() {
                   <option value="HALL_OF_JUSTICE">Hall of Justice — owner-level access</option>
                   <option value="ADMIN">Admin — manage members &amp; settings</option>
                   <option value="STAFF">Staff — standard member</option>
+                  <option value="ACCOUNTANT">Accountant — finance view, own KPI only</option>
                   <option value="CLIENT">Client — limited view access</option>
                 </select>
               </div>

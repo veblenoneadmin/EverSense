@@ -177,12 +177,13 @@ export function KPIReport() {
 
   const kpi = data?.orgKPIs;
 
-  const isStaff = userRole === 'STAFF';
+  // STAFF and ACCOUNTANT can only see their own KPI row
+  const ownKpiOnly = userRole === 'STAFF' || userRole === 'ACCOUNTANT';
 
   const filteredUsers = (data?.users ?? [])
     .filter(u => u.classification !== 'client')
-    // Staff can only see their own KPI
-    .filter(u => !isStaff || u.user.id === session?.user?.id)
+    // Staff + Accountant can only see their own KPI
+    .filter(u => !ownKpiOnly || u.user.id === session?.user?.id)
     .filter(u => !filterClass || u.classification === filterClass)
     .filter(u => {
       if (!searchQuery) return true;
