@@ -434,7 +434,7 @@ export function Tasks() {
         .catch(() => {});
     };
     poll();
-    const id = setInterval(poll, 5000);
+    const id = setInterval(poll, 30000); // 30s — was 5s, caused excessive DB load
     return () => clearInterval(id);
   }, [session?.user?.id, currentOrg?.id]);
 

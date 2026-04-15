@@ -469,27 +469,6 @@ app.use('/api', async (req, res, next) => {
         }
       } else {
         console.log('⚠️  No valid session found for request to:', req.path);
-
-          // TEMPORARY FIX: Auto-authenticate existing users for testing
-          // TODO: Remove this after fixing session management
-          try {
-            const existingUser = await prisma.user.findFirst({
-              where: { email: 'tony@opusautomations.com' },
-              select: { id: true, email: true, name: true }
-            });
-
-            if (existingUser) {
-              req.user = {
-                id: existingUser.id,
-                email: existingUser.email,
-                name: existingUser.name,
-                image: null
-              };
-              console.log('🔧 TEMP: Auto-authenticated user for testing:', req.user.email);
-            }
-          } catch (tempError) {
-            console.log('⚠️  Temp auth failed:', tempError.message);
-          }
       }
     } catch (authError) {
       // Session might be expired or invalid, continue without user
