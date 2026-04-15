@@ -448,6 +448,13 @@ app.use('/api', async (req, res, next) => {
     };
 
     try {
+      // Mobile apps can't send cookies reliably — inject Bearer token as cookie
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ') && !req.headers.cookie?.includes('better-auth.session_token')) {
+        const token = authHeader.slice(7);
+        req.headers.cookie = (req.headers.cookie ? req.headers.cookie + '; ' : '') + `better-auth.session_token=${token}`;
+      }
+
       const session = await auth.api.getSession({ headers: req.headers });
       if (session?.user) {
         req.user = {
@@ -456,7 +463,10 @@ app.use('/api', async (req, res, next) => {
           name: session.user.name,
           image: session.user.image
         };
-        console.log('✅ User session validated:', req.user.email);
+        // Only log session validation for non-routine requests (reduces log noise)
+        if (req.method !== 'GET' || req.path.includes('/admin') || req.path.includes('/super-admin')) {
+          console.log('✅ User session validated:', req.user.email, req.method, req.path);
+        }
       } else {
         console.log('⚠️  No valid session found for request to:', req.path);
 
