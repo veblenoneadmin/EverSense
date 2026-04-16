@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useSession } from '../../lib/auth-client';
 import { EverSenseLogo } from '../EverSenseLogo';
+import { EmployeeProfileModal } from '../../pages/EmployeeProfile';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -42,7 +43,7 @@ const navItems = [
   { name: 'Clients',        href: '/clients',     icon: Users,           roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
   { name: 'Reports',        href: '/reports',     icon: BarChart3,       roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
   { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
-  { name: 'My Profile',     href: '/my-profile',  icon: User,            roles: ['ACCOUNTANT'] },
+  { name: 'My Profile',     href: '#my-profile',  icon: User,            roles: ['ACCOUNTANT'], action: 'profile-modal' },
   { name: 'Employee Info',  href: '/employee-directory', icon: Landmark, roles: ['ACCOUNTANT'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
@@ -57,6 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { data: session } = useSession();
   const [userRole, setUserRole] = useState<string>('CLIENT');
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -113,8 +115,33 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           {visible.map(item => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.href ||
-              (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
+            const isAction = !!(item as any).action;
+            const isActive = !isAction && (location.pathname === item.href ||
+              (item.href !== '/dashboard' && location.pathname.startsWith(item.href)));
+
+            if (isAction) {
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => {
+                    if ((item as any).action === 'profile-modal') setShowProfileModal(true);
+                    onClose();
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px',
+                    borderRadius: '6px', fontSize: '13px', fontWeight: 400, width: '100%',
+                    color: VS.text2, background: 'transparent', border: 'none',
+                    borderLeft: '2px solid transparent', textDecoration: 'none', textAlign: 'left',
+                    cursor: 'pointer', transition: 'background 0.15s, color 0.15s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = VS.bg2; (e.currentTarget as HTMLElement).style.color = VS.text1; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = VS.text2; }}
+                >
+                  <Icon size={16} style={{ flexShrink: 0 }} />
+                  <span>{item.name}</span>
+                </button>
+              );
+            }
 
             return (
               <NavLink
@@ -154,6 +181,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           })}
         </nav>
       </div>
+
+      {/* Employee Profile Step Modal */}
+      <EmployeeProfileModal open={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </>
   );
 };
