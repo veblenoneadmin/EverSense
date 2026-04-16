@@ -23,7 +23,7 @@ router.get('/', requireAuth, withOrgScope, async (req, res) => {
     const { projectId: filterProjectId, memberId, search, dateFrom, dateTo } = req.query;
 
     const role         = await getRole(userId, orgId);
-    const isPrivileged = role === 'OWNER' || role === 'ADMIN' || role === 'HALL_OF_JUSTICE';
+    const isPrivileged = role === 'OWNER' || role === 'ADMIN' || role === 'HALL_OF_JUSTICE' || role === 'ACCOUNTANT';
 
     // ── Fetch all reports for this org (or just this user) ───────────────────
     let sql    = `SELECT * FROM reports WHERE orgId = ?`;
@@ -193,7 +193,7 @@ router.delete('/:id', requireAuth, withOrgScope, async (req, res) => {
     const orgId  = req.orgId;
 
     const role         = await getRole(userId, orgId);
-    const isPrivileged = role === 'OWNER' || role === 'ADMIN' || role === 'HALL_OF_JUSTICE';
+    const isPrivileged = role === 'OWNER' || role === 'ADMIN' || role === 'HALL_OF_JUSTICE' || role === 'ACCOUNTANT';
 
     const checkSql = isPrivileged
       ? `SELECT id FROM reports WHERE id = ? AND orgId = ? LIMIT 1`

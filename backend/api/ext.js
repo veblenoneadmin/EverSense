@@ -434,7 +434,7 @@ router.patch('/tasks/:id', async (req, res) => {
       where: { userId_orgId: { userId: req.user.id, orgId } },
       select: { role: true },
     });
-    const isPrivileged = ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(membership?.role);
+    const isPrivileged = ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE', 'ACCOUNTANT'].includes(membership?.role);
     const isInvolved = task.userId === req.user.id || task.createdBy === req.user.id;
 
     if (!isPrivileged && !isInvolved) {
