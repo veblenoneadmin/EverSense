@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { User, Phone, MapPin, Briefcase, Landmark, Save, CheckCircle, AlertTriangle, Heart, Users, Upload, FileText } from 'lucide-react';
+import { User, Phone, Briefcase, Landmark, Save, CheckCircle, AlertTriangle, Heart, Users, Upload, FileText } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 const inputCls = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { Users, Search, ChevronDown, ChevronUp, Landmark, Phone, MapPin, Shield, Briefcase, Heart, FileText } from 'lucide-react';
+import { Users, Search, ChevronDown, ChevronUp, Landmark, Phone, Shield, Briefcase, Heart, FileText } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 interface EmployeeProfile {
