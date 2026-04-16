@@ -112,6 +112,97 @@ function renderMentions(text: string) {
   );
 }
 
+// ── Actual Hours Grid (with inline edit for super admin) ─────────────────────
+const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
+
+function ActualHoursGrid({ task, session, api, orgId, isOverdue }: {
+  task: Task; session: any; api: any; orgId: string; isOverdue: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [hours, setHours] = useState('');
+  const [mins, setMins] = useState('');
+  const [saving, setSaving] = useState(false);
+  const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
+
+  const startEdit = () => {
+    const totalH = task.actualHours || 0;
+    setHours(String(Math.floor(totalH)));
+    setMins(String(Math.round((totalH % 1) * 60)));
+    setEditing(true);
+  };
+
+  const saveHours = async () => {
+    setSaving(true);
+    const total = (parseInt(hours) || 0) + (parseInt(mins) || 0) / 60;
+    try {
+      await api.fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ actualHours: parseFloat(total.toFixed(2)) }),
+      });
+      task.actualHours = parseFloat(total.toFixed(2));
+      setEditing(false);
+    } catch { /* */ }
+    finally { setSaving(false); }
+  };
+
+  const fmtEst = () => { const h = Math.floor(task.estimatedHours || 0); const m = Math.round(((task.estimatedHours || 0) % 1) * 60); return h && m ? `${h}h ${m}m` : h ? `${h}h` : m ? `${m}m` : '—'; };
+
+  const items = [
+    { icon: Calendar, label: 'Due Date',    value: task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—', color: isOverdue ? VS.red : VS.text1 },
+    { icon: Folder,   label: 'Project',     value: task.project || '—',   color: VS.text1 },
+    { icon: Flag,     label: 'Milestone',   value: task.milestoneName ? `${task.milestoneName} (${task.milestoneStatus})` : '—', color: task.milestoneStatus === 'active' ? VS.accent : VS.text1 },
+    { icon: Clock,    label: 'Est. Time',   value: fmtEst(), color: VS.text1 },
+    { icon: Clock,    label: 'Actual Hours', value: '__EDITABLE__', color: VS.text1 },
+    { icon: User,     label: 'Assignee',    value: task.assignee || '—',       color: VS.text1 },
+    { icon: User,     label: 'Created By',  value: task.createdByName || '—',  color: VS.text1 },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {items.map(({ icon: Icon, label, value, color }) => (
+        <div key={label} className="flex items-start gap-2.5 p-3 rounded-lg" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+          <Icon className="h-4 w-4 mt-0.5 shrink-0" style={{ color: VS.text2 }} />
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: VS.text2 }}>{label}</div>
+            {value === '__EDITABLE__' ? (
+              editing ? (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <input type="number" min="0" value={hours} onChange={e => setHours(e.target.value)}
+                    className="w-12 px-1.5 py-0.5 rounded text-[12px] text-center" style={{ background: VS.bg3, border: `1px solid ${VS.accent}`, color: VS.text0 }}
+                    placeholder="h" autoFocus />
+                  <span className="text-[11px]" style={{ color: VS.text2 }}>h</span>
+                  <input type="number" min="0" max="59" value={mins} onChange={e => setMins(e.target.value)}
+                    className="w-12 px-1.5 py-0.5 rounded text-[12px] text-center" style={{ background: VS.bg3, border: `1px solid ${VS.accent}`, color: VS.text0 }}
+                    placeholder="m" />
+                  <span className="text-[11px]" style={{ color: VS.text2 }}>m</span>
+                  <button onClick={saveHours} disabled={saving}
+                    className="ml-1 px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: VS.accent, color: '#fff' }}>
+                    {saving ? '…' : '✓'}
+                  </button>
+                  <button onClick={() => setEditing(false)}
+                    className="px-1.5 py-0.5 rounded text-[11px]" style={{ color: VS.text2 }}>✕</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[13px] font-medium" style={{ color }}>{task.actualHours}h</span>
+                  {isSuperAdmin && (
+                    <button onClick={startEdit} className="text-[10px] px-1.5 py-0.5 rounded hover:bg-white/10 transition-all"
+                      style={{ color: VS.accent, border: `1px solid ${VS.accent}44` }}>
+                      edit
+                    </button>
+                  )}
+                </div>
+              )
+            ) : (
+              <div className="text-[13px] font-medium mt-0.5" style={{ color }}>{value}</div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _onTaskUpdated, onCountsLoaded }: Props) {
   const { data: session } = useSession();
@@ -535,25 +626,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
             <div className="p-5 space-y-5">
 
               {/* Metadata grid */}
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { icon: Calendar, label: 'Due Date',        value: fmtDate(task.dueDate),    color: isOverdue ? VS.red : VS.text1 },
-                  { icon: Folder,   label: 'Project',         value: task.project || '—',       color: VS.text1 },
-                  { icon: Flag,     label: 'Milestone',       value: task.milestoneName ? `${task.milestoneName} (${task.milestoneStatus})` : '—', color: task.milestoneStatus === 'active' ? VS.accent : VS.text1 },
-                  { icon: Clock,    label: 'Est. Time',      value: (() => { const h = Math.floor(task.estimatedHours || 0); const m = Math.round(((task.estimatedHours || 0) % 1) * 60); return h && m ? `${h}h ${m}m` : h ? `${h}h` : m ? `${m}m` : '—'; })(), color: VS.text1 },
-                  { icon: Clock,    label: 'Actual Hours',    value: `${task.actualHours}h`,    color: VS.text1 },
-                  { icon: User,     label: 'Assignee',        value: task.assignee || '—',       color: VS.text1 },
-                  { icon: User,     label: 'Created By',      value: task.createdByName || '—',  color: VS.text1 },
-                ].map(({ icon: Icon, label, value, color }) => (
-                  <div key={label} className="flex items-start gap-2.5 p-3 rounded-lg" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-                    <Icon className="h-4 w-4 mt-0.5 shrink-0" style={{ color: VS.text2 }} />
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: VS.text2 }}>{label}</div>
-                      <div className="text-[13px] font-medium mt-0.5" style={{ color }}>{value}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <ActualHoursGrid task={task} session={session} api={api} orgId={currentOrg?.id ?? ''} isOverdue={isOverdue} />
 
               {/* ── Team Task section ── */}
               {task.isTeamTask && (
