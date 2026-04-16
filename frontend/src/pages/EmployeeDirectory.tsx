@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { Users, Search, ChevronDown, ChevronUp, Landmark, Phone, MapPin, Shield, Building2, X } from 'lucide-react';
+import { Users, Search, ChevronDown, ChevronUp, Landmark, Phone, MapPin, Shield } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 interface EmployeeProfile {
@@ -136,7 +136,7 @@ export function EmployeeDirectory() {
           </div>
 
           {/* Rows */}
-          {filtered.map((p, i) => {
+          {filtered.map((p) => {
             const isExp = expanded === p.id;
             const hasBank = !!(p.bankName || p.bsb || p.accountNumber);
             return (
