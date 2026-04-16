@@ -115,8 +115,8 @@ function renderMentions(text: string) {
 // ── Actual Hours Grid (with inline edit for super admin) ─────────────────────
 const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
 
-function ActualHoursGrid({ task, session, api, orgId, isOverdue }: {
-  task: Task; session: any; api: any; orgId: string; isOverdue: boolean;
+function ActualHoursGrid({ task, session, api, isOverdue }: {
+  task: Task; session: any; api: any; isOverdue: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [hours, setHours] = useState('');
@@ -626,7 +626,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
             <div className="p-5 space-y-5">
 
               {/* Metadata grid */}
-              <ActualHoursGrid task={task} session={session} api={api} orgId={currentOrg?.id ?? ''} isOverdue={isOverdue} />
+              <ActualHoursGrid task={task} session={session} api={api} isOverdue={!!isOverdue} />
 
               {/* ── Team Task section ── */}
               {task.isTeamTask && (
