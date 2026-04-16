@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { User, Phone, Briefcase, Landmark, Save, CheckCircle, AlertTriangle, Heart, Users, Upload, FileText, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { User, Phone, Briefcase, Landmark, Save, CheckCircle, AlertTriangle, Heart, Users, Upload, FileText, X, ArrowLeft, ArrowRight, Download, PenTool } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 const inputCls = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
@@ -21,6 +21,7 @@ interface Profile {
   ref2Name: string; ref2Phone: string; ref2Relationship: string;
   ref3Name: string; ref3Phone: string; ref3Relationship: string;
   validIdUrl: string; validIdFilename: string;
+  contractSignature: string; contractSignedAt: string;
 }
 
 const EMPTY: Profile = {
@@ -36,6 +37,7 @@ const EMPTY: Profile = {
   ref2Name: '', ref2Phone: '', ref2Relationship: '',
   ref3Name: '', ref3Phone: '', ref3Relationship: '',
   validIdUrl: '', validIdFilename: '',
+  contractSignature: '', contractSignedAt: '',
 };
 
 function Field({ label, value, onChange, type = 'text', placeholder, colSpan }: {
@@ -51,6 +53,114 @@ function Field({ label, value, onChange, type = 'text', placeholder, colSpan }: 
   );
 }
 
+// ── Signature Pad (draw or upload) ────────────────────────────────────────────
+function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [drawing, setDrawing] = useState(false);
+
+  const getCtx = () => canvasRef.current?.getContext('2d') || null;
+
+  const clearCanvas = useCallback(() => {
+    const ctx = getCtx();
+    if (!ctx || !canvasRef.current) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    onChange('');
+  }, [onChange]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    if (value && value.startsWith('data:image')) {
+      const img = new Image();
+      img.onload = () => { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); };
+      img.src = value;
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ('touches' in e) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  };
+
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setDrawing(true);
+    const ctx = getCtx();
+    if (!ctx) return;
+    const { x, y } = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawing) return;
+    e.preventDefault();
+    const ctx = getCtx();
+    if (!ctx) return;
+    const { x, y } = getPos(e);
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const endDraw = () => {
+    if (!drawing) return;
+    setDrawing(false);
+    if (canvasRef.current) onChange(canvasRef.current.toDataURL('image/png'));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${VS.border2}`, background: '#fff' }}>
+        <canvas
+          ref={canvasRef}
+          width={460} height={160}
+          className="w-full cursor-crosshair"
+          style={{ touchAction: 'none', display: 'block' }}
+          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={clearCanvas}
+          className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all hover:opacity-90"
+          style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text2 }}>
+          Clear
+        </button>
+        <span className="text-[11px]" style={{ color: VS.text2 }}>or</span>
+        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition-all hover:opacity-90"
+          style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text2 }}>
+          <Upload className="h-3 w-3" />
+          Upload Signature
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => onChange(reader.result as string);
+            reader.readAsDataURL(file);
+          }} />
+        </label>
+        {value && <span className="text-[11px] ml-auto" style={{ color: VS.teal }}>Signature captured</span>}
+      </div>
+    </div>
+  );
+}
+
 const STEPS = [
   { id: 'personal', label: 'Employee Info', icon: User },
   { id: 'spouse', label: 'Spouse', icon: Heart },
@@ -59,6 +169,7 @@ const STEPS = [
   { id: 'bank', label: 'Bank Details', icon: Landmark },
   { id: 'references', label: 'References', icon: Users },
   { id: 'id', label: 'Valid ID', icon: FileText },
+  { id: 'contract', label: 'Contract', icon: PenTool },
 ];
 
 export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -242,6 +353,52 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
                     <img src={form.validIdUrl} alt="ID Preview" className="mt-4 rounded-lg max-w-[250px] max-h-[180px] object-cover"
                       style={{ border: `1px solid ${VS.border}` }} />
                   )}
+                </div>
+              </>}
+
+              {step === 7 && <>
+                <div className="sm:col-span-2 space-y-5">
+                  {/* Download contract */}
+                  <div className="rounded-lg p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+                    <p className="text-[13px] font-medium mb-2" style={{ color: VS.text0 }}>Employment Contract</p>
+                    <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>
+                      Please download and read the employment contract before signing below.
+                    </p>
+                    <a href="/contract.docx" download="Employment_Contract.docx"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
+                      style={{ background: VS.accent, color: '#fff', textDecoration: 'none' }}>
+                      <Download className="h-4 w-4" />
+                      Download Contract (.docx)
+                    </a>
+                  </div>
+
+                  {/* Already signed notice */}
+                  {form.contractSignedAt && (
+                    <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: 'rgba(78,201,176,0.1)', border: `1px solid ${VS.teal}44` }}>
+                      <CheckCircle className="h-4 w-4" style={{ color: VS.teal }} />
+                      <span className="text-[12px]" style={{ color: VS.teal }}>
+                        Contract signed on {new Date(form.contractSignedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Signature section */}
+                  <div>
+                    <p className="text-[13px] font-medium mb-2" style={{ color: VS.text0 }}>Your Signature</p>
+                    <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>
+                      Draw your signature below or upload an image of your signature.
+                    </p>
+
+                    {/* Signature canvas */}
+                    <SignaturePad
+                      value={form.contractSignature}
+                      onChange={(dataUrl) => setForm(prev => ({
+                        ...prev,
+                        contractSignature: dataUrl,
+                        contractSignedAt: dataUrl ? new Date().toISOString() : '',
+                      }))}
+                    />
+                  </div>
                 </div>
               </>}
             </div>

@@ -25,6 +25,8 @@ const FIELDS = [
   'ref3Name', 'ref3Phone', 'ref3Relationship',
   // Valid ID
   'validIdUrl', 'validIdFilename',
+  // Contract signature
+  'contractSignature', 'contractSignedAt',
 ];
 
 function pick(body) {

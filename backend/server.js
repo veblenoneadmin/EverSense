@@ -3429,6 +3429,8 @@ async function ensureEmployeeProfilesTable() {
         ref3Relationship VARCHAR(100),
         validIdUrl VARCHAR(1000),
         validIdFilename VARCHAR(255),
+        contractSignature LONGTEXT,
+        contractSignedAt DATETIME(3),
         createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         UNIQUE KEY uq_user_org (userId, orgId)
@@ -3447,6 +3449,7 @@ async function ensureEmployeeProfilesTable() {
       "ref2Name VARCHAR(255)", "ref2Phone VARCHAR(50)", "ref2Relationship VARCHAR(100)",
       "ref3Name VARCHAR(255)", "ref3Phone VARCHAR(50)", "ref3Relationship VARCHAR(100)",
       "validIdUrl VARCHAR(1000)", "validIdFilename VARCHAR(255)",
+      "contractSignature LONGTEXT", "contractSignedAt DATETIME(3)",
     ];
     for (const col of newCols) {
       try { await prisma.$executeRawUnsafe(`ALTER TABLE employee_profiles ADD COLUMN ${col}`); }
