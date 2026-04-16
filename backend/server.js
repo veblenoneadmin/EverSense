@@ -514,6 +514,8 @@ app.use('/api/clients', clientsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/user-reports', userReportsRoutes);
 app.use('/api/onboarding', onboardingRoutes);
+import employeeProfilesRoutes from './api/employee-profiles.js';
+app.use('/api/employee-profiles', employeeProfilesRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/password-reset', passwordResetLimiter, passwordResetRoutes);
 app.use('/api/invitations', invitationRoutes);
@@ -3377,6 +3379,43 @@ async function ensureAuthTables() {
   } catch (e) { console.warn('  ⚠️  ensureAuthTables:', e.message); }
 }
 
+// Ensure employee_profiles table exists (employee info + bank details for payroll)
+async function ensureEmployeeProfilesTable() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS employee_profiles (
+        id VARCHAR(36) PRIMARY KEY,
+        userId VARCHAR(36) NOT NULL,
+        orgId VARCHAR(191) NOT NULL,
+        legalName VARCHAR(255),
+        dateOfBirth DATE,
+        phone VARCHAR(50),
+        streetAddress VARCHAR(500),
+        city VARCHAR(100),
+        state VARCHAR(100),
+        postcode VARCHAR(20),
+        country VARCHAR(100) DEFAULT 'Australia',
+        emergencyContactName VARCHAR(255),
+        emergencyContactPhone VARCHAR(50),
+        emergencyContactRelation VARCHAR(100),
+        tfn VARCHAR(20),
+        superFundName VARCHAR(255),
+        superMemberNumber VARCHAR(100),
+        bankName VARCHAR(255),
+        bsb VARCHAR(10),
+        accountNumber VARCHAR(30),
+        accountName VARCHAR(255),
+        employmentType ENUM('full-time','part-time','casual','contractor') DEFAULT 'full-time',
+        startDate DATE,
+        createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        UNIQUE KEY uq_user_org (userId, orgId)
+      ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    `);
+    console.log('  ✅ employee_profiles table ready');
+  } catch (e) { console.warn('  ⚠️  ensureEmployeeProfilesTable:', e.message); }
+}
+
 // Run migrations and start server
 async function startServer() {
   await runDatabaseMigrations();
@@ -3387,6 +3426,7 @@ async function startServer() {
   await ensureAccountScopeText();
   await ensureProfileColumns();
   await ensureAdminCredentialAccount();
+  await ensureEmployeeProfilesTable();
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
   startAttendanceCron();

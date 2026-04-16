@@ -19,6 +19,8 @@ import {
   Timer,
   Crown,
   Flag,
+  User,
+  Landmark,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -40,6 +42,8 @@ const navItems = [
   { name: 'Clients',        href: '/clients',     icon: Users,           roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
   { name: 'Reports',        href: '/reports',     icon: BarChart3,       roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
   { name: 'KPI Report',     href: '/kpi-report',  icon: FileBarChart,    roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
+  { name: 'My Profile',     href: '/my-profile',  icon: User,            roles: ['OWNER', 'ADMIN', 'STAFF', 'ACCOUNTANT'] },
+  { name: 'Employee Info',  href: '/employee-directory', icon: Landmark, roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
 ];
