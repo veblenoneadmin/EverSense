@@ -164,17 +164,6 @@ export function EmployeeProfile() {
           <Field label="E-mail Address" value={form.workEmail} onChange={set('workEmail')} type="email" />
           <Field label="Cell Phone" value={form.workCellPhone} onChange={set('workCellPhone')} />
           <Field label="Start Date" value={form.startDate} onChange={set('startDate')} type="date" />
-          <Field label="Salary" value={form.salary} onChange={set('salary')} placeholder="0.00" />
-          <div>
-            <label className={labelCls} style={{ color: VS.text2 }}>Employment Type</label>
-            <select className={inputCls} style={inputStyle} value={form.employmentType}
-              onChange={e => setForm(prev => ({ ...prev, employmentType: e.target.value }))}>
-              <option value="full-time">Full-time</option>
-              <option value="part-time">Part-time</option>
-              <option value="casual">Casual</option>
-              <option value="contractor">Contractor</option>
-            </select>
-          </div>
         </Section>
 
         {/* Emergency Contact */}
