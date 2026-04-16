@@ -667,17 +667,25 @@ export function Tasks() {
         fullReport = reportText.trim();
       }
 
-      // Upload files first if any
+      // Upload files as base64 JSON (backend expects { name, mimeType, size, data })
       if (isComplete && reportFiles.length > 0) {
         for (const file of reportFiles) {
-          const formData = new FormData();
-          formData.append('file', file);
-          await fetch(`/api/tasks/${taskId}/attachments`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: currentOrg?.id ? { 'x-org-id': currentOrg.id } : {},
-            body: formData,
-          }).catch(() => {});
+          try {
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = reader.result as string;
+                // Strip the data:mime;base64, prefix — backend stores raw base64
+                resolve(result.includes(',') ? result.split(',')[1] : result);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            await apiClient.fetch(`/api/tasks/${taskId}/attachments`, {
+              method: 'POST',
+              body: JSON.stringify({ name: file.name, mimeType: file.type, size: file.size, data: base64 }),
+            });
+          } catch { /* non-fatal */ }
         }
       }
 
