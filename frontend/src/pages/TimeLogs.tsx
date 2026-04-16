@@ -851,7 +851,7 @@ export function TimeLogs() {
                   style={{ color: VS.text2 }}>Overtime</th>
                 <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
                   style={{ color: VS.text2 }}>Status</th>
-                {isPrivileged && (
+                {isPrivileged && userRole !== 'ACCOUNTANT' && (
                   <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
                     style={{ color: VS.text2 }}>Actions</th>
                 )}
@@ -1018,7 +1018,7 @@ export function TimeLogs() {
                           ? <span style={{ color: VS.yellow }}>{fmtDuration(log.breakDuration)}</span>
                           : <span style={{ color: VS.text2 }}>—</span>
                         }
-                        {isPrivileged && !log.isActive && (
+                        {isPrivileged && userRole !== 'ACCOUNTANT' && !log.isActive && (
                           <button
                             onClick={() => {
                               const totalSecs = log.breakDuration || 0;
@@ -1079,8 +1079,8 @@ export function TimeLogs() {
                       </span>
                     </td>
 
-                    {/* Actions */}
-                    {isPrivileged && (
+                    {/* Actions — hidden for ACCOUNTANT (view-only) */}
+                    {isPrivileged && userRole !== 'ACCOUNTANT' && (
                       <td className="px-4 py-3">
                         {log.isActive && (
                           <button
