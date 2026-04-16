@@ -7,12 +7,24 @@ const router = express.Router();
 
 // Fields that can be saved
 const FIELDS = [
-  'legalName', 'dateOfBirth', 'phone',
-  'streetAddress', 'city', 'state', 'postcode', 'country',
-  'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelation',
-  'tfn', 'superFundName', 'superMemberNumber',
-  'bankName', 'bsb', 'accountNumber', 'accountName',
-  'employmentType', 'startDate',
+  // Employee Information
+  'legalName', 'streetAddress', 'city', 'state', 'postcode', 'country',
+  'homePhone', 'cellPhone', 'emailAddress', 'sssId', 'dateOfBirth',
+  'maritalStatus', 'spouseName', 'spouseEmployer', 'spouseWorkPhone',
+  // Job Information
+  'jobTitle', 'supervisor', 'client', 'workEmail', 'workCellPhone',
+  'startDate', 'salary', 'employmentType',
+  // Emergency Contact
+  'emergencyContactName', 'emergencyContactAddress',
+  'emergencyContactPhone', 'emergencyContactCell', 'emergencyContactRelation',
+  // Bank Details
+  'bankName', 'accountNumber', 'wiseUsername',
+  // References
+  'ref1Name', 'ref1Phone', 'ref1Relationship',
+  'ref2Name', 'ref2Phone', 'ref2Relationship',
+  'ref3Name', 'ref3Phone', 'ref3Relationship',
+  // Valid ID
+  'validIdUrl', 'validIdFilename',
 ];
 
 function pick(body) {

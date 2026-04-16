@@ -1,35 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { Users, Search, ChevronDown, ChevronUp, Landmark, Phone, MapPin, Shield } from 'lucide-react';
+import { Users, Search, ChevronDown, ChevronUp, Landmark, Phone, MapPin, Shield, Briefcase, Heart, FileText } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 interface EmployeeProfile {
-  id: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  userRole: string;
-  legalName: string | null;
-  dateOfBirth: string | null;
-  phone: string | null;
-  streetAddress: string | null;
-  city: string | null;
-  state: string | null;
-  postcode: string | null;
-  country: string | null;
-  emergencyContactName: string | null;
-  emergencyContactPhone: string | null;
-  emergencyContactRelation: string | null;
-  tfn: string | null;
-  superFundName: string | null;
-  superMemberNumber: string | null;
-  bankName: string | null;
-  bsb: string | null;
-  accountNumber: string | null;
-  accountName: string | null;
-  employmentType: string | null;
-  startDate: string | null;
+  id: string; userId: string; userName: string; userEmail: string; userRole: string;
+  legalName: string | null; streetAddress: string | null; city: string | null;
+  state: string | null; postcode: string | null; country: string | null;
+  homePhone: string | null; cellPhone: string | null; emailAddress: string | null;
+  sssId: string | null; dateOfBirth: string | null; maritalStatus: string | null;
+  spouseName: string | null; spouseEmployer: string | null; spouseWorkPhone: string | null;
+  jobTitle: string | null; supervisor: string | null; client: string | null;
+  workEmail: string | null; workCellPhone: string | null; startDate: string | null;
+  salary: number | null; employmentType: string | null;
+  emergencyContactName: string | null; emergencyContactAddress: string | null;
+  emergencyContactPhone: string | null; emergencyContactCell: string | null; emergencyContactRelation: string | null;
+  bankName: string | null; accountNumber: string | null; wiseUsername: string | null;
+  ref1Name: string | null; ref1Phone: string | null; ref1Relationship: string | null;
+  ref2Name: string | null; ref2Phone: string | null; ref2Relationship: string | null;
+  ref3Name: string | null; ref3Phone: string | null; ref3Relationship: string | null;
+  validIdUrl: string | null; validIdFilename: string | null;
 }
 
 const ROLE_COLOR: Record<string, string> = {
@@ -42,16 +33,16 @@ function fmtDate(d: string | null) {
   return new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function DetailRow({ label, value }: { label: string; value: string | null }) {
+function Row({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="flex items-start gap-2 py-1">
-      <span className="text-[11px] font-medium shrink-0 w-32" style={{ color: VS.text2 }}>{label}</span>
+    <div className="flex items-start gap-2 py-0.5">
+      <span className="text-[11px] font-medium shrink-0 w-28" style={{ color: VS.text2 }}>{label}</span>
       <span className="text-[12px]" style={{ color: value ? VS.text0 : VS.text2 }}>{value || '—'}</span>
     </div>
   );
 }
 
-function DetailSection({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
+function Group({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
@@ -94,11 +85,10 @@ export function EmployeeDirectory() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
+    <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-[18px] font-bold" style={{ color: VS.text0 }}>Employee Directory</h1>
+          <h1 className="text-[18px] font-bold" style={{ color: VS.text0 }}>Employee Information</h1>
           <p className="text-[13px] mt-1" style={{ color: VS.text2 }}>
             {profiles.length} employee profile{profiles.length !== 1 ? 's' : ''} on file
           </p>
@@ -108,9 +98,7 @@ export function EmployeeDirectory() {
           <input
             className="w-full pl-9 pr-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50"
             style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}
-            placeholder="Search employees…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            placeholder="Search employees…" value={search} onChange={e => setSearch(e.target.value)}
           />
         </div>
       </div>
@@ -120,30 +108,30 @@ export function EmployeeDirectory() {
           <Users className="h-10 w-10 mx-auto mb-3" style={{ color: VS.text2, opacity: 0.4 }} />
           <p className="text-[14px] font-medium" style={{ color: VS.text1 }}>No employee profiles yet</p>
           <p className="text-[12px] mt-1" style={{ color: VS.text2 }}>
-            Employees can fill in their profile from the "My Profile" page in the sidebar.
+            Employees can fill in their profile from the "My Profile" page.
           </p>
         </div>
       ) : (
         <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-          {/* Table header */}
-          <div className="grid grid-cols-[1fr_120px_120px_120px_100px] px-5 py-3 text-[11px] font-semibold uppercase tracking-wider"
+          <div className="grid grid-cols-[1fr_100px_100px_100px_80px_80px] px-5 py-3 text-[11px] font-semibold uppercase tracking-wider"
             style={{ borderBottom: `1px solid ${VS.border}`, color: VS.text2 }}>
             <span>Employee</span>
             <span>Role</span>
-            <span>Type</span>
+            <span>Job Title</span>
             <span>Start Date</span>
             <span className="text-center">Bank</span>
+            <span className="text-center">ID</span>
           </div>
 
-          {/* Rows */}
           {filtered.map((p) => {
             const isExp = expanded === p.id;
-            const hasBank = !!(p.bankName || p.bsb || p.accountNumber);
+            const hasBank = !!(p.bankName || p.accountNumber || p.wiseUsername);
+            const hasId = !!p.validIdFilename;
             return (
               <div key={p.id}>
                 <div
                   onClick={() => setExpanded(isExp ? null : p.id)}
-                  className="grid grid-cols-[1fr_120px_120px_120px_100px] px-5 py-3 items-center cursor-pointer hover:bg-white/[0.02] transition-colors"
+                  className="grid grid-cols-[1fr_100px_100px_100px_80px_80px] px-5 py-3 items-center cursor-pointer hover:bg-white/[0.02] transition-colors"
                   style={{ borderBottom: isExp ? 'none' : `1px solid ${VS.border}` }}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -153,7 +141,7 @@ export function EmployeeDirectory() {
                       {(p.userName || p.userEmail)[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[13px] font-medium truncate" style={{ color: VS.text0 }}>{p.userName || '—'}</div>
+                      <div className="text-[13px] font-medium truncate" style={{ color: VS.text0 }}>{p.legalName || p.userName || '—'}</div>
                       <div className="text-[11px] truncate" style={{ color: VS.text2 }}>{p.userEmail}</div>
                     </div>
                   </div>
@@ -161,44 +149,73 @@ export function EmployeeDirectory() {
                     style={{ background: `${ROLE_COLOR[p.userRole] || VS.text2}18`, color: ROLE_COLOR[p.userRole] || VS.text2 }}>
                     {p.userRole?.toLowerCase()}
                   </span>
-                  <span className="text-[12px]" style={{ color: VS.text1 }}>{p.employmentType || '—'}</span>
+                  <span className="text-[12px] truncate" style={{ color: VS.text1 }}>{p.jobTitle || '—'}</span>
                   <span className="text-[12px]" style={{ color: VS.text1 }}>{fmtDate(p.startDate)}</span>
-                  <span className="text-[11px] text-center" style={{ color: hasBank ? VS.teal : VS.text2 }}>
-                    {hasBank ? '✓' : '—'}
-                  </span>
+                  <span className="text-[11px] text-center" style={{ color: hasBank ? VS.teal : VS.text2 }}>{hasBank ? '✓' : '—'}</span>
+                  <span className="text-[11px] text-center" style={{ color: hasId ? VS.teal : VS.text2 }}>{hasId ? '✓' : '—'}</span>
                 </div>
 
-                {/* Expanded detail */}
                 {isExp && (
-                  <div className="px-12 pb-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+                  <div className="px-12 pb-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2"
                     style={{ borderBottom: `1px solid ${VS.border}`, background: `${VS.accent}04` }}>
-                    <DetailSection title="Personal" icon={Users}>
-                      <DetailRow label="Legal Name" value={p.legalName} />
-                      <DetailRow label="Date of Birth" value={fmtDate(p.dateOfBirth)} />
-                      <DetailRow label="Phone" value={p.phone} />
-                    </DetailSection>
-                    <DetailSection title="Address" icon={MapPin}>
-                      <DetailRow label="Street" value={p.streetAddress} />
-                      <DetailRow label="City" value={p.city} />
-                      <DetailRow label="State" value={p.state} />
-                      <DetailRow label="Postcode" value={p.postcode} />
-                    </DetailSection>
-                    <DetailSection title="Tax & Super" icon={Shield}>
-                      <DetailRow label="TFN" value={p.tfn} />
-                      <DetailRow label="Super Fund" value={p.superFundName} />
-                      <DetailRow label="Member No." value={p.superMemberNumber} />
-                    </DetailSection>
-                    <DetailSection title="Bank Details" icon={Landmark}>
-                      <DetailRow label="Bank" value={p.bankName} />
-                      <DetailRow label="BSB" value={p.bsb} />
-                      <DetailRow label="Account No." value={p.accountNumber} />
-                      <DetailRow label="Account Name" value={p.accountName} />
-                    </DetailSection>
-                    <DetailSection title="Emergency Contact" icon={Phone}>
-                      <DetailRow label="Name" value={p.emergencyContactName} />
-                      <DetailRow label="Phone" value={p.emergencyContactPhone} />
-                      <DetailRow label="Relation" value={p.emergencyContactRelation} />
-                    </DetailSection>
+                    <Group title="Employee Information" icon={Users}>
+                      <Row label="Full Name" value={p.legalName} />
+                      <Row label="Date of Birth" value={fmtDate(p.dateOfBirth)} />
+                      <Row label="SSS Id" value={p.sssId} />
+                      <Row label="Home Phone" value={p.homePhone} />
+                      <Row label="Cell Phone" value={p.cellPhone} />
+                      <Row label="Email" value={p.emailAddress} />
+                      <Row label="Marital Status" value={p.maritalStatus} />
+                      <Row label="Address" value={[p.streetAddress, p.city, p.state, p.postcode].filter(Boolean).join(', ') || null} />
+                    </Group>
+
+                    <Group title="Spouse" icon={Heart}>
+                      <Row label="Name" value={p.spouseName} />
+                      <Row label="Employer" value={p.spouseEmployer} />
+                      <Row label="Work Phone" value={p.spouseWorkPhone} />
+                    </Group>
+
+                    <Group title="Job Information" icon={Briefcase}>
+                      <Row label="Job Title" value={p.jobTitle} />
+                      <Row label="Supervisor" value={p.supervisor} />
+                      <Row label="Client" value={p.client} />
+                      <Row label="Email" value={p.workEmail} />
+                      <Row label="Cell Phone" value={p.workCellPhone} />
+                      <Row label="Start Date" value={fmtDate(p.startDate)} />
+                      <Row label="Salary" value={p.salary ? `$${Number(p.salary).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : null} />
+                      <Row label="Type" value={p.employmentType} />
+                    </Group>
+
+                    <Group title="Emergency Contact" icon={Phone}>
+                      <Row label="Name" value={p.emergencyContactName} />
+                      <Row label="Address" value={p.emergencyContactAddress} />
+                      <Row label="Primary Phone" value={p.emergencyContactPhone} />
+                      <Row label="Cell Phone" value={p.emergencyContactCell} />
+                      <Row label="Relationship" value={p.emergencyContactRelation} />
+                    </Group>
+
+                    <Group title="Bank Details" icon={Landmark}>
+                      <Row label="Bank Name" value={p.bankName} />
+                      <Row label="Account No." value={p.accountNumber} />
+                      <Row label="Wise Username" value={p.wiseUsername} />
+                    </Group>
+
+                    <Group title="References" icon={Shield}>
+                      {p.ref1Name && <Row label="Ref 1" value={`${p.ref1Name} — ${p.ref1Phone || ''} (${p.ref1Relationship || ''})`} />}
+                      {p.ref2Name && <Row label="Ref 2" value={`${p.ref2Name} — ${p.ref2Phone || ''} (${p.ref2Relationship || ''})`} />}
+                      {p.ref3Name && <Row label="Ref 3" value={`${p.ref3Name} — ${p.ref3Phone || ''} (${p.ref3Relationship || ''})`} />}
+                      {!p.ref1Name && !p.ref2Name && !p.ref3Name && <Row label="References" value={null} />}
+                    </Group>
+
+                    {p.validIdFilename && (
+                      <Group title="Valid ID" icon={FileText}>
+                        <Row label="File" value={p.validIdFilename} />
+                        {p.validIdUrl && p.validIdUrl.startsWith('data:image') && (
+                          <img src={p.validIdUrl} alt="Valid ID" className="mt-2 rounded-lg max-w-[200px] max-h-[150px] object-cover"
+                            style={{ border: `1px solid ${VS.border}` }} />
+                        )}
+                      </Group>
+                    )}
                   </div>
                 )}
               </div>
