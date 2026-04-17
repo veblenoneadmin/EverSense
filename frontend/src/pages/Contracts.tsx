@@ -135,6 +135,7 @@ export function Contracts() {
   const [newStartDate, setNewStartDate] = useState('');
   const [newJobDesc, setNewJobDesc] = useState('');
   const [newCompany, setNewCompany] = useState('Veblen Group');
+  const [newSalary, setNewSalary] = useState('');
 
   const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -163,7 +164,8 @@ export function Contracts() {
         .replace(/\{Employee Name\}/g, newEmployee)
         .replace(/\{Employee Address\}/g, newAddress || '_______________')
         .replace(/\{Job Title\}/g, newJobTitle || '_______________')
-        .replace(/\{Start Date\}/g, startDateFmt);
+        .replace(/\{Start Date\}/g, startDateFmt)
+        .replace(/\{Salary\}/g, newSalary ? `${Number(newSalary).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '___________');
       // Insert job description into Annex B
       if (newJobDesc.trim()) {
         filled = filled.replace(
@@ -177,7 +179,7 @@ export function Contracts() {
       });
       setShowNew(false);
       setNewTitle(''); setNewEmployee(''); setNewAddress(''); setNewJobTitle('');
-      setNewStartDate(''); setNewJobDesc(''); setNewCompany('Veblen Group');
+      setNewStartDate(''); setNewJobDesc(''); setNewCompany('Veblen Group'); setNewSalary('');
       showToast('Contract created');
       await fetchContracts();
       const res = await apiClient.fetch(`/api/contracts/${data.id}`);
@@ -379,7 +381,7 @@ export function Contracts() {
                 <input value={newAddress} onChange={e => setNewAddress(e.target.value)} placeholder="Full residential address"
                   className={inp} style={inpS} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Job Title / Position</label>
                   <input value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} placeholder="e.g. Senior Bookkeeper"
@@ -388,6 +390,11 @@ export function Contracts() {
                 <div>
                   <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Start Date</label>
                   <input type="date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)}
+                    className={inp} style={inpS} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Monthly Salary (PhP)</label>
+                  <input type="number" value={newSalary} onChange={e => setNewSalary(e.target.value)} placeholder="0.00"
                     className={inp} style={inpS} />
                 </div>
               </div>

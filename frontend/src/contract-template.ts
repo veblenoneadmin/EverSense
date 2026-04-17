@@ -206,7 +206,7 @@ export const DEFAULT_CONTRACT_HTML = `
 
 <table style="width:100%;border-collapse:collapse;margin:15px 0">
 <tr><td style="padding:8px;border:1px solid #ccc"><strong>Particulars</strong></td><td style="padding:8px;border:1px solid #ccc"></td></tr>
-<tr><td style="padding:8px;border:1px solid #ccc">Monthly Salary</td><td style="padding:8px;border:1px solid #ccc">PhP ___________</td></tr>
+<tr><td style="padding:8px;border:1px solid #ccc">Monthly Salary</td><td style="padding:8px;border:1px solid #ccc">PhP <strong><span style="color:#007acc">{Salary}</span></strong></td></tr>
 </table>
 
 <p><strong>Paid Time Off</strong></p>
