@@ -358,9 +358,14 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
 
               {step === 7 && <>
                 <div className="sm:col-span-2 space-y-5">
-                  {/* Download contract */}
+                  {/* Contract header with employee name */}
                   <div className="rounded-lg p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-                    <p className="text-[13px] font-medium mb-2" style={{ color: VS.text0 }}>Employment Contract</p>
+                    <p className="text-[13px] font-medium mb-1" style={{ color: VS.text0 }}>Employment Contract</p>
+                    {form.legalName && (
+                      <p className="text-[14px] font-bold mb-2" style={{ color: VS.accent }}>
+                        For: {form.legalName}
+                      </p>
+                    )}
                     <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>
                       Please download and read the employment contract before signing below.
                     </p>
@@ -378,6 +383,7 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
                       <CheckCircle className="h-4 w-4" style={{ color: VS.teal }} />
                       <span className="text-[12px]" style={{ color: VS.teal }}>
                         Contract signed on {new Date(form.contractSignedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {form.legalName ? ` by ${form.legalName}` : ''}
                       </span>
                     </div>
                   )}
@@ -398,6 +404,18 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
                         contractSignedAt: dataUrl ? new Date().toISOString() : '',
                       }))}
                     />
+
+                    {/* Printed name under signature */}
+                    {form.contractSignature && (
+                      <div className="mt-3 pt-3 text-center" style={{ borderTop: `1px solid ${VS.border}` }}>
+                        <p className="text-[14px] font-semibold" style={{ color: VS.text0 }}>
+                          {form.legalName || 'Name not provided'}
+                        </p>
+                        <p className="text-[11px]" style={{ color: VS.text2 }}>
+                          {form.jobTitle ? `${form.jobTitle} — ` : ''}Signed {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </>}
