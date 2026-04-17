@@ -94,9 +94,9 @@ router.put('/:id', requireAuth, withOrgScope, requireContractAccess, async (req,
 // ── DELETE /api/contracts/:id — delete contract ──────────────────────────────
 router.delete('/:id', requireAuth, withOrgScope, requireContractAccess, async (req, res) => {
   try {
-    // Only OWNER/ADMIN can delete
-    if (!['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(req.userRole)) {
-      return res.status(403).json({ error: 'Only admins can delete contracts' });
+    // OWNER, ADMIN, HALL_OF_JUSTICE, ACCOUNTANT can delete
+    if (!['OWNER', 'ADMIN', 'HALL_OF_JUSTICE', 'ACCOUNTANT'].includes(req.userRole)) {
+      return res.status(403).json({ error: 'Access denied' });
     }
     await prisma.$executeRawUnsafe(
       'DELETE FROM contract_templates WHERE id = ? AND orgId = ?',
