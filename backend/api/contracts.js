@@ -37,6 +37,21 @@ router.get('/', requireAuth, withOrgScope, requireContractAccess, async (req, re
   }
 });
 
+// ── GET /api/contracts/my — get the contract assigned to current user's email ─
+// MUST be before /:id so Express doesn't treat "my" as an id
+router.get('/my', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT id, title, content, status, createdAt FROM contract_templates WHERE employeeEmail = ? AND orgId = ? ORDER BY createdAt DESC LIMIT 1',
+      req.user.email, req.orgId
+    );
+    res.json({ contract: rows[0] || null });
+  } catch (err) {
+    console.error('[Contracts] my error:', err);
+    res.status(500).json({ error: 'Failed to fetch contract' });
+  }
+});
+
 // ── GET /api/contracts/:id — get single contract with content ────────────────
 router.get('/:id', requireAuth, withOrgScope, requireContractAccess, async (req, res) => {
   try {
@@ -106,20 +121,6 @@ router.delete('/:id', requireAuth, withOrgScope, requireContractAccess, async (r
   } catch (err) {
     console.error('[Contracts] delete error:', err);
     res.status(500).json({ error: 'Failed to delete contract' });
-  }
-});
-
-// ── GET /api/contracts/my — get the contract assigned to current user's email ─
-router.get('/my', requireAuth, withOrgScope, async (req, res) => {
-  try {
-    const rows = await prisma.$queryRawUnsafe(
-      'SELECT id, title, content, status, createdAt FROM contract_templates WHERE employeeEmail = ? AND orgId = ? ORDER BY createdAt DESC LIMIT 1',
-      req.user.email, req.orgId
-    );
-    res.json({ contract: rows[0] || null });
-  } catch (err) {
-    console.error('[Contracts] my error:', err);
-    res.status(500).json({ error: 'Failed to fetch contract' });
   }
 });
 

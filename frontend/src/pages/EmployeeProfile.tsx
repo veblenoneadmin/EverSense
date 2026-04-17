@@ -127,9 +127,7 @@ function validateStep(step: number, form: Profile): string[] {
     req(form.state, 'State/Province');
     req(form.postcode, 'Postcode');
   } else if (step === 1) {
-    req(form.spouseName, "Spouse's Name");
-    req(form.spouseEmployer, "Spouse's Employer");
-    req(form.spouseWorkPhone, "Spouse's Work Phone");
+    // Spouse info is optional — no required fields
   } else if (step === 2) {
     req(form.emergencyContactName, 'Full Name');
     req(form.emergencyContactAddress, 'Address');
@@ -352,7 +350,7 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      >
       <div className="w-full max-w-xl rounded-2xl overflow-hidden flex flex-col" style={{ background: VS.bg0, border: `1px solid ${VS.border}`, maxHeight: '90vh', boxShadow: '0 24px 60px rgba(0,0,0,0.7)' }}>
 
         {/* Header */}
@@ -419,9 +417,9 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
 
               {/* Step 1: Spouse */}
               {step === 1 && <>
-                <Field label="Spouse's Name" value={form.spouseName} onChange={set('spouseName')} required error={errors.includes("Spouse's Name")} />
-                <Field label="Spouse's Employer" value={form.spouseEmployer} onChange={set('spouseEmployer')} required error={errors.includes("Spouse's Employer")} />
-                <Field label="Spouse's Work Phone" value={form.spouseWorkPhone} onChange={set('spouseWorkPhone')} required error={errors.includes("Spouse's Work Phone")} />
+                <Field label="Spouse's Name" value={form.spouseName} onChange={set('spouseName')} />
+                <Field label="Spouse's Employer" value={form.spouseEmployer} onChange={set('spouseEmployer')} />
+                <Field label="Spouse's Work Phone" value={form.spouseWorkPhone} onChange={set('spouseWorkPhone')} />
                 <div className="sm:col-span-2">
                   <p className="text-[11px] mt-2" style={{ color: VS.text2 }}>
                     If not married, enter "N/A" for each field.
