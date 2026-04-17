@@ -515,7 +515,9 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/user-reports', userReportsRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 import employeeProfilesRoutes from './api/employee-profiles.js';
+import contractsRoutes from './api/contracts.js';
 app.use('/api/employee-profiles', employeeProfilesRoutes);
+app.use('/api/contracts', contractsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/password-reset', passwordResetLimiter, passwordResetRoutes);
 app.use('/api/invitations', invitationRoutes);
@@ -3459,6 +3461,27 @@ async function ensureEmployeeProfilesTable() {
   } catch (e) { console.warn('  ⚠️  ensureEmployeeProfilesTable:', e.message); }
 }
 
+// Ensure contract_templates table
+async function ensureContractTemplatesTable() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS contract_templates (
+        id VARCHAR(36) PRIMARY KEY,
+        orgId VARCHAR(191) NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        content LONGTEXT,
+        status VARCHAR(20) DEFAULT 'draft',
+        createdBy VARCHAR(36),
+        updatedBy VARCHAR(36),
+        createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        INDEX idx_ct_orgId (orgId)
+      ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    `);
+    console.log('  ✅ contract_templates table ready');
+  } catch (e) { console.warn('  ⚠️  ensureContractTemplatesTable:', e.message); }
+}
+
 // Run migrations and start server
 async function startServer() {
   await runDatabaseMigrations();
@@ -3470,6 +3493,7 @@ async function startServer() {
   await ensureProfileColumns();
   await ensureAdminCredentialAccount();
   await ensureEmployeeProfilesTable();
+  await ensureContractTemplatesTable();
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
   startAttendanceCron();

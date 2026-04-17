@@ -27,6 +27,7 @@ import { EstimatesReport } from './pages/EstimatesReport';
 import { Milestones } from './pages/Milestones';
 import { EmployeeProfile } from './pages/EmployeeProfile';
 import { EmployeeDirectory } from './pages/EmployeeDirectory';
+import { Contracts } from './pages/Contracts';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingGuard } from './components/OnboardingGuard';
@@ -89,6 +90,7 @@ function AppContent() {
                 <Route path="owner-admin" element={<OwnerAdmin />} />
                 <Route path="my-profile" element={<EmployeeProfile />} />
                 <Route path="employee-directory" element={<EmployeeDirectory />} />
+                <Route path="contracts" element={<Contracts />} />
               </Route>
 
               <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
