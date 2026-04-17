@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { Save, CheckCircle, AlertTriangle, Upload, FileText, X, ArrowLeft, ArrowRight, Download, PenTool } from 'lucide-react';
+import { Save, CheckCircle, AlertTriangle, Upload, FileText, X, ArrowLeft, ArrowRight, Download } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 const inp = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
