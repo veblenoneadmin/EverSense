@@ -55,12 +55,12 @@ router.get('/:id', requireAuth, withOrgScope, requireContractAccess, async (req,
 // ── POST /api/contracts — create new contract ────────────────────────────────
 router.post('/', requireAuth, withOrgScope, requireContractAccess, async (req, res) => {
   try {
-    const { title, content = '', status = 'draft' } = req.body;
+    const { title, content = '', status = 'draft', employeeEmail = null } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
     const id = randomUUID();
     await prisma.$executeRawUnsafe(
-      'INSERT INTO contract_templates (id, orgId, title, content, status, createdBy, updatedBy) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      id, req.orgId, title.trim(), content, status, req.user.id, req.user.id
+      'INSERT INTO contract_templates (id, orgId, title, content, status, employeeEmail, createdBy, updatedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      id, req.orgId, title.trim(), content, status, employeeEmail || null, req.user.id, req.user.id
     );
     res.status(201).json({ success: true, id });
   } catch (err) {
@@ -106,6 +106,20 @@ router.delete('/:id', requireAuth, withOrgScope, requireContractAccess, async (r
   } catch (err) {
     console.error('[Contracts] delete error:', err);
     res.status(500).json({ error: 'Failed to delete contract' });
+  }
+});
+
+// ── GET /api/contracts/my — get the contract assigned to current user's email ─
+router.get('/my', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT id, title, content, status, createdAt FROM contract_templates WHERE employeeEmail = ? AND orgId = ? ORDER BY createdAt DESC LIMIT 1',
+      req.user.email, req.orgId
+    );
+    res.json({ contract: rows[0] || null });
+  } catch (err) {
+    console.error('[Contracts] my error:', err);
+    res.status(500).json({ error: 'Failed to fetch contract' });
   }
 });
 

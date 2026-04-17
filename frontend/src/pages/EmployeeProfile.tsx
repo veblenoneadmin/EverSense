@@ -215,44 +215,45 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: 
 
 // ── Contract Step ────────────────────────────────────────────────────────────
 function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Dispatch<React.SetStateAction<Profile>>; api: any }) {
-  const [contractHtml, setContractHtml] = useState<string | null>(null);
+  const [myContract, setMyContract] = useState<{ id: string; title: string; content: string } | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
-  const [loadingContract, setLoadingContract] = useState(false);
+  const [loadingContract, setLoadingContract] = useState(true);
 
-  const viewContract = async () => {
-    setLoadingContract(true);
-    try { const data = await api.fetch('/api/employee-profiles/contract?format=html'); setContractHtml(data.html); setViewOpen(true); }
-    catch { setContractHtml('<p>Failed to load contract.</p>'); setViewOpen(true); }
-    finally { setLoadingContract(false); }
-  };
-  const downloadContract = async () => {
-    try {
-      const res = await fetch('/api/employee-profiles/contract', { credentials: 'include' });
-      const blob = await res.blob(); const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `Contract_${(form.legalName || 'Employee').replace(/\s+/g, '_')}.docx`; a.click(); URL.revokeObjectURL(url);
-    } catch { alert('Failed to download'); }
-  };
+  // Fetch the contract linked to this employee's email
+  useEffect(() => {
+    api.fetch('/api/contracts/my')
+      .then((d: any) => setMyContract(d.contract || null))
+      .catch(() => {})
+      .finally(() => setLoadingContract(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
       <div className="sm:col-span-2 space-y-5">
-        <div className="rounded-lg p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-          <p className="text-[13px] font-medium mb-1" style={{ color: VS.text0 }}>Employment Contract</p>
-          {form.legalName && <p className="text-[14px] font-bold mb-2" style={{ color: VS.accent }}>For: {form.legalName}</p>}
-          <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>Your details have been filled into the contract. View or download before signing.</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={viewContract} disabled={loadingContract}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90 disabled:opacity-50"
-              style={{ background: VS.accent, color: '#fff' }}>
-              <FileText className="h-4 w-4" /> {loadingContract ? 'Loading…' : 'View Contract'}
-            </button>
-            <button onClick={downloadContract}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
-              style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text1 }}>
-              <Download className="h-4 w-4" /> Download (.docx)
-            </button>
+        {loadingContract ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 rounded-full animate-spin" style={{ border: '2px solid #3c3c3c', borderTopColor: VS.accent }} />
           </div>
-        </div>
+        ) : !myContract ? (
+          <div className="rounded-lg p-6 text-center" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+            <FileText className="h-8 w-8 mx-auto mb-2" style={{ color: VS.text2, opacity: 0.4 }} />
+            <p className="text-[13px] font-medium" style={{ color: VS.text1 }}>No contract assigned yet</p>
+            <p className="text-[12px] mt-1" style={{ color: VS.text2 }}>Your administrator will prepare your contract. You can still save your profile and come back to sign later.</p>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-lg p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+              <p className="text-[13px] font-medium mb-1" style={{ color: VS.text0 }}>{myContract.title}</p>
+              {form.legalName && <p className="text-[14px] font-bold mb-2" style={{ color: VS.accent }}>For: {form.legalName}</p>}
+              <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>Please review your contract below before signing.</p>
+              <button onClick={() => setViewOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
+                style={{ background: VS.accent, color: '#fff' }}>
+                <FileText className="h-4 w-4" /> View Contract
+              </button>
+            </div>
+          </>
+        )}
         {form.contractSignedAt && (
           <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: 'rgba(78,201,176,0.1)', border: `1px solid ${VS.teal}44` }}>
             <CheckCircle className="h-4 w-4" style={{ color: VS.teal }} />
@@ -272,16 +273,16 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
           )}
         </div>
       </div>
-      {viewOpen && (
+      {viewOpen && myContract && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)' }}
           onClick={e => { if (e.target === e.currentTarget) setViewOpen(false); }}>
           <div className="w-full max-w-3xl rounded-2xl overflow-hidden flex flex-col" style={{ background: '#fff', maxHeight: '90vh' }}>
             <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ background: VS.bg1, borderBottom: `1px solid ${VS.border}` }}>
-              <span className="text-[14px] font-bold" style={{ color: VS.text0 }}>Employment Contract — {form.legalName || 'Preview'}</span>
+              <span className="text-[14px] font-bold" style={{ color: VS.text0 }}>{myContract.title}</span>
               <button onClick={() => setViewOpen(false)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/10" style={{ color: VS.text1 }}><X className="h-4 w-4" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-8" style={{ color: '#1a1a1a', fontSize: '13px', lineHeight: 1.7 }}
-              dangerouslySetInnerHTML={{ __html: contractHtml || '' }} />
+              dangerouslySetInnerHTML={{ __html: myContract.content || '' }} />
           </div>
         </div>
       )}

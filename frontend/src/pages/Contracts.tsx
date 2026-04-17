@@ -213,7 +213,7 @@ export function Contracts() {
       }
       const data = await apiClient.fetch('/api/contracts', {
         method: 'POST',
-        body: JSON.stringify({ title: newTitle, content: filled }),
+        body: JSON.stringify({ title: newTitle, content: filled, employeeEmail: emailSearch || null }),
       });
       setShowNew(false);
       setNewTitle(''); setNewEmployee(''); setNewAddress(''); setNewJobTitle('');

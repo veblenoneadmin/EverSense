@@ -3478,6 +3478,9 @@ async function ensureContractTemplatesTable() {
         INDEX idx_ct_orgId (orgId)
       ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     `);
+    // Add employeeEmail column (idempotent)
+    try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD COLUMN employeeEmail VARCHAR(255)'); } catch (_) {}
+    try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD INDEX idx_ct_email (employeeEmail)'); } catch (_) {}
     console.log('  ✅ contract_templates table ready');
   } catch (e) { console.warn('  ⚠️  ensureContractTemplatesTable:', e.message); }
 }
