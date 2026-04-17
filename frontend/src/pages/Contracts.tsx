@@ -334,12 +334,7 @@ export function Contracts() {
                   <p>Created {fmtDate(c.createdAt)} {c.createdByName ? `by ${c.createdByName}` : ''}</p>
                   <p>Last edited {fmtDate(c.updatedAt)} {c.updatedByName ? `by ${c.updatedByName}` : ''}</p>
                 </div>
-                <div className="flex items-center justify-end mt-3 pt-3" style={{ borderTop: `1px solid ${VS.border}` }}>
-                  <button onClick={e => { e.stopPropagation(); handleDelete(c.id, c.title); }}
-                    className="p-1.5 rounded-lg opacity-40 hover:opacity-100 transition-all" style={{ color: VS.red }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${VS.border}` }} />
               </div>
             );
           })}
