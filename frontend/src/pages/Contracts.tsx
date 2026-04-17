@@ -7,6 +7,7 @@ import {
   Heading1, Heading2, Type, Undo2, Redo2, CheckCircle, AlertTriangle,
 } from 'lucide-react';
 import { VS } from '../lib/theme';
+import { DEFAULT_CONTRACT_HTML } from '../contract-template';
 
 interface Contract {
   id: string;
@@ -106,10 +107,9 @@ function DocsEditor({ content, onChange }: { content: string; onChange: (html: s
   );
 }
 
-// ── Default contract template ───────────────────────────────────────────────
-const DEFAULT_CONTRACT_HTML = `
-<h1 style="text-align:center">CONTRACT OF EMPLOYMENT</h1>
-<p>This Contract of Employment ("Contract") is made and entered into by and between:</p>
+// Old inline template removed — now imported from ../contract-template.ts
+const _UNUSED = `
+<p></p>
 <p><strong><span style="color:#007acc">{Company Name}</span></strong>, a corporation duly organized and existing under and by virtue of the laws of the Philippines, with principal office at Suite 1707 Q1 Tower / 9 Hamilton Ave, Surfers Paradise QLD 4217 Australia ("EMPLOYER/COMPANY")</p>
 <p style="text-align:center"><strong>And</strong></p>
 <p><strong><span style="color:#007acc">{Employee Name}</span></strong> of legal age, Filipino citizen, with residential address at <strong><span style="color:#007acc">{Employee Address}</span></strong> ("EMPLOYEE").</p>
