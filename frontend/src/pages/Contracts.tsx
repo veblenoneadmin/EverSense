@@ -137,6 +137,11 @@ export function Contracts() {
   const [newCompany, setNewCompany] = useState('Veblen Group');
   const [newSalary, setNewSalary] = useState('');
 
+  // Employee search
+  const [orgMembers, setOrgMembers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [emailSearch, setEmailSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+
   const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3500);
@@ -151,6 +156,39 @@ export function Contracts() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (session?.user?.id) fetchContracts(); }, [session?.user?.id, fetchContracts]);
+
+  // Fetch org members for the email dropdown
+  useEffect(() => {
+    if (!showNew || orgMembers.length > 0) return;
+    apiClient.fetch('/api/tasks/members')
+      .then((d: any) => setOrgMembers(d.members || []))
+      .catch(() => {});
+  }, [showNew]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filteredMembers = orgMembers.filter(m => {
+    if (!emailSearch) return true;
+    const q = emailSearch.toLowerCase();
+    return m.email.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q);
+  });
+
+  const selectMember = async (member: { id: string; name: string; email: string }) => {
+    setEmailSearch(member.email);
+    setNewEmployee(member.name || '');
+    setShowDropdown(false);
+    // Try to auto-fill from their employee profile
+    try {
+      const d = await apiClient.fetch('/api/employee-profiles/all');
+      const profile = (d.profiles || []).find((p: any) => p.userId === member.id);
+      if (profile) {
+        if (profile.legalName) setNewEmployee(profile.legalName);
+        const addr = [profile.streetAddress, profile.city, profile.state, profile.postcode].filter(Boolean).join(', ');
+        if (addr) setNewAddress(addr);
+        if (profile.jobTitle) setNewJobTitle(profile.jobTitle);
+        if (profile.startDate) setNewStartDate(new Date(profile.startDate).toISOString().split('T')[0]);
+      }
+    } catch { /* non-fatal */ }
+    if (!newTitle) setNewTitle(`Employment Contract — ${member.name || member.email}`);
+  };
 
   const handleCreate = async () => {
     if (!newTitle.trim() || !newEmployee.trim()) return;
@@ -180,6 +218,7 @@ export function Contracts() {
       setShowNew(false);
       setNewTitle(''); setNewEmployee(''); setNewAddress(''); setNewJobTitle('');
       setNewStartDate(''); setNewJobDesc(''); setNewCompany('Veblen Group'); setNewSalary('');
+      setEmailSearch(''); setShowDropdown(false);
       showToast('Contract created');
       await fetchContracts();
       const res = await apiClient.fetch(`/api/contracts/${data.id}`);
@@ -357,8 +396,45 @@ export function Contracts() {
             </div>
             <div className="p-6 space-y-3 overflow-y-auto" style={{ maxHeight: '70vh' }}>
               <p className="text-[12px]" style={{ color: VS.text2 }}>
-                Fill in the employee details below. These will be inserted into the contract template automatically.
+                Search for an employee to auto-fill their details, or enter manually.
               </p>
+
+              {/* Employee email search */}
+              <div className="relative">
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Search Employee</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: VS.text2 }} />
+                  <input
+                    value={emailSearch}
+                    onChange={e => { setEmailSearch(e.target.value); setShowDropdown(true); }}
+                    onFocus={() => setShowDropdown(true)}
+                    placeholder="Search by name or email…"
+                    className={inp}
+                    style={{ ...inpS, paddingLeft: 32 }}
+                    autoFocus
+                  />
+                </div>
+                {showDropdown && emailSearch && filteredMembers.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 rounded-lg overflow-hidden shadow-xl"
+                    style={{ background: VS.bg1, border: `1px solid ${VS.border}`, maxHeight: 200, overflowY: 'auto' }}>
+                    {filteredMembers.slice(0, 8).map(m => (
+                      <button key={m.id} onClick={() => selectMember(m)}
+                        className="w-full text-left px-3 py-2 hover:bg-white/[0.05] transition-colors flex items-center gap-2"
+                        style={{ borderBottom: `1px solid ${VS.border}` }}>
+                        <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                          style={{ background: `${VS.accent}22`, color: VS.accent }}>
+                          {(m.name || m.email)[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[12px] font-medium truncate" style={{ color: VS.text0 }}>{m.name || '—'}</div>
+                          <div className="text-[11px] truncate" style={{ color: VS.text2 }}>{m.email}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Contract Title *</label>
                 <input value={newTitle} onChange={e => setNewTitle(e.target.value)} autoFocus placeholder="e.g. Employment Contract — Jane Smith"
