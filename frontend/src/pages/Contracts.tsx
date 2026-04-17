@@ -9,6 +9,9 @@ import {
 import { VS } from '../lib/theme';
 import { DEFAULT_CONTRACT_HTML } from '../contract-template';
 
+const inp = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
+const inpS: React.CSSProperties = { background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text0 };
+
 interface Contract {
   id: string;
   title: string;
@@ -126,6 +129,12 @@ export function Contracts() {
   // New contract
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [newEmployee, setNewEmployee] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [newJobTitle, setNewJobTitle] = useState('');
+  const [newStartDate, setNewStartDate] = useState('');
+  const [newJobDesc, setNewJobDesc] = useState('');
+  const [newCompany, setNewCompany] = useState('Veblen Group');
 
   const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -143,17 +152,34 @@ export function Contracts() {
   useEffect(() => { if (session?.user?.id) fetchContracts(); }, [session?.user?.id, fetchContracts]);
 
   const handleCreate = async () => {
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || !newEmployee.trim()) return;
     try {
+      // Replace placeholders with actual employee data
+      const startDateFmt = newStartDate
+        ? new Date(newStartDate + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+        : '_______________';
+      let filled = DEFAULT_CONTRACT_HTML
+        .replace(/\{Company Name\}/g, newCompany || 'Veblen Group')
+        .replace(/\{Employee Name\}/g, newEmployee)
+        .replace(/\{Employee Address\}/g, newAddress || '_______________')
+        .replace(/\{Job Title\}/g, newJobTitle || '_______________')
+        .replace(/\{Start Date\}/g, startDateFmt);
+      // Insert job description into Annex B
+      if (newJobDesc.trim()) {
+        filled = filled.replace(
+          '<p><strong>JOB OVERVIEW</strong> <em>(For updating)</em></p>',
+          `<p><strong>JOB OVERVIEW</strong></p>\n<p>${newJobDesc.replace(/\n/g, '</p>\n<p>')}</p>`
+        );
+      }
       const data = await apiClient.fetch('/api/contracts', {
         method: 'POST',
-        body: JSON.stringify({ title: newTitle, content: DEFAULT_CONTRACT_HTML }),
+        body: JSON.stringify({ title: newTitle, content: filled }),
       });
       setShowNew(false);
-      setNewTitle('');
+      setNewTitle(''); setNewEmployee(''); setNewAddress(''); setNewJobTitle('');
+      setNewStartDate(''); setNewJobDesc(''); setNewCompany('Veblen Group');
       showToast('Contract created');
       await fetchContracts();
-      // Open it for editing immediately
       const res = await apiClient.fetch(`/api/contracts/${data.id}`);
       openEditor(res.contract);
     } catch (err: any) { showToast(err.message || 'Failed to create', false); }
@@ -322,23 +348,62 @@ export function Contracts() {
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}
           onClick={e => { if (e.target === e.currentTarget) setShowNew(false); }}>
-          <div className="w-full max-w-sm rounded-xl p-6" style={{ background: VS.bg0, border: `1px solid ${VS.border}` }}>
-            <div className="flex items-center justify-between mb-4">
+          <div className="w-full max-w-lg rounded-xl overflow-hidden" style={{ background: VS.bg0, border: `1px solid ${VS.border}`, maxHeight: '90vh' }}>
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${VS.border}`, background: VS.bg1 }}>
               <h3 className="text-[15px] font-bold" style={{ color: VS.text0 }}>New Contract</h3>
               <button onClick={() => setShowNew(false)} className="opacity-50 hover:opacity-100"><X className="h-4 w-4" style={{ color: VS.text1 }} /></button>
             </div>
-            <input value={newTitle} onChange={e => setNewTitle(e.target.value)} autoFocus
-              placeholder="Contract title…"
-              className="w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 mb-4"
-              style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text0 }}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
-            />
-            <div className="flex justify-end gap-2">
+            <div className="p-6 space-y-3 overflow-y-auto" style={{ maxHeight: '70vh' }}>
+              <p className="text-[12px]" style={{ color: VS.text2 }}>
+                Fill in the employee details below. These will be inserted into the contract template automatically.
+              </p>
+              <div>
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Contract Title *</label>
+                <input value={newTitle} onChange={e => setNewTitle(e.target.value)} autoFocus placeholder="e.g. Employment Contract — Jane Smith"
+                  className={inp} style={inpS} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Company Name</label>
+                  <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Veblen Group"
+                    className={inp} style={inpS} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Employee Name *</label>
+                  <input value={newEmployee} onChange={e => setNewEmployee(e.target.value)} placeholder="Full legal name"
+                    className={inp} style={inpS} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Employee Address</label>
+                <input value={newAddress} onChange={e => setNewAddress(e.target.value)} placeholder="Full residential address"
+                  className={inp} style={inpS} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Job Title / Position</label>
+                  <input value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} placeholder="e.g. Senior Bookkeeper"
+                    className={inp} style={inpS} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Start Date</label>
+                  <input type="date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)}
+                    className={inp} style={inpS} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Job Description (Annex B)</label>
+                <textarea value={newJobDesc} onChange={e => setNewJobDesc(e.target.value)} rows={3}
+                  placeholder="Duties, responsibilities, and scope of work…"
+                  className={inp} style={{ ...inpS, resize: 'vertical' }} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: `1px solid ${VS.border}`, background: VS.bg1 }}>
               <button onClick={() => setShowNew(false)} className="px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-white/5"
                 style={{ border: `1px solid ${VS.border}`, color: VS.text1 }}>Cancel</button>
-              <button onClick={handleCreate} disabled={!newTitle.trim()}
+              <button onClick={handleCreate} disabled={!newTitle.trim() || !newEmployee.trim()}
                 className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-50 transition-all hover:opacity-90"
-                style={{ background: VS.accent, color: '#fff' }}>Create</button>
+                style={{ background: VS.accent, color: '#fff' }}>Create Contract</button>
             </div>
           </div>
         </div>
