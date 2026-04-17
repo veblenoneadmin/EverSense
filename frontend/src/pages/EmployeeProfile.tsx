@@ -161,6 +161,117 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: 
   );
 }
 
+// ── Contract Step (view + download + sign) ───────────────────────────────────
+function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Dispatch<React.SetStateAction<Profile>>; api: any }) {
+  const [contractHtml, setContractHtml] = useState<string | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [loadingContract, setLoadingContract] = useState(false);
+
+  const viewContract = async () => {
+    setLoadingContract(true);
+    try {
+      const data = await api.fetch('/api/employee-profiles/contract?format=html');
+      setContractHtml(data.html);
+      setViewOpen(true);
+    } catch { setContractHtml('<p>Failed to load contract. Please try again.</p>'); setViewOpen(true); }
+    finally { setLoadingContract(false); }
+  };
+
+  const downloadContract = async () => {
+    try {
+      const res = await fetch('/api/employee-profiles/contract', { credentials: 'include' });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Employment_Contract_${(form.legalName || 'Employee').replace(/\s+/g, '_')}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert('Failed to download contract'); }
+  };
+
+  return (
+    <>
+      <div className="sm:col-span-2 space-y-5">
+        {/* Contract header */}
+        <div className="rounded-lg p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+          <p className="text-[13px] font-medium mb-1" style={{ color: VS.text0 }}>Employment Contract</p>
+          {form.legalName && (
+            <p className="text-[14px] font-bold mb-2" style={{ color: VS.accent }}>For: {form.legalName}</p>
+          )}
+          <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>
+            Your details have been filled into the contract. View or download it before signing.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={viewContract} disabled={loadingContract}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90 disabled:opacity-50"
+              style={{ background: VS.accent, color: '#fff' }}>
+              <FileText className="h-4 w-4" />
+              {loadingContract ? 'Loading…' : 'View Contract'}
+            </button>
+            <button onClick={downloadContract}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
+              style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text1 }}>
+              <Download className="h-4 w-4" />
+              Download (.docx)
+            </button>
+          </div>
+        </div>
+
+        {/* Signed notice */}
+        {form.contractSignedAt && (
+          <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: 'rgba(78,201,176,0.1)', border: `1px solid ${VS.teal}44` }}>
+            <CheckCircle className="h-4 w-4" style={{ color: VS.teal }} />
+            <span className="text-[12px]" style={{ color: VS.teal }}>
+              Contract signed on {new Date(form.contractSignedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+              {form.legalName ? ` by ${form.legalName}` : ''}
+            </span>
+          </div>
+        )}
+
+        {/* Signature */}
+        <div>
+          <p className="text-[13px] font-medium mb-2" style={{ color: VS.text0 }}>Your Signature</p>
+          <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>Draw your signature below or upload an image.</p>
+          <SignaturePad
+            value={form.contractSignature}
+            onChange={(dataUrl) => setForm(prev => ({
+              ...prev,
+              contractSignature: dataUrl,
+              contractSignedAt: dataUrl ? new Date().toISOString() : '',
+            }))}
+          />
+          {form.contractSignature && (
+            <div className="mt-3 pt-3 text-center" style={{ borderTop: `1px solid ${VS.border}` }}>
+              <p className="text-[14px] font-semibold" style={{ color: VS.text0 }}>{form.legalName || 'Name not provided'}</p>
+              <p className="text-[11px]" style={{ color: VS.text2 }}>
+                {form.jobTitle ? `${form.jobTitle} — ` : ''}Signed {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* View Contract Modal */}
+      {viewOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)' }}
+          onClick={e => { if (e.target === e.currentTarget) setViewOpen(false); }}>
+          <div className="w-full max-w-3xl rounded-2xl overflow-hidden flex flex-col" style={{ background: '#fff', maxHeight: '90vh' }}>
+            <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ background: VS.bg1, borderBottom: `1px solid ${VS.border}` }}>
+              <span className="text-[14px] font-bold" style={{ color: VS.text0 }}>Employment Contract — {form.legalName || 'Preview'}</span>
+              <button onClick={() => setViewOpen(false)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/10" style={{ color: VS.text1 }}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8" style={{ color: '#1a1a1a', fontSize: '13px', lineHeight: 1.7 }}
+              dangerouslySetInnerHTML={{ __html: contractHtml || '' }} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 const STEPS = [
   { id: 'personal', label: 'Employee Info', icon: User },
   { id: 'spouse', label: 'Spouse', icon: Heart },
@@ -356,69 +467,7 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
                 </div>
               </>}
 
-              {step === 7 && <>
-                <div className="sm:col-span-2 space-y-5">
-                  {/* Contract header with employee name */}
-                  <div className="rounded-lg p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-                    <p className="text-[13px] font-medium mb-1" style={{ color: VS.text0 }}>Employment Contract</p>
-                    {form.legalName && (
-                      <p className="text-[14px] font-bold mb-2" style={{ color: VS.accent }}>
-                        For: {form.legalName}
-                      </p>
-                    )}
-                    <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>
-                      Please download and read the employment contract before signing below.
-                    </p>
-                    <a href="/contract.docx" download="Employment_Contract.docx"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
-                      style={{ background: VS.accent, color: '#fff', textDecoration: 'none' }}>
-                      <Download className="h-4 w-4" />
-                      Download Contract (.docx)
-                    </a>
-                  </div>
-
-                  {/* Already signed notice */}
-                  {form.contractSignedAt && (
-                    <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: 'rgba(78,201,176,0.1)', border: `1px solid ${VS.teal}44` }}>
-                      <CheckCircle className="h-4 w-4" style={{ color: VS.teal }} />
-                      <span className="text-[12px]" style={{ color: VS.teal }}>
-                        Contract signed on {new Date(form.contractSignedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        {form.legalName ? ` by ${form.legalName}` : ''}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Signature section */}
-                  <div>
-                    <p className="text-[13px] font-medium mb-2" style={{ color: VS.text0 }}>Your Signature</p>
-                    <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>
-                      Draw your signature below or upload an image of your signature.
-                    </p>
-
-                    {/* Signature canvas */}
-                    <SignaturePad
-                      value={form.contractSignature}
-                      onChange={(dataUrl) => setForm(prev => ({
-                        ...prev,
-                        contractSignature: dataUrl,
-                        contractSignedAt: dataUrl ? new Date().toISOString() : '',
-                      }))}
-                    />
-
-                    {/* Printed name under signature */}
-                    {form.contractSignature && (
-                      <div className="mt-3 pt-3 text-center" style={{ borderTop: `1px solid ${VS.border}` }}>
-                        <p className="text-[14px] font-semibold" style={{ color: VS.text0 }}>
-                          {form.legalName || 'Name not provided'}
-                        </p>
-                        <p className="text-[11px]" style={{ color: VS.text2 }}>
-                          {form.jobTitle ? `${form.jobTitle} — ` : ''}Signed {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>}
+              {step === 7 && <ContractStep form={form} setForm={setForm} api={apiClient} />}
             </div>
           )}
         </div>
