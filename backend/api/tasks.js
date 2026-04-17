@@ -255,8 +255,14 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
 
     const where = { orgId };
 
-    // Apply filters
-    if (status) where.status = status;
+    // Apply filters — normalize "open" to all non-completed/cancelled statuses
+    if (status) {
+      if (status === 'open') {
+        where.status = { notIn: ['completed', 'cancelled'] };
+      } else {
+        where.status = status;
+      }
+    }
     if (priority) where.priority = priority;
     if (userId) where.userId = userId;
     if (projectId) where.projectId = projectId;
