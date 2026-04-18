@@ -82,6 +82,26 @@ router.get('/', requireAuth, async (req, res) => {
       })
     ]);
 
+    // ─── Fetch per-assignee statuses for multi-assignee tasks ─────────────
+    // Maps userId → Set of taskIds they've personally completed
+    const perAssigneeCompletedMap = {};
+    try {
+      const assigneeRows = await prisma.$queryRawUnsafe(
+        `SELECT ta.userId, ta.taskId FROM task_assignees ta
+         JOIN macro_tasks t ON t.id = ta.taskId
+         WHERE ta.orgId = ? AND ta.userId IN (${memberIds.map(() => '?').join(',') || 'NULL'})
+           AND ta.status = 'completed'
+           AND t.updatedAt >= ? AND t.updatedAt <= ?`,
+        orgId, ...memberIds, start, end
+      );
+      for (const r of assigneeRows) {
+        if (!perAssigneeCompletedMap[r.userId]) perAssigneeCompletedMap[r.userId] = new Set();
+        perAssigneeCompletedMap[r.userId].add(r.taskId);
+      }
+    } catch (e) {
+      console.warn('[KPI] per-assignee fetch failed:', e.message);
+    }
+
     // ─── Fetch projects ───────────────────────────────────────────────────
     const projects = await prisma.project.findMany({
       where: { orgId },
@@ -103,8 +123,12 @@ router.get('/', requireAuth, async (req, res) => {
       const currentHours = userCurrentLogs.reduce((s, l) => s + (l.duration || 0), 0) / 3600;
       const previousHours = userPreviousLogs.reduce((s, l) => s + (l.duration || 0), 0) / 3600;
 
-      const completedTasks = userTasks.filter(t => t.status === 'completed').length;
-      const totalTasks = userTasks.length;
+      // Add per-assignee completions from team tasks (tasks where this user isn't the primary but completed their part)
+      const personalCompletedIds = perAssigneeCompletedMap[user.id] || new Set();
+      const primaryCompleted = userTasks.filter(t => t.status === 'completed').length;
+      const assigneeCompletedCount = [...personalCompletedIds].filter(taskId => !userTasks.find(t => t.id === taskId)).length;
+      const completedTasks = primaryCompleted + assigneeCompletedCount;
+      const totalTasks = userTasks.length + assigneeCompletedCount;
       const inProgressTasks = userTasks.filter(t => t.status === 'in_progress').length;
 
       // Estimation accuracy: compare actual vs estimated on completed tasks
