@@ -115,17 +115,18 @@ function renderMentions(text: string) {
 // ── Actual Hours Grid (with inline edit for super admin) ─────────────────────
 const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
 
-function ActualHoursGrid({ task, session, api, isOverdue }: {
-  task: Task; session: any; api: any; isOverdue: boolean;
+function ActualHoursGrid({ task, session, api, isOverdue, onTaskUpdated }: {
+  task: Task; session: any; api: any; isOverdue: boolean; onTaskUpdated?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [hours, setHours] = useState('');
   const [mins, setMins] = useState('');
   const [saving, setSaving] = useState(false);
+  const [localHours, setLocalHours] = useState(task.actualHours);
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
   const startEdit = () => {
-    const totalH = task.actualHours || 0;
+    const totalH = localHours || 0;
     setHours(String(Math.floor(totalH)));
     setMins(String(Math.round((totalH % 1) * 60)));
     setEditing(true);
@@ -134,13 +135,17 @@ function ActualHoursGrid({ task, session, api, isOverdue }: {
   const saveHours = async () => {
     setSaving(true);
     const total = (parseInt(hours) || 0) + (parseInt(mins) || 0) / 60;
+    const rounded = parseFloat(total.toFixed(2));
     try {
       await api.fetch(`/api/tasks/${task.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ actualHours: parseFloat(total.toFixed(2)) }),
+        body: JSON.stringify({ actualHours: rounded }),
       });
-      task.actualHours = parseFloat(total.toFixed(2));
+      setLocalHours(rounded);
+      task.actualHours = rounded;
       setEditing(false);
+      // Tell parent to re-fetch so the task card on the board updates
+      onTaskUpdated?.();
     } catch { /* */ }
     finally { setSaving(false); }
   };
@@ -184,7 +189,7 @@ function ActualHoursGrid({ task, session, api, isOverdue }: {
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[13px] font-medium" style={{ color }}>{task.actualHours}h</span>
+                  <span className="text-[13px] font-medium" style={{ color }}>{localHours}h</span>
                   {isSuperAdmin && (
                     <button onClick={startEdit} className="text-[10px] px-1.5 py-0.5 rounded hover:bg-white/10 transition-all"
                       style={{ color: VS.accent, border: `1px solid ${VS.accent}44` }}>
@@ -204,7 +209,7 @@ function ActualHoursGrid({ task, session, api, isOverdue }: {
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _onTaskUpdated, onCountsLoaded }: Props) {
+export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated, onCountsLoaded }: Props) {
   const { data: session } = useSession();
   const api = useApiClient();
   const { currentOrg } = useOrganization();
@@ -626,7 +631,7 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _
             <div className="p-5 space-y-5">
 
               {/* Metadata grid */}
-              <ActualHoursGrid task={task} session={session} api={api} isOverdue={!!isOverdue} />
+              <ActualHoursGrid task={task} session={session} api={api} isOverdue={!!isOverdue} onTaskUpdated={onTaskUpdated} />
 
               {/* ── Team Task section ── */}
               {task.isTeamTask && (
