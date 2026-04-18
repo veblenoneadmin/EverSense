@@ -289,7 +289,7 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
 }
 
 // ── Main Modal ───────────────────────────────────────────────────────────────
-export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function EmployeeProfileModal({ open, onClose, mandatory = false }: { open: boolean; onClose: () => void; mandatory?: boolean }) {
   const { data: session } = useSession();
   const apiClient = useApiClient();
   const [form, setForm] = useState<Profile>(EMPTY);
@@ -333,6 +333,12 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
   };
 
   const handleSave = async () => {
+    // In mandatory mode, require signature before save succeeds
+    if (mandatory && !form.contractSignature) {
+      setToast({ msg: 'Please sign the contract before saving', ok: false });
+      setTimeout(() => setToast(null), 3500);
+      return;
+    }
     setSaving(true);
     try {
       await apiClient.fetch('/api/employee-profiles/me', { method: 'PUT', body: JSON.stringify(form) });
@@ -359,7 +365,9 @@ export function EmployeeProfileModal({ open, onClose }: { open: boolean; onClose
             <h2 className="text-[15px] font-bold" style={{ color: VS.text0 }}>Employee Profile</h2>
             <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>Step {step + 1} of {STEPS.length} — {STEPS[step].label}</p>
           </div>
-          <button onClick={onClose} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/5" style={{ color: VS.text1 }}><X className="h-4 w-4" /></button>
+          {!mandatory && (
+            <button onClick={onClose} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/5" style={{ color: VS.text1 }}><X className="h-4 w-4" /></button>
+          )}
         </div>
 
         {/* Step progress line */}

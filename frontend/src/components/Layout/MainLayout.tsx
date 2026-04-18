@@ -79,13 +79,21 @@ const MainLayout: React.FC = () => {
     if (session) fetchRole();
   }, [session]);
 
-  // Auto-popup My Profile modal when accountant has created a contract for this user
-  // AND they haven't signed it yet. Only checks once per session.
-  useEffect(() => {
-    if (!session?.user?.id || profileCheckedRef.current) return;
-    profileCheckedRef.current = true;
+  // Auto-popup My Profile modal when user clocks in AND accountant has assigned a contract
+  // to them that they haven't signed yet. Also creates an "Employee Signup" task +
+  // auto-starts the timer on it. Only fires once per session.
+  const [signupTaskId, setSignupTaskId] = useState<string | null>(null);
 
-    (async () => {
+  useEffect(() => {
+    const handleAttendanceChange = async () => {
+      if (!session?.user?.id || profileCheckedRef.current) return;
+
+      // Only fire when user just clocked IN (check status endpoint)
+      const statusRes = await fetch('/api/attendance/status', { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (!statusRes?.clockedIn) return;
+
+      profileCheckedRef.current = true;
+
       try {
         const [contractRes, profileRes] = await Promise.all([
           fetch('/api/contracts/my', { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
@@ -93,16 +101,67 @@ const MainLayout: React.FC = () => {
         ]);
 
         const hasContract = !!contractRes?.contract;
-        const profile = profileRes?.profile;
-        const alreadySigned = !!profile?.contractSignedAt;
+        const alreadySigned = !!profileRes?.profile?.contractSignedAt;
+        if (!hasContract || alreadySigned) return;
 
-        // Show the modal only if a contract is assigned AND the user hasn't signed yet
-        if (hasContract && !alreadySigned) {
-          setShowProfileModal(true);
-        }
+        // Create "Employee Signup" task for this user and start the timer
+        try {
+          const currentOrgId = orgId;
+          if (currentOrgId) {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json', 'x-org-id': currentOrgId };
+            const taskRes = await fetch('/api/tasks', {
+              method: 'POST',
+              credentials: 'include',
+              headers,
+              body: JSON.stringify({
+                title: 'Employee Signup',
+                description: 'Complete your employee profile and sign your contract.',
+                userId: session.user.id,
+                orgId: currentOrgId,
+                priority: 'High',
+                status: 'in_progress',
+                category: 'Onboarding',
+              }),
+            });
+            if (taskRes.ok) {
+              const data = await taskRes.json();
+              const createdTaskId = data?.task?.id || data?.id;
+              if (createdTaskId) {
+                setSignupTaskId(createdTaskId);
+                // Start the timer on the new task
+                await fetch('/api/tasks/timer/start', {
+                  method: 'POST',
+                  credentials: 'include',
+                  headers,
+                  body: JSON.stringify({ taskId: createdTaskId, startedAt: Date.now() }),
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch { /* non-fatal */ }
+
+        setShowProfileModal(true);
       } catch { /* ignore */ }
-    })();
-  }, [session?.user?.id]);
+    };
+
+    // Listen for clock-in events
+    window.addEventListener('attendance-change', handleAttendanceChange);
+    // Also run once on mount in case they're already clocked in and haven't signed yet
+    handleAttendanceChange();
+    return () => window.removeEventListener('attendance-change', handleAttendanceChange);
+  }, [session?.user?.id, orgId]);
+
+  // Stop the signup task timer when the profile modal is saved & closed
+  const handleProfileModalClose = async () => {
+    if (signupTaskId && orgId) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', 'x-org-id': orgId };
+        await fetch('/api/tasks/timer/stop', { method: 'POST', credentials: 'include', headers });
+      } catch { /* */ }
+      setSignupTaskId(null);
+    }
+    setShowProfileModal(false);
+  };
 
   // Wall clock tick
   useEffect(() => {
@@ -240,8 +299,9 @@ const MainLayout: React.FC = () => {
     <div className="min-h-screen" style={{ background: VS.bg0 }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Auto-popup My Profile modal when the user has a contract waiting to be signed */}
-      <EmployeeProfileModal open={showProfileModal} onClose={() => setShowProfileModal(false)} />
+      {/* Auto-popup My Profile modal when the user clocks in and has an unsigned contract.
+          mandatory=true → can't close until they complete it */}
+      <EmployeeProfileModal open={showProfileModal} onClose={handleProfileModalClose} mandatory />
 
       {/* Top Navbar */}
       <header
