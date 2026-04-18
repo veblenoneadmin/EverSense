@@ -4,6 +4,7 @@ import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink, Settings } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
+import { EmployeeProfileModal } from '../../pages/EmployeeProfile';
 
 import { VS } from '../../lib/theme';
 
@@ -48,6 +49,10 @@ const MainLayout: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotif, setSelectedNotif] = useState<Notif | null>(null);
 
+  // Employee profile auto-popup (when accountant has assigned a contract to this email)
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const profileCheckedRef = useRef(false);
+
   // Wall clock
   const [currentTime, setCurrentTime] = useState(nowClock());
 
@@ -73,6 +78,31 @@ const MainLayout: React.FC = () => {
     };
     if (session) fetchRole();
   }, [session]);
+
+  // Auto-popup My Profile modal when accountant has created a contract for this user
+  // AND they haven't signed it yet. Only checks once per session.
+  useEffect(() => {
+    if (!session?.user?.id || profileCheckedRef.current) return;
+    profileCheckedRef.current = true;
+
+    (async () => {
+      try {
+        const [contractRes, profileRes] = await Promise.all([
+          fetch('/api/contracts/my', { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch('/api/employee-profiles/me', { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
+        ]);
+
+        const hasContract = !!contractRes?.contract;
+        const profile = profileRes?.profile;
+        const alreadySigned = !!profile?.contractSignedAt;
+
+        // Show the modal only if a contract is assigned AND the user hasn't signed yet
+        if (hasContract && !alreadySigned) {
+          setShowProfileModal(true);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [session?.user?.id]);
 
   // Wall clock tick
   useEffect(() => {
@@ -209,6 +239,9 @@ const MainLayout: React.FC = () => {
   return (
     <div className="min-h-screen" style={{ background: VS.bg0 }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Auto-popup My Profile modal when the user has a contract waiting to be signed */}
+      <EmployeeProfileModal open={showProfileModal} onClose={() => setShowProfileModal(false)} />
 
       {/* Top Navbar */}
       <header
