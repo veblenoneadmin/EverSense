@@ -118,18 +118,23 @@ router.get('/', requireAuth, async (req, res) => {
       const userCurrentLogs = currentLogs.filter(l => l.userId === user.id);
       const userPreviousLogs = previousLogs.filter(l => l.userId === user.id);
       const userTasks = currentTasks.filter(t => t.userId === user.id);
-      const userOverdue = overdueTasks.filter(t => t.userId === user.id);
+      // Exclude tasks the user personally completed (team tasks) from overdue count
+      const userPersonalCompleted = perAssigneeCompletedMap[user.id] || new Set();
+      const userOverdue = overdueTasks.filter(t => t.userId === user.id && !userPersonalCompleted.has(t.id));
 
       const currentHours = userCurrentLogs.reduce((s, l) => s + (l.duration || 0), 0) / 3600;
       const previousHours = userPreviousLogs.reduce((s, l) => s + (l.duration || 0), 0) / 3600;
 
-      // Add per-assignee completions from team tasks (tasks where this user isn't the primary but completed their part)
-      const personalCompletedIds = perAssigneeCompletedMap[user.id] || new Set();
-      const primaryCompleted = userTasks.filter(t => t.status === 'completed').length;
-      const assigneeCompletedCount = [...personalCompletedIds].filter(taskId => !userTasks.find(t => t.id === taskId)).length;
-      const completedTasks = primaryCompleted + assigneeCompletedCount;
-      const totalTasks = userTasks.length + assigneeCompletedCount;
-      const inProgressTasks = userTasks.filter(t => t.status === 'in_progress').length;
+      // "Effective status" for this user: if they have a per-assignee completion,
+      // treat the task as completed regardless of global status (team task flow)
+      const isCompletedForUser = (t) => t.status === 'completed' || userPersonalCompleted.has(t.id);
+
+      // Team tasks where user is NOT the primary (not in userTasks) but completed their part
+      const teamOnlyCompletedIds = [...userPersonalCompleted].filter(taskId => !userTasks.find(t => t.id === taskId));
+
+      const completedTasks = userTasks.filter(isCompletedForUser).length + teamOnlyCompletedIds.length;
+      const totalTasks = userTasks.length + teamOnlyCompletedIds.length;
+      const inProgressTasks = userTasks.filter(t => t.status === 'in_progress' && !userPersonalCompleted.has(t.id)).length;
 
       // Estimation accuracy: compare actual vs estimated on completed tasks
       const completedWithEstimate = userTasks.filter(
