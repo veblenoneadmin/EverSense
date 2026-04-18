@@ -457,17 +457,35 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
       } catch (_) {}
 
       // Batch-fetch multi-assignees (with per-assignee status)
+      // Split into two queries to avoid JOIN collation issues between task_assignees and User
       try {
         await ensureAssigneesTable();
-        const rows = await prisma.$queryRawUnsafe(
-          `SELECT ta.taskId, ta.userId, ta.status as assigneeStatus, u.name, u.email, u.image FROM task_assignees ta JOIN User u ON u.id = ta.userId WHERE ta.taskId IN (${ph})`,
+        const assigneeRows = await prisma.$queryRawUnsafe(
+          `SELECT taskId, userId, status as assigneeStatus FROM task_assignees WHERE taskId IN (${ph})`,
           ...taskIds
         );
+
+        // Fetch user info separately
+        const userIds = [...new Set(assigneeRows.map(r => r.userId))];
+        const userMap = {};
+        if (userIds.length > 0) {
+          try {
+            const users = await prisma.user.findMany({
+              where: { id: { in: userIds } },
+              select: { id: true, name: true, email: true, image: true },
+            });
+            for (const u of users) userMap[u.id] = u;
+          } catch (e) {
+            console.error('[tasks] user fetch for assignees failed:', e.message);
+          }
+        }
+
         const aMap = {};
         const assigneeStatusMap = {}; // taskId -> { userId -> status }
-        for (const r of rows) {
+        for (const r of assigneeRows) {
+          const u = userMap[r.userId] || { id: r.userId, name: null, email: null, image: null };
           if (!aMap[r.taskId]) aMap[r.taskId] = [];
-          aMap[r.taskId].push({ id: r.userId, name: r.name, email: r.email, image: r.image || null });
+          aMap[r.taskId].push({ id: r.userId, name: u.name, email: u.email, image: u.image || null });
           if (!assigneeStatusMap[r.taskId]) assigneeStatusMap[r.taskId] = {};
           if (r.assigneeStatus) assigneeStatusMap[r.taskId][r.userId] = r.assigneeStatus;
         }
@@ -482,7 +500,9 @@ router.get('/', requireAuth, withOrgScope, validateQuery(commonSchemas.paginatio
             if (myStatus) t.status = myStatus;
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error('[tasks] multi-assignee fetch error:', e.message);
+      }
 
       // Batch-fetch sub-task progress + assignees for team tasks
       try {
