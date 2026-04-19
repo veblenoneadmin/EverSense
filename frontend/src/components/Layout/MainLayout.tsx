@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
-import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink, Settings } from 'lucide-react';
+import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink, Settings, User } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
 import { EmployeeProfileModal } from '../../pages/EmployeeProfile';
 
@@ -588,9 +588,25 @@ const MainLayout: React.FC = () => {
                     <p className="text-[11px] truncate mt-0.5" style={{ color: VS.text2 }}>{email}</p>
                   </div>
                   <button
-                    onClick={handleSignOut}
+                    onClick={() => { setShowDropdown(false); setShowProfileModal(true); }}
                     className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] transition-colors duration-150"
                     style={{ color: VS.text1 }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.background = `${VS.accent}14`;
+                      (e.currentTarget as HTMLElement).style.color = VS.accent;
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                      (e.currentTarget as HTMLElement).style.color = VS.text1;
+                    }}
+                  >
+                    <User className="h-4 w-4" />
+                    Employee Info
+                  </button>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] transition-colors duration-150"
+                    style={{ color: VS.text1, borderTop: `1px solid ${VS.border}` }}
                     onMouseEnter={e => {
                       (e.currentTarget as HTMLElement).style.background = `${VS.red}14`;
                       (e.currentTarget as HTMLElement).style.color = VS.red;
