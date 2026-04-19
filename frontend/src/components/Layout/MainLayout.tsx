@@ -126,12 +126,23 @@ const MainLayout: React.FC = () => {
               const createdTaskId = data?.task?.id || data?.id;
               if (createdTaskId) {
                 setSignupTaskId(createdTaskId);
-                // Start the timer on the new task
+                // Start the timer — both backend (for admin view) AND frontend localStorage
+                // (so the timer actually ticks on the user's side)
+                const startTime = Date.now();
+                try {
+                  // Clear any existing timer first
+                  localStorage.removeItem('task_timer_active');
+                  localStorage.setItem('task_timer_active', JSON.stringify({ taskId: createdTaskId, startTime }));
+                  localStorage.setItem('task_timer_start', String(startTime));
+                  // Notify other tabs/components to pick up the new timer
+                  window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: { taskId: createdTaskId, startTime } }));
+                } catch { /* localStorage unavailable */ }
+
                 await fetch('/api/tasks/timer/start', {
                   method: 'POST',
                   credentials: 'include',
                   headers,
-                  body: JSON.stringify({ taskId: createdTaskId, startedAt: Date.now() }),
+                  body: JSON.stringify({ taskId: createdTaskId, startedAt: startTime }),
                 }).catch(() => {});
               }
             }
@@ -153,6 +164,12 @@ const MainLayout: React.FC = () => {
   const handleProfileModalClose = async () => {
     if (signupTaskId && orgId) {
       try {
+        // Stop frontend localStorage timer
+        localStorage.removeItem('task_timer_active');
+        localStorage.removeItem('task_timer_start');
+        window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: null }));
+
+        // Stop backend timer
         const headers: Record<string, string> = { 'Content-Type': 'application/json', 'x-org-id': orgId };
         await fetch('/api/tasks/timer/stop', { method: 'POST', credentials: 'include', headers });
       } catch { /* */ }
