@@ -928,6 +928,22 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
       : (userId ? [userId] : []);
     await setTaskAssignees(task.id, orgId, assigneeIds);
 
+    // Save checklist items (for non-team tasks) — simple checkable list
+    const { checklistItems: createChecklistItems } = req.body;
+    if (Array.isArray(createChecklistItems) && createChecklistItems.length > 0) {
+      try {
+        await ensureAssigneesTable();
+        for (let i = 0; i < createChecklistItems.length; i++) {
+          const it = createChecklistItems[i];
+          if (!it?.title) continue;
+          await prisma.$executeRawUnsafe(
+            'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
+            randomUUID(), task.id, req.user.id, orgId, it.title, it.sortOrder ?? i
+          );
+        }
+      } catch (e) { console.warn('[Tasks] checklist create error:', e.message); }
+    }
+
     // Create sub-tasks as real MacroTask records (appear on each member's board)
     const { isTeamTask, mainAssigneeId, subTasks } = req.body;
     if (isTeamTask && Array.isArray(subTasks) && subTasks.length > 0) {

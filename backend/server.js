@@ -435,7 +435,11 @@ app.use('/api', async (req, res, next) => {
       '/test'
     ];
 
-    const isPublicEndpoint = publicEndpoints.some(endpoint => req.path.startsWith(endpoint));
+    // /api/auth/me and /api/auth/profile need auth extraction despite being under /api/auth/
+    const authRequiredEndpoints = ['/api/auth/me', '/api/auth/profile'];
+    const needsAuth = authRequiredEndpoints.some(endpoint => req.path === endpoint || req.path.startsWith(endpoint + '/'));
+
+    const isPublicEndpoint = !needsAuth && publicEndpoints.some(endpoint => req.path.startsWith(endpoint));
     if (isPublicEndpoint) {
       return next();
     }

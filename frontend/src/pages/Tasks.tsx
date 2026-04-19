@@ -169,6 +169,7 @@ export function Tasks() {
     projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
     isTeamTask: false,
     subTasks: [] as { assigneeId: string; title: string }[],
+    checklistItems: [] as string[],
     recurringPattern: '' as '' | 'daily' | 'weekly' | 'biweekly' | 'monthly',
     recurringEndDate: '',
   });
@@ -186,6 +187,7 @@ export function Tasks() {
   const [editTaskForm, setEditTaskForm] = useState({
     title: '', description: '', priority: 'Medium' as Task['priority'],
     projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
+    checklistItems: [] as string[],
   });
 
   // Drag and drop
@@ -729,6 +731,9 @@ export function Tasks() {
           tags: newTaskForm.tags ? newTaskForm.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
           isTeamTask: newTaskForm.isTeamTask || undefined,
           subTasks: newTaskForm.isTeamTask ? newTaskForm.subTasks.filter(s => s.title && s.assigneeId) : undefined,
+          checklistItems: !newTaskForm.isTeamTask && newTaskForm.checklistItems.filter(i => i.trim()).length > 0
+            ? newTaskForm.checklistItems.filter(i => i.trim()).map((title, idx) => ({ title: title.trim(), sortOrder: idx }))
+            : undefined,
           recurringPattern: newTaskForm.recurringPattern || undefined,
           recurringConfig: newTaskForm.recurringPattern ? {
             ...(newTaskForm.recurringEndDate ? { endDate: new Date(newTaskForm.recurringEndDate + 'T23:59:59.000Z').toISOString() } : {}),
@@ -737,7 +742,7 @@ export function Tasks() {
       });
       if (data.task) {
         await fetchTasks(false);
-        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [], isTeamTask: false, subTasks: [], recurringPattern: '', recurringEndDate: '' });
+        setNewTaskForm({ title: '', description: '', priority: 'Medium', projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [], isTeamTask: false, subTasks: [], checklistItems: [], recurringPattern: '', recurringEndDate: '' });
         setShowNewTaskForm(false);
       }
     } catch { alert('Failed to create task.'); }
@@ -763,6 +768,7 @@ export function Tasks() {
           dueDate: editTaskForm.dueDate ? new Date(editTaskForm.dueDate + 'T00:00:00.000Z').toISOString() : null,
           tags: editTaskForm.tags ? editTaskForm.tags.split(',').map(t => t.trim()).filter(Boolean) : null,
           assigneeIds: editTaskForm.assigneeIds,
+          checklistItems: editTaskForm.checklistItems.filter(i => i.trim()).map((title, idx) => ({ title: title.trim(), sortOrder: idx })),
         }),
       });
       if (data.task) {
@@ -862,7 +868,15 @@ export function Tasks() {
       dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
       tags: Array.isArray(task.tags) ? task.tags.join(', ') : '',
       assigneeIds: task.assignees?.map(a => a.id) ?? [],
+      checklistItems: [],
     });
+    // Fetch existing checklist items for this task
+    apiClient.fetch(`/api/tasks/${task.id}/checklist`)
+      .then((d: any) => {
+        const items = (d.items || d.checklist || []).map((i: any) => i.title || '').filter(Boolean);
+        if (items.length > 0) setEditTaskForm(prev => ({ ...prev, checklistItems: items }));
+      })
+      .catch(() => {});
   };
 
   const handleDuplicateTask = (task: Task) => {
@@ -879,6 +893,7 @@ export function Tasks() {
       assigneeIds: [],
       isTeamTask: task.isTeamTask || false,
       subTasks: [],
+      checklistItems: [],
       recurringPattern: '',
       recurringEndDate: '',
     });
@@ -2477,6 +2492,44 @@ export function Tasks() {
                 </div>
               )}
 
+              {/* Checklist (only for non-team tasks) */}
+              {!newTaskForm.isTeamTask && (
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Checklist (optional)</label>
+                  <div className="space-y-1.5">
+                    {newTaskForm.checklistItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <div className="h-3.5 w-3.5 rounded border shrink-0" style={{ borderColor: VS.border2 }} />
+                        <input
+                          type="text"
+                          value={item}
+                          placeholder="Checklist item..."
+                          onChange={e => setNewTaskForm(p => {
+                            const u = [...p.checklistItems]; u[idx] = e.target.value; return { ...p, checklistItems: u };
+                          })}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && item.trim()) { e.preventDefault(); setNewTaskForm(p => ({ ...p, checklistItems: [...p.checklistItems, ''] })); }
+                          }}
+                          className={inputCls}
+                          style={{ ...inputStyle, flex: 1, fontSize: 12, padding: '5px 8px' }}
+                        />
+                        <button type="button"
+                          onClick={() => setNewTaskForm(p => ({ ...p, checklistItems: p.checklistItems.filter((_, i) => i !== idx) }))}
+                          className="opacity-40 hover:opacity-100 transition-opacity" style={{ color: VS.red }}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button"
+                      onClick={() => setNewTaskForm(p => ({ ...p, checklistItems: [...p.checklistItems, ''] }))}
+                      className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg transition-colors"
+                      style={{ color: VS.accent, border: `1px dashed ${VS.accent}55`, background: 'transparent', width: '100%', justifyContent: 'center' }}>
+                      <Plus className="h-3 w-3" /> Add checklist item
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Priority</label>
@@ -2868,6 +2921,41 @@ export function Tasks() {
                   className={inputCls}
                   style={inputStyle}
                 />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: VS.text2 }}>Checklist</label>
+                <div className="space-y-1.5">
+                  {editTaskForm.checklistItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div className="h-3.5 w-3.5 rounded border shrink-0" style={{ borderColor: VS.border2 }} />
+                      <input
+                        type="text"
+                        value={item}
+                        placeholder="Checklist item..."
+                        onChange={e => setEditTaskForm(p => {
+                          const u = [...p.checklistItems]; u[idx] = e.target.value; return { ...p, checklistItems: u };
+                        })}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && item.trim()) { e.preventDefault(); setEditTaskForm(p => ({ ...p, checklistItems: [...p.checklistItems, ''] })); }
+                        }}
+                        className={inputCls}
+                        style={{ ...inputStyle, flex: 1, fontSize: 12, padding: '5px 8px' }}
+                      />
+                      <button type="button"
+                        onClick={() => setEditTaskForm(p => ({ ...p, checklistItems: p.checklistItems.filter((_, i) => i !== idx) }))}
+                        className="opacity-40 hover:opacity-100 transition-opacity" style={{ color: VS.red }}>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button"
+                    onClick={() => setEditTaskForm(p => ({ ...p, checklistItems: [...p.checklistItems, ''] }))}
+                    className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg transition-colors"
+                    style={{ color: VS.accent, border: `1px dashed ${VS.accent}55`, background: 'transparent', width: '100%', justifyContent: 'center' }}>
+                    <Plus className="h-3 w-3" /> Add checklist item
+                  </button>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">
