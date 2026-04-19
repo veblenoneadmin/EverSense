@@ -12,7 +12,7 @@ const labelCls = 'block text-[12px] font-semibold mb-1.5';
 interface Profile {
   legalName: string; dateOfBirth: string; country: string;
   streetAddress: string; city: string; state: string; postcode: string;
-  homePhone: string; cellPhone: string; emailAddress: string; sssId: string;
+  homePhone: string; cellPhone: string; emailAddress: string;
   maritalStatus: string; spouseName: string; spouseEmployer: string; spouseWorkPhone: string;
   emergencyContactName: string; emergencyContactAddress: string;
   emergencyContactPhone: string; emergencyContactCell: string; emergencyContactRelation: string;
@@ -24,7 +24,7 @@ interface Profile {
 const EMPTY: Profile = {
   legalName: '', dateOfBirth: '', country: 'Philippines',
   streetAddress: '', city: '', state: '', postcode: '',
-  homePhone: '', cellPhone: '', emailAddress: '', sssId: '',
+  homePhone: '', cellPhone: '', emailAddress: '',
   maritalStatus: '', spouseName: '', spouseEmployer: '', spouseWorkPhone: '',
   emergencyContactName: '', emergencyContactAddress: '',
   emergencyContactPhone: '', emergencyContactCell: '', emergencyContactRelation: '',
@@ -109,17 +109,28 @@ const STEPS = [
   { id: 'contract', label: 'Contract' },
 ];
 
-// Validation per step — returns list of missing field labels
+// Validation helpers
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^[+\d][\d\s\-()]{6,}$/;      // digits with optional +, space, dash, parens; min 7 chars
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Validation per step — returns list of invalid/missing fields with reason
 function validateStep(step: number, form: Profile): string[] {
-  const missing: string[] = [];
-  const req = (val: string, label: string) => { if (!val.trim()) missing.push(label); };
+  const errs: string[] = [];
+  const req = (val: string, label: string) => { if (!val.trim()) errs.push(label); };
+  const email = (val: string, label: string) => { if (val.trim() && !EMAIL_RE.test(val.trim())) errs.push(`${label} (invalid format)`); };
+  const phone = (val: string, label: string) => { if (val.trim() && !PHONE_RE.test(val.trim())) errs.push(`${label} (invalid number)`); };
+  const date = (val: string, label: string) => { if (val.trim() && !DATE_RE.test(val.trim())) errs.push(`${label} (invalid date)`); };
 
   if (step === 0) {
     req(form.legalName, 'Full Name');
     req(form.dateOfBirth, 'Date of Birth');
+    date(form.dateOfBirth, 'Date of Birth');
     req(form.cellPhone, 'Cell Phone');
+    phone(form.cellPhone, 'Cell Phone');
+    phone(form.homePhone, 'Home Phone');
     req(form.emailAddress, 'Email Address');
-    req(form.sssId, 'SSS Id');
+    email(form.emailAddress, 'Email Address');
     req(form.maritalStatus, 'Marital Status');
     req(form.country, 'Country');
     req(form.streetAddress, 'Street Address');
@@ -127,22 +138,28 @@ function validateStep(step: number, form: Profile): string[] {
     req(form.state, 'State/Province');
     req(form.postcode, 'Postcode');
   } else if (step === 1) {
-    // Spouse info is optional — no required fields
+    // Spouse info is optional — only validate phone format if filled
+    phone(form.spouseWorkPhone, "Spouse's Work Phone");
   } else if (step === 2) {
     req(form.emergencyContactName, 'Full Name');
     req(form.emergencyContactAddress, 'Address');
     req(form.emergencyContactPhone, 'Primary Phone');
+    phone(form.emergencyContactPhone, 'Primary Phone');
     req(form.emergencyContactCell, 'Cell Phone');
+    phone(form.emergencyContactCell, 'Cell Phone');
     req(form.emergencyContactRelation, 'Relationship');
   } else if (step === 3) {
     req(form.bankName, 'Bank Name');
     req(form.accountNumber, 'Account Number');
+    if (form.accountNumber.trim() && !/^\d{4,}$/.test(form.accountNumber.trim().replace(/[\s-]/g, ''))) {
+      errs.push('Account Number (digits only, min 4)');
+    }
     req(form.wiseUsername, 'Wise Username');
   } else if (step === 4) {
     req(form.validIdFilename, 'Valid ID upload');
   }
-  // Step 5 (contract) — signature not required to proceed (they sign at the end)
-  return missing;
+  // Step 5 (contract) — signature not required to proceed
+  return errs;
 }
 
 // ── Signature Pad ────────────────────────────────────────────────────────────
@@ -348,18 +365,32 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
                 </button>
                 <button onClick={() => {
                   const filledHtml = injectSignature(myContract.content || '', form);
-                  const full = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${myContract.title}</title><style>body{font-family:-apple-system,Segoe UI,sans-serif;color:#1a1a1a;max-width:780px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px}h1,h2{margin-top:24px}table{width:100%;border-collapse:collapse;margin:15px 0}td{padding:8px;border:1px solid #ccc;vertical-align:top}img{max-width:180px}</style></head><body>${filledHtml}</body></html>`;
-                  const blob = new Blob([full], { type: 'text/html' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `Contract_${(form.legalName || 'Employee').replace(/\s+/g, '_')}.html`;
-                  a.click();
-                  URL.revokeObjectURL(url);
+                  const fileName = `Contract_${(form.legalName || 'Employee').replace(/\s+/g, '_')}`;
+                  const full = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${fileName}</title><style>
+                    @page { size: A4; margin: 20mm; }
+                    body{font-family:-apple-system,Segoe UI,sans-serif;color:#1a1a1a;max-width:780px;margin:0 auto;padding:0 10px;line-height:1.7;font-size:13px}
+                    h1{font-size:18px;margin:24px 0 12px;text-align:center}
+                    h2{font-size:15px;margin:20px 0 8px}
+                    h3{font-size:14px;margin:16px 0 8px}
+                    table{width:100%;border-collapse:collapse;margin:10px 0}
+                    td{padding:6px 8px;border:1px solid #ccc;vertical-align:top}
+                    img{max-width:180px}
+                    ul{margin:8px 0;padding-left:24px}
+                    hr{page-break-after:always;border:none}
+                  </style></head><body>${filledHtml}
+                  <script>window.addEventListener('load', () => { setTimeout(() => window.print(), 300); });</script>
+                  </body></html>`;
+                  // Open in new window → auto-trigger print dialog → user saves as PDF
+                  const w = window.open('', '_blank');
+                  if (w) {
+                    w.document.open();
+                    w.document.write(full);
+                    w.document.close();
+                  }
                 }}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
                   style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text1 }}>
-                  <Download className="h-4 w-4" /> Download Contract
+                  <Download className="h-4 w-4" /> Download PDF
                 </button>
               </div>
             </div>
@@ -445,7 +476,18 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
   };
 
   const handleSave = async () => {
-    // Signature recommended but not required (skippable for now)
+    // Validate all steps on save — collect issues from all steps
+    const allErrors: string[] = [];
+    for (let i = 0; i < STEPS.length; i++) {
+      allErrors.push(...validateStep(i, form));
+    }
+    if (allErrors.length > 0) {
+      setErrors(allErrors);
+      setToast({ msg: `${allErrors.length} field${allErrors.length > 1 ? 's' : ''} need attention`, ok: false });
+      setTimeout(() => setToast(null), 3500);
+      return;
+    }
+    setErrors([]);
     setSaving(true);
     try {
       // Build the signed contract HTML snapshot (signature embedded + date filled)
@@ -525,7 +567,6 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
               {step === 0 && <>
                 <Field label="Full Name" value={form.legalName} onChange={set('legalName')} placeholder="As shown on ID" required error={errors.includes('Full Name')} />
                 <Field label="Date of Birth" value={form.dateOfBirth} onChange={set('dateOfBirth')} type="date" required error={errors.includes('Date of Birth')} />
-                <Field label="SSS Id" value={form.sssId} onChange={set('sssId')} placeholder="SSS number" required error={errors.includes('SSS Id')} />
                 <Field label="Home Phone" value={form.homePhone} onChange={set('homePhone')} placeholder="+63 2 000 0000" />
                 <Field label="Cell Phone" value={form.cellPhone} onChange={set('cellPhone')} placeholder="+63 900 000 0000" required error={errors.includes('Cell Phone')} />
                 <Field label="Email Address" value={form.emailAddress} onChange={set('emailAddress')} type="email" placeholder="personal@email.com" required error={errors.includes('Email Address')} />
