@@ -211,6 +211,43 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: 
   );
 }
 
+// Inject the employee's signature image + signing date into the contract HTML
+// Replaces the last signature line (employee side) with the actual signature
+function injectSignature(html: string, form: Profile): string {
+  if (!form.contractSignature) return html;
+
+  const dateStr = form.contractSignedAt
+    ? new Date(form.contractSignedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const signatureImg = `<img src="${form.contractSignature}" alt="Signature" style="max-width:200px;max-height:70px;display:block;margin:-10px auto 5px;" />`;
+  let out = html;
+
+  // Replace the LAST occurrence of the signature line with the actual image
+  // The contract has two signature lines: employer (first) and employee (second/last)
+  const sigLineRegex = /___________________________/g;
+  const matches = [...out.matchAll(sigLineRegex)];
+  if (matches.length >= 2) {
+    // Replace only the last one (employee)
+    const lastMatch = matches[matches.length - 1];
+    out = out.slice(0, lastMatch.index) + signatureImg + out.slice(lastMatch.index + lastMatch[0].length);
+  } else if (matches.length === 1) {
+    out = out.replace(sigLineRegex, signatureImg);
+  }
+
+  // Fill in the Date: _______________ line near the signature (last occurrence)
+  const dateLineRegex = /Date: _______________/g;
+  const dateMatches = [...out.matchAll(dateLineRegex)];
+  if (dateMatches.length >= 2) {
+    const lastDate = dateMatches[dateMatches.length - 1];
+    out = out.slice(0, lastDate.index) + `Date: <strong>${dateStr}</strong>` + out.slice(lastDate.index + lastDate[0].length);
+  } else if (dateMatches.length === 1) {
+    out = out.replace(dateLineRegex, `Date: <strong>${dateStr}</strong>`);
+  }
+
+  return out;
+}
+
 // ── Contract Step ────────────────────────────────────────────────────────────
 function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Dispatch<React.SetStateAction<Profile>>; api: any }) {
   const [myContract, setMyContract] = useState<{ id: string; title: string; content: string } | null>(null);
@@ -280,7 +317,7 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
               <button onClick={() => setViewOpen(false)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/10" style={{ color: VS.text1 }}><X className="h-4 w-4" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-8" style={{ color: '#1a1a1a', fontSize: '13px', lineHeight: 1.7 }}
-              dangerouslySetInnerHTML={{ __html: myContract.content || '' }} />
+              dangerouslySetInnerHTML={{ __html: injectSignature(myContract.content || '', form) }} />
           </div>
         </div>
       )}

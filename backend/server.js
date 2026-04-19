@@ -3457,6 +3457,8 @@ async function ensureEmployeeProfilesTable() {
       try { await prisma.$executeRawUnsafe(`ALTER TABLE employee_profiles ADD COLUMN ${col}`); }
       catch (_) { /* column already exists */ }
     }
+    // Upgrade size of columns that store base64 data (file uploads)
+    try { await prisma.$executeRawUnsafe('ALTER TABLE employee_profiles MODIFY COLUMN validIdUrl LONGTEXT'); } catch (_) {}
     console.log('  ✅ employee_profiles table ready');
   } catch (e) { console.warn('  ⚠️  ensureEmployeeProfilesTable:', e.message); }
 }
