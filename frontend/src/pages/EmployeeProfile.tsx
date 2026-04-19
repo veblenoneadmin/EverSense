@@ -260,8 +260,14 @@ function injectSignature(html: string, form: Profile): string {
     out = out.replace(/(>|\s)Name:\s*(<img[^>]*>|<strong>)/g, (m, pre, next) => `${pre}Name: <strong>${nameStr}</strong> ${next === '<strong>' ? '' : next}`);
   }
 
-  // 5) Patch existing contracts — replace old director placeholder with Zac McAnally / Founder
-  out = out.replace(/\(Director['’]s Name\/Owner\)/g, 'Zac McAnally');
+  // 5) Patch existing contracts — replace old director placeholder with Zac McAnally, Founder
+  // Handle any apostrophe variant and whitespace, collapse into single bold line
+  out = out.replace(
+    /<p>\s*<strong>\s*\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)\s*<\/strong>\s*<\/p>\s*<p>\s*<em>\s*\(Position\)\s*<\/em>\s*<\/p>/gi,
+    '<p><strong>Zac McAnally, Founder</strong></p>'
+  );
+  // Catch-all for standalone placeholders
+  out = out.replace(/\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)/gi, 'Zac McAnally');
   out = out.replace(/\(Position\)/g, 'Founder');
 
   return out;
@@ -274,15 +280,33 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
   const [loadingContract, setLoadingContract] = useState(true);
   const viewScrollRef = useRef<HTMLDivElement>(null);
 
-  // Reset scroll to top when viewer opens
+  // Reset scroll to top when viewer opens + again after images load (prevents auto-scroll-down)
   useEffect(() => {
-    if (viewOpen && viewScrollRef.current) {
-      // Wait for DOM to paint, then scroll to top
-      requestAnimationFrame(() => {
-        if (viewScrollRef.current) viewScrollRef.current.scrollTop = 0;
-      });
-    }
-  }, [viewOpen]);
+    if (!viewOpen || !viewScrollRef.current) return;
+    const el = viewScrollRef.current;
+
+    // Scroll to top multiple times as content loads
+    const toTop = () => { if (el) el.scrollTop = 0; };
+    toTop();
+    requestAnimationFrame(toTop);
+    const t1 = setTimeout(toTop, 50);
+    const t2 = setTimeout(toTop, 200);
+    const t3 = setTimeout(toTop, 500);
+
+    // Also reset whenever any image inside loads (signature image causes layout shift)
+    const imgs = el.querySelectorAll('img');
+    const handlers: Array<[HTMLImageElement, () => void]> = [];
+    imgs.forEach(img => {
+      const handler = () => { if (el) el.scrollTop = 0; };
+      img.addEventListener('load', handler);
+      handlers.push([img, handler]);
+    });
+
+    return () => {
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+      handlers.forEach(([img, h]) => img.removeEventListener('load', h));
+    };
+  }, [viewOpen, myContract]);
 
   // Fetch the contract linked to this employee's email
   useEffect(() => {
