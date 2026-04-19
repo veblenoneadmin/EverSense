@@ -221,7 +221,8 @@ function injectSignature(html: string, form: Profile): string {
     ? new Date(form.contractSignedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  const sigImg = `<img src="${form.contractSignature}" alt="Signature" style="max-width:180px;max-height:60px;display:inline-block;vertical-align:middle;" />`;
+  // Fixed dimensions prevent layout shift when image loads → prevents auto-scroll
+  const sigImg = `<img src="${form.contractSignature}" alt="Signature" width="180" height="60" style="width:180px;height:60px;display:inline-block;vertical-align:middle;object-fit:contain;" />`;
   let out = html;
 
   // 1) Replace ALL employee-side signature underscore lines with the signature image.
@@ -249,24 +250,27 @@ function injectSignature(html: string, form: Profile): string {
   // 4) Printed Name / Name: _______ → employee's legal name
   const nameStr = form.legalName || '';
   if (nameStr) {
-    out = out.replace(/Printed Name:\s*/g, `Printed Name: <strong>${nameStr}</strong> `);
-    // Collapse duplicate "Printed Name: <name> [img]" if already processed
-    out = out.replace(
-      new RegExp(`Printed Name:\\s*<strong>${nameStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</strong>\\s*${sigImg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'),
-      `Printed Name: <strong>${nameStr}</strong>`
-    );
-    // Standalone "Name: <img>" or "Name: <strong>" inside Annex E
-    out = out.replace(/(>|\s)Name:\s*(<img[^>]*>|<strong>)/g, (_m, pre, next) => `${pre}Name: <strong>${nameStr}</strong> ${next === '<strong>' ? '' : next}`);
+    // "Printed Name: <img>" → "Printed Name: [name]" (img already replaced underscores)
+    const sigImgEscaped = sigImg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`Printed Name:\\s*${sigImgEscaped}`, 'g'), `Printed Name: <strong>${nameStr}</strong>`);
+
+    // Annex E: ">Name: <img>" → ">Name: [name]"
+    // Use `>` right before to avoid matching "Full Name:" or "Legal Name:"
+    out = out.replace(new RegExp(`>Name:\\s*${sigImgEscaped}`, 'g'), `>Name: <strong>${nameStr}</strong>`);
+
+    // Also handle the case where signature wasn't a separate sig line (fallback): "Printed Name: ___"
+    out = out.replace(/Printed Name:\s*_{20,}/g, `Printed Name: <strong>${nameStr}</strong>`);
+    out = out.replace(/>Name:\s*_{20,}/g, `>Name: <strong>${nameStr}</strong>`);
   }
 
-  // 5) Patch existing contracts — replace old director placeholder with Zac McAnally, Founder
+  // 5) Patch existing contracts — replace old director placeholder with Zac Mcanally, Founder
   // Handle any apostrophe variant and whitespace, collapse into single bold line
   out = out.replace(
     /<p>\s*<strong>\s*\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)\s*<\/strong>\s*<\/p>\s*<p>\s*<em>\s*\(Position\)\s*<\/em>\s*<\/p>/gi,
-    '<p><strong>Zac McAnally, Founder</strong></p>'
+    '<p><strong>Zac Mcanally, Founder</strong></p>'
   );
   // Catch-all for standalone placeholders
-  out = out.replace(/\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)/gi, 'Zac McAnally');
+  out = out.replace(/\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)/gi, 'Zac Mcanally');
   out = out.replace(/\(Position\)/g, 'Founder');
 
   return out;
@@ -369,7 +373,7 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
               <span className="text-[14px] font-bold" style={{ color: VS.text0 }}>{myContract.title}</span>
               <button onClick={() => setViewOpen(false)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/10" style={{ color: VS.text1 }}><X className="h-4 w-4" /></button>
             </div>
-            <div ref={viewScrollRef} className="flex-1 overflow-y-auto p-8" style={{ color: '#1a1a1a', fontSize: '13px', lineHeight: 1.7 }}
+            <div ref={viewScrollRef} className="flex-1 overflow-y-auto p-8" style={{ color: '#1a1a1a', fontSize: '13px', lineHeight: 1.7, overflowAnchor: 'none' }}
               dangerouslySetInnerHTML={{ __html: injectSignature(myContract.content || '', form) }} />
           </div>
         </div>
