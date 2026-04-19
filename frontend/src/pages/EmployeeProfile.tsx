@@ -330,6 +330,7 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
   const { data: session } = useSession();
   const apiClient = useApiClient();
   const [form, setForm] = useState<Profile>(EMPTY);
+  const [contractTemplate, setContractTemplate] = useState<string>('');
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -339,22 +340,23 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
   useEffect(() => {
     if (!open || !session?.user?.id) return;
     setLoading(true);
-    apiClient.fetch('/api/employee-profiles/me')
-      .then((d: any) => {
-        if (d.profile) {
-          const p = d.profile;
-          const out: any = { ...EMPTY };
-          for (const k of Object.keys(EMPTY)) {
-            if (p[k] != null) {
-              if ((k === 'dateOfBirth' || k === 'startDate') && p[k]) out[k] = new Date(p[k]).toISOString().split('T')[0];
-              else out[k] = String(p[k]);
-            }
+    Promise.all([
+      apiClient.fetch('/api/employee-profiles/me').catch(() => null),
+      apiClient.fetch('/api/contracts/my').catch(() => null),
+    ]).then(([profileRes, contractRes]: any[]) => {
+      if (profileRes?.profile) {
+        const p = profileRes.profile;
+        const out: any = { ...EMPTY };
+        for (const k of Object.keys(EMPTY)) {
+          if (p[k] != null) {
+            if ((k === 'dateOfBirth' || k === 'startDate') && p[k]) out[k] = new Date(p[k]).toISOString().split('T')[0];
+            else out[k] = String(p[k]);
           }
-          setForm(out);
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+        setForm(out);
+      }
+      if (contractRes?.contract?.content) setContractTemplate(contractRes.contract.content);
+    }).finally(() => setLoading(false));
   }, [open, session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (field: keyof Profile) => (v: string) => setForm(prev => ({ ...prev, [field]: v }));
@@ -378,7 +380,15 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
     }
     setSaving(true);
     try {
-      await apiClient.fetch('/api/employee-profiles/me', { method: 'PUT', body: JSON.stringify(form) });
+      // Build the signed contract HTML snapshot (signature embedded + date filled)
+      const signedContractHtml = contractTemplate && form.contractSignature
+        ? injectSignature(contractTemplate, form)
+        : null;
+
+      await apiClient.fetch('/api/employee-profiles/me', {
+        method: 'PUT',
+        body: JSON.stringify({ ...form, signedContractHtml }),
+      });
       setToast({ msg: 'Profile saved successfully', ok: true });
       setTimeout(() => { setToast(null); onClose(); }, 1500);
     } catch (err: any) {

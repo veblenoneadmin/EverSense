@@ -3483,6 +3483,9 @@ async function ensureContractTemplatesTable() {
     // Add employeeEmail column (idempotent)
     try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD COLUMN employeeEmail VARCHAR(255)'); } catch (_) {}
     try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD INDEX idx_ct_email (employeeEmail)'); } catch (_) {}
+    // Add signed contract snapshot columns
+    try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD COLUMN signedContent LONGTEXT'); } catch (_) {}
+    try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD COLUMN signedAt DATETIME(3)'); } catch (_) {}
     console.log('  ✅ contract_templates table ready');
   } catch (e) { console.warn('  ⚠️  ensureContractTemplatesTable:', e.message); }
 }

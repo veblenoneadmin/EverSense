@@ -35,10 +35,31 @@ const FIELDS = [
   'contractSignature', 'contractSignedAt',
 ];
 
+// Fields that are DATETIME/DATE in MySQL — must convert ISO strings to MySQL format
+const DATETIME_FIELDS = new Set(['contractSignedAt']);
+const DATE_FIELDS = new Set(['dateOfBirth', 'startDate']);
+
+function normalizeValue(field, value) {
+  if (value == null || value === '') return null;
+  if (DATETIME_FIELDS.has(field)) {
+    // Convert ISO 8601 ('2026-04-19T03:55:19.042Z') → MySQL DATETIME ('2026-04-19 03:55:19.042')
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().replace('T', ' ').replace('Z', '');
+  }
+  if (DATE_FIELDS.has(field)) {
+    // Ensure YYYY-MM-DD
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().split('T')[0];
+  }
+  return value;
+}
+
 function pick(body) {
   const data = {};
   for (const f of FIELDS) {
-    if (body[f] !== undefined) data[f] = body[f] || null;
+    if (body[f] !== undefined) data[f] = normalizeValue(f, body[f]);
   }
   return data;
 }
@@ -81,6 +102,23 @@ router.put('/me', requireAuth, withOrgScope, async (req, res) => {
         `INSERT INTO employee_profiles (${cols.map(c => '`' + c + '`').join(', ')}) VALUES (${placeholders})`,
         id, req.user.id, req.orgId, ...Object.values(data)
       );
+    }
+
+    // If the user just signed their contract, save the signed HTML snapshot
+    // to contract_templates so admins can view the exact signed version
+    if (data.contractSignature && data.contractSignedAt) {
+      try {
+        const signedHtml = req.body.signedContractHtml;
+        if (signedHtml) {
+          await prisma.$executeRawUnsafe(
+            'UPDATE contract_templates SET signedContent = ?, signedAt = ?, status = ? WHERE employeeEmail = ? AND orgId = ? AND (signedContent IS NULL OR signedContent = "")',
+            signedHtml, data.contractSignedAt, 'signed', req.user.email, req.orgId
+          );
+          console.log(`📝 Signed contract snapshot saved for ${req.user.email}`);
+        }
+      } catch (e) {
+        console.warn('[EmployeeProfiles] signed contract save failed:', e.message);
+      }
     }
 
     // Return updated profile
