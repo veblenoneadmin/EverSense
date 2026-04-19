@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
-import { Save, CheckCircle, AlertTriangle, Upload, FileText, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Save, CheckCircle, AlertTriangle, Upload, FileText, X, ArrowLeft, ArrowRight, Download } from 'lucide-react';
 import { VS } from '../lib/theme';
 
 const inp = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
@@ -338,11 +338,28 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
               <p className="text-[13px] font-medium mb-1" style={{ color: VS.text0 }}>{myContract.title}</p>
               {form.legalName && <p className="text-[14px] font-bold mb-2" style={{ color: VS.accent }}>For: {form.legalName}</p>}
               <p className="text-[12px] mb-3" style={{ color: VS.text2 }}>Please review your contract below before signing.</p>
-              <button onClick={() => setViewOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
-                style={{ background: VS.accent, color: '#fff' }}>
-                <FileText className="h-4 w-4" /> View Contract
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => setViewOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
+                  style={{ background: VS.accent, color: '#fff' }}>
+                  <FileText className="h-4 w-4" /> View Contract
+                </button>
+                <button onClick={() => {
+                  const filledHtml = injectSignature(myContract.content || '', form);
+                  const full = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${myContract.title}</title><style>body{font-family:-apple-system,Segoe UI,sans-serif;color:#1a1a1a;max-width:780px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px}h1,h2{margin-top:24px}table{width:100%;border-collapse:collapse;margin:15px 0}td{padding:8px;border:1px solid #ccc;vertical-align:top}img{max-width:180px}</style></head><body>${filledHtml}</body></html>`;
+                  const blob = new Blob([full], { type: 'text/html' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Contract_${(form.legalName || 'Employee').replace(/\s+/g, '_')}.html`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all hover:opacity-90"
+                  style={{ background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text1 }}>
+                  <Download className="h-4 w-4" /> Download Contract
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -483,6 +500,23 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
               <div className="w-6 h-6 rounded-full animate-spin" style={{ border: '2px solid #3c3c3c', borderTopColor: VS.accent }} />
             </div>
           ) : (
+            <>
+            {/* Step header — large title for each step */}
+            <div className="mb-5 pb-3" style={{ borderBottom: `1px solid ${VS.border}` }}>
+              <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{ color: VS.accent }}>
+                Step {step + 1} of {STEPS.length}
+              </p>
+              <h3 className="text-[18px] font-bold" style={{ color: VS.text0 }}>{STEPS[step].label}</h3>
+              <p className="text-[12px] mt-1" style={{ color: VS.text2 }}>
+                {step === 0 && 'Personal information and contact details'}
+                {step === 1 && 'Optional — fill in if applicable'}
+                {step === 2 && 'Someone to contact in case of emergency'}
+                {step === 3 && 'For payroll and reimbursements'}
+                {step === 4 && 'Upload a valid government-issued ID'}
+                {step === 5 && 'Review and sign your employment contract'}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
               {/* Step 0: Employee Info */}
@@ -577,6 +611,7 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
               {/* Step 5: Contract */}
               {step === 5 && <ContractStep form={form} setForm={setForm} api={apiClient} />}
             </div>
+            </>
           )}
 
           {/* Validation errors */}
