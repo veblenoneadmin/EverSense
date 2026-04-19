@@ -223,9 +223,9 @@ export function Tasks() {
   const [reportFiles, setReportFiles] = useState<File[]>([]);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
-  // My tasks vs all tasks toggle (OWNER/ADMIN/STAFF)
+  // My tasks vs all tasks toggle (OWNER/ADMIN/STAFF/ACCOUNTANT)
   const isAdminOrOwner = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN';
-  const canToggleTasks = isAdminOrOwner || currentOrg?.role === 'STAFF';
+  const canToggleTasks = isAdminOrOwner || currentOrg?.role === 'STAFF' || currentOrg?.role === 'ACCOUNTANT';
 
   // Clock-in gate for STAFF
   const [isClockedIn, setIsClockedIn] = useState<boolean | null>(null);
@@ -274,7 +274,7 @@ export function Tasks() {
     if (!session?.user?.id || !currentOrg?.id) return;
     try {
       if (showLoader) setLoading(true);
-      const canToggle = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN' || currentOrg?.role === 'STAFF';
+      const canToggle = currentOrg?.role === 'OWNER' || currentOrg?.role === 'ADMIN' || currentOrg?.role === 'STAFF' || currentOrg?.role === 'ACCOUNTANT';
       const taskUrl = (canToggle && !showAllTasks)
         ? `/api/tasks?userId=${session.user.id}&limit=200`
         : '/api/tasks?limit=500';
