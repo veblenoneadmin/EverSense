@@ -362,22 +362,14 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
   const set = (field: keyof Profile) => (v: string) => setForm(prev => ({ ...prev, [field]: v }));
 
   const tryNext = () => {
+    // Validation is shown as a warning but no longer blocks — user can skip
     const missing = validateStep(step, form);
-    if (missing.length > 0) {
-      setErrors(missing);
-      return;
-    }
-    setErrors([]);
+    setErrors(missing);
     setStep(s => Math.min(STEPS.length - 1, s + 1));
   };
 
   const handleSave = async () => {
-    // In mandatory mode, require signature before save succeeds
-    if (mandatory && !form.contractSignature) {
-      setToast({ msg: 'Please sign the contract before saving', ok: false });
-      setTimeout(() => setToast(null), 3500);
-      return;
-    }
+    // Signature recommended but not required (skippable for now)
     setSaving(true);
     try {
       // Build the signed contract HTML snapshot (signature embedded + date filled)
