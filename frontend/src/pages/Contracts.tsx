@@ -136,6 +136,7 @@ export function Contracts() {
   const [newJobDesc, setNewJobDesc] = useState('');
   const [newCompany, setNewCompany] = useState('Veblen Group');
   const [newSalary, setNewSalary] = useState('');
+  const [newEmploymentType, setNewEmploymentType] = useState('Full-time');
 
   // Employee search
   const [orgMembers, setOrgMembers] = useState<{ id: string; name: string; email: string }[]>([]);
@@ -185,6 +186,7 @@ export function Contracts() {
         if (addr) setNewAddress(addr);
         if (profile.jobTitle) setNewJobTitle(profile.jobTitle);
         if (profile.startDate) setNewStartDate(new Date(profile.startDate).toISOString().split('T')[0]);
+        if (profile.employmentType) setNewEmploymentType(profile.employmentType.charAt(0).toUpperCase() + profile.employmentType.slice(1));
       }
     } catch { /* non-fatal */ }
     if (!newTitle) setNewTitle(`Employment Contract — ${member.name || member.email}`);
@@ -203,7 +205,8 @@ export function Contracts() {
         .replace(/\{Employee Address\}/g, newAddress || '_______________')
         .replace(/\{Job Title\}/g, newJobTitle || '_______________')
         .replace(/\{Start Date\}/g, startDateFmt)
-        .replace(/\{Salary\}/g, newSalary ? `${Number(newSalary).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '___________');
+        .replace(/\{Salary\}/g, newSalary ? `${Number(newSalary).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '___________')
+        .replace(/\{Employment Type\}/g, newEmploymentType || '___________');
       // Insert job description into Annex B
       if (newJobDesc.trim()) {
         filled = filled.replace(
@@ -217,7 +220,7 @@ export function Contracts() {
       });
       setShowNew(false);
       setNewTitle(''); setNewEmployee(''); setNewAddress(''); setNewJobTitle('');
-      setNewStartDate(''); setNewJobDesc(''); setNewCompany('Veblen Group'); setNewSalary('');
+      setNewStartDate(''); setNewJobDesc(''); setNewCompany('Veblen Group'); setNewSalary(''); setNewEmploymentType('Full-time');
       setEmailSearch(''); setShowDropdown(false);
       showToast('Contract created');
       await fetchContracts();
@@ -473,6 +476,17 @@ export function Contracts() {
                   <input type="number" value={newSalary} onChange={e => setNewSalary(e.target.value)} placeholder="0.00"
                     className={inp} style={inpS} />
                 </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Employment Type</label>
+                <select value={newEmploymentType} onChange={e => setNewEmploymentType(e.target.value)} className={inp} style={inpS}>
+                  <option value="Full-time">Full-time</option>
+                  <option value="Part-time">Part-time</option>
+                  <option value="Casual">Casual</option>
+                  <option value="Contractor">Contractor</option>
+                  <option value="Probationary">Probationary</option>
+                  <option value="Regular">Regular</option>
+                </select>
               </div>
               <div>
                 <label className="block text-[12px] font-semibold mb-1" style={{ color: VS.text2 }}>Job Description (Annex B)</label>
