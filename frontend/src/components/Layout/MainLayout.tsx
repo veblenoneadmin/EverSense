@@ -4,7 +4,7 @@ import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink, Settings, User } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
-import { EmployeeProfileModal } from '../../pages/EmployeeProfile';
+import { EmployeeProfileModal, EmployeeInfoViewer } from '../../pages/EmployeeProfile';
 
 import { VS } from '../../lib/theme';
 
@@ -51,6 +51,7 @@ const MainLayout: React.FC = () => {
 
   // Employee profile auto-popup (when accountant has assigned a contract to this email)
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showProfileViewer, setShowProfileViewer] = useState(false);
   const profileCheckedRef = useRef(false);
 
   // Wall clock
@@ -317,6 +318,13 @@ const MainLayout: React.FC = () => {
       {/* Auto-popup My Profile modal when the user clocks in and has an unsigned contract.
           mandatory=true → can't close until they complete it */}
       <EmployeeProfileModal open={showProfileModal} onClose={handleProfileModalClose} mandatory />
+
+      {/* Read-only viewer — opened from the navbar user dropdown */}
+      <EmployeeInfoViewer
+        open={showProfileViewer}
+        onClose={() => setShowProfileViewer(false)}
+        onEdit={() => { setShowProfileViewer(false); setShowProfileModal(true); }}
+      />
 
       {/* Top Navbar */}
       <header
@@ -588,7 +596,7 @@ const MainLayout: React.FC = () => {
                     <p className="text-[11px] truncate mt-0.5" style={{ color: VS.text2 }}>{email}</p>
                   </div>
                   <button
-                    onClick={() => { setShowDropdown(false); setShowProfileModal(true); }}
+                    onClick={() => { setShowDropdown(false); setShowProfileViewer(true); }}
                     className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] transition-colors duration-150"
                     style={{ color: VS.text1 }}
                     onMouseEnter={e => {

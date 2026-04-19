@@ -704,3 +704,145 @@ export function EmployeeProfileModal({ open, onClose, mandatory = false }: { ope
 export function EmployeeProfile() {
   return <EmployeeProfileModal open={true} onClose={() => window.history.back()} />;
 }
+
+// ── Read-only view of saved Employee Info (navbar access) ────────────────────
+export function EmployeeInfoViewer({ open, onClose, onEdit }: {
+  open: boolean; onClose: () => void; onEdit: () => void;
+}) {
+  const { data: session } = useSession();
+  const apiClient = useApiClient();
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!open || !session?.user?.id) return;
+    setLoading(true);
+    apiClient.fetch('/api/employee-profiles/me')
+      .then((d: any) => setProfile(d.profile || null))
+      .catch(() => setProfile(null))
+      .finally(() => setLoading(false));
+  }, [open, session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!open) return null;
+
+  const row = (label: string, value: string | null | undefined) => (
+    <div className="flex items-start gap-3 py-1.5" style={{ borderBottom: `1px solid ${VS.border}` }}>
+      <span className="text-[11px] font-semibold shrink-0 w-36 pt-0.5" style={{ color: VS.text2 }}>{label}</span>
+      <span className="text-[13px] flex-1" style={{ color: value ? VS.text0 : VS.text2 }}>{value || '—'}</span>
+    </div>
+  );
+
+  const section = (title: string, children: React.ReactNode) => (
+    <div>
+      <h3 className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: VS.accent }}>{title}</h3>
+      <div>{children}</div>
+    </div>
+  );
+
+  const fmtDate = (d: string | null | undefined) => {
+    if (!d) return null;
+    return new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  const address = profile
+    ? [profile.streetAddress, profile.city, profile.state, profile.postcode, profile.country].filter(Boolean).join(', ')
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col" style={{ background: VS.bg0, border: `1px solid ${VS.border}`, maxHeight: '90vh', boxShadow: '0 24px 60px rgba(0,0,0,0.7)' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ background: VS.bg1, borderBottom: `1px solid ${VS.border}` }}>
+          <div>
+            <h2 className="text-[15px] font-bold" style={{ color: VS.text0 }}>Employee Information</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>Your saved profile details</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onEdit}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all hover:opacity-90"
+              style={{ background: VS.accent, color: '#fff' }}>
+              Edit
+            </button>
+            <button onClick={onClose} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/5" style={{ color: VS.text1 }}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-6 h-6 rounded-full animate-spin" style={{ border: '2px solid #3c3c3c', borderTopColor: VS.accent }} />
+            </div>
+          ) : !profile ? (
+            <div className="rounded-lg p-8 text-center" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+              <FileText className="h-10 w-10 mx-auto mb-3" style={{ color: VS.text2, opacity: 0.4 }} />
+              <p className="text-[14px] font-medium" style={{ color: VS.text1 }}>No profile saved yet</p>
+              <p className="text-[12px] mt-1 mb-4" style={{ color: VS.text2 }}>Fill in your employee details to get started.</p>
+              <button onClick={onEdit}
+                className="px-4 py-2 rounded-lg text-[13px] font-semibold transition-all hover:opacity-90"
+                style={{ background: VS.accent, color: '#fff' }}>
+                Fill in Profile
+              </button>
+            </div>
+          ) : (
+            <>
+              {section('Personal Information', <>
+                {row('Full Name', profile.legalName)}
+                {row('Date of Birth', fmtDate(profile.dateOfBirth))}
+                {row('Email', profile.emailAddress)}
+                {row('Cell Phone', profile.cellPhone)}
+                {row('Home Phone', profile.homePhone)}
+                {row('Marital Status', profile.maritalStatus)}
+                {row('Address', address)}
+              </>)}
+
+              {(profile.spouseName || profile.spouseEmployer || profile.spouseWorkPhone) && section('Spouse', <>
+                {row('Name', profile.spouseName)}
+                {row('Employer', profile.spouseEmployer)}
+                {row('Work Phone', profile.spouseWorkPhone)}
+              </>)}
+
+              {section('Emergency Contact', <>
+                {row('Name', profile.emergencyContactName)}
+                {row('Address', profile.emergencyContactAddress)}
+                {row('Primary Phone', profile.emergencyContactPhone)}
+                {row('Cell Phone', profile.emergencyContactCell)}
+                {row('Relationship', profile.emergencyContactRelation)}
+              </>)}
+
+              {section('Bank Details', <>
+                {row('Bank Name', profile.bankName)}
+                {row('Account Number', profile.accountNumber)}
+                {row('Wise Username', profile.wiseUsername)}
+              </>)}
+
+              {profile.validIdFilename && section('Valid ID', <>
+                {row('File', profile.validIdFilename)}
+                {profile.validIdUrl && profile.validIdUrl.startsWith('data:image') && (
+                  <img src={profile.validIdUrl} alt="Valid ID"
+                    className="mt-2 rounded-lg max-w-[240px] max-h-[170px] object-cover"
+                    style={{ border: `1px solid ${VS.border}` }} />
+                )}
+              </>)}
+
+              {profile.contractSignedAt && section('Contract', <>
+                {row('Signed On', fmtDate(profile.contractSignedAt))}
+                {profile.contractSignature && (
+                  <div className="mt-2">
+                    <p className="text-[11px] mb-1" style={{ color: VS.text2 }}>Signature</p>
+                    <img src={profile.contractSignature} alt="Signature"
+                      className="rounded-lg bg-white p-1" style={{ maxWidth: 200, maxHeight: 60, border: `1px solid ${VS.border}` }} />
+                  </div>
+                )}
+              </>)}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
