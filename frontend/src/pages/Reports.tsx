@@ -553,6 +553,15 @@ export function Reports() {
   const clearFilters = () => { setSearch(''); setFProject(''); setFMember(''); setFFrom(''); setFTo(''); };
   const hasFilters   = !!(search || filterProject || filterMember || filterFrom || filterTo);
 
+  // Only show reports from today + yesterday (unless the user explicitly filters by date)
+  const showAllDates = !!(filterFrom || filterTo);
+  const visibleReports = (() => {
+    if (showAllDates) return reports;
+    const now = new Date();
+    const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
+    return reports.filter(r => new Date(r.createdAt).getTime() >= startOfYesterday);
+  })();
+
   const inp2: React.CSSProperties = { background: VS.bg2, border: `1px solid ${VS.border}`, borderRadius: 8, padding: '6px 10px', color: VS.text0, fontSize: 13, outline: 'none' };
 
   return (
@@ -641,7 +650,7 @@ export function Reports() {
           <div style={{ width: 28, height: 28, borderRadius: '50%', border: `2px solid ${VS.accent}44`, borderTopColor: VS.accent, animation: 'spin 0.8s linear infinite' }} />
           <span style={{ fontSize: 13, color: VS.text2 }}>Loading reports…</span>
         </div>
-      ) : reports.length === 0 && !error ? (
+      ) : visibleReports.length === 0 && !error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '60px 0', background: VS.bg1, borderRadius: 10, border: `1px solid ${VS.border}` }}>
           <FileText size={40} style={{ color: VS.text2, opacity: 0.3 }} />
           <p style={{ fontSize: 15, fontWeight: 600, color: VS.text1, margin: 0 }}>{hasFilters ? 'No matching reports' : 'No reports yet'}</p>
@@ -654,7 +663,7 @@ export function Reports() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
-          {reports.map(report => {
+          {visibleReports.map(report => {
             const pColor   = projectColor(report.project?.color);
             const dispName = report.user?.name || report.userName;
             const isOwn    = report.user?.id === session?.user?.id;
