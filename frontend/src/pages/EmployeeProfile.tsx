@@ -249,15 +249,14 @@ function injectSignature(html: string, form: Profile): string {
   // 4) Printed Name / Name: _______ → employee's legal name
   const nameStr = form.legalName || '';
   if (nameStr) {
-    out = out.replace(/Printed Name:\s*/g, (match) => {
-      // Only replace if followed by the signature image (already injected) or still has blank
-      return `Printed Name: <strong>${nameStr}</strong> `;
-    });
-    // Handle img replacement right after "Printed Name:" header that was prev replaced
-    out = out.replace(new RegExp(`Printed Name:\\s*<strong>${nameStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</strong>\\s*${sigImg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'),
-      `Printed Name: <strong>${nameStr}</strong>`);
-    // Standalone "Name: ___" inside Annex E (not "Legal Name" etc.)
-    out = out.replace(/(>|\s)Name:\s*(<img[^>]*>|<strong>)/g, (m, pre, next) => `${pre}Name: <strong>${nameStr}</strong> ${next === '<strong>' ? '' : next}`);
+    out = out.replace(/Printed Name:\s*/g, `Printed Name: <strong>${nameStr}</strong> `);
+    // Collapse duplicate "Printed Name: <name> [img]" if already processed
+    out = out.replace(
+      new RegExp(`Printed Name:\\s*<strong>${nameStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</strong>\\s*${sigImg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'),
+      `Printed Name: <strong>${nameStr}</strong>`
+    );
+    // Standalone "Name: <img>" or "Name: <strong>" inside Annex E
+    out = out.replace(/(>|\s)Name:\s*(<img[^>]*>|<strong>)/g, (_m, pre, next) => `${pre}Name: <strong>${nameStr}</strong> ${next === '<strong>' ? '' : next}`);
   }
 
   // 5) Patch existing contracts — replace old director placeholder with Zac McAnally, Founder
