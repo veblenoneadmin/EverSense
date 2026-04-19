@@ -162,7 +162,7 @@ export const DEFAULT_CONTRACT_HTML = `
 <td style="width:50%;padding:15px;vertical-align:top">
 <p>By:</p><br/><br/>
 <p style="border-bottom:1px solid #333;padding-bottom:5px">___________________________</p>
-<p><strong>Zac Mcanally, Founder</strong></p>
+<p><strong>Zachariah Mcanally, Founder</strong></p>
 <br/>
 <p>Date: _______________</p>
 </td>

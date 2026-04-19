@@ -263,15 +263,17 @@ function injectSignature(html: string, form: Profile): string {
     out = out.replace(/>Name:\s*_{20,}/g, `>Name: <strong>${nameStr}</strong>`);
   }
 
-  // 5) Patch existing contracts — replace old director placeholder with Zac Mcanally, Founder
+  // 5) Patch existing contracts — replace old director placeholder with Zachariah Mcanally, Founder
   // Handle any apostrophe variant and whitespace, collapse into single bold line
   out = out.replace(
     /<p>\s*<strong>\s*\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)\s*<\/strong>\s*<\/p>\s*<p>\s*<em>\s*\(Position\)\s*<\/em>\s*<\/p>/gi,
-    '<p><strong>Zac Mcanally, Founder</strong></p>'
+    '<p><strong>Zachariah Mcanally, Founder</strong></p>'
   );
   // Catch-all for standalone placeholders
-  out = out.replace(/\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)/gi, 'Zac Mcanally');
+  out = out.replace(/\(Director[’'‘`´]?s?\s*Name\s*\/\s*Owner\s*\)/gi, 'Zachariah Mcanally');
   out = out.replace(/\(Position\)/g, 'Founder');
+  // Also upgrade any previously-stored "Zac Mcanally" → "Zachariah Mcanally"
+  out = out.replace(/Zac Mcanally/gi, 'Zachariah Mcanally');
 
   return out;
 }
