@@ -25,7 +25,7 @@ router.get('/', requireAuth, withOrgScope, async (req, res) => {
     const role         = await getRole(userId, orgId);
     const isPrivileged = role === 'OWNER' || role === 'ADMIN' || role === 'HALL_OF_JUSTICE' || role === 'ACCOUNTANT';
 
-    // ── Fetch all reports for this org (or just this user) ───────────────────
+    // ── Fetch reports for this org (or just this user) ──────────────────────
     let sql    = `SELECT * FROM reports WHERE orgId = ?`;
     let params = [orgId];
 
@@ -35,6 +35,16 @@ router.get('/', requireAuth, withOrgScope, async (req, res) => {
     } else if (memberId) {
       sql += ` AND userId = ?`;
       params.push(memberId);
+    }
+
+    // Default: only fetch reports from today + yesterday (huge payload savings
+    // because the `image` column stores base64 attachments). If the user
+    // explicitly filters by date range, that takes over.
+    if (!dateFrom && !dateTo) {
+      const now = new Date();
+      const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      sql += ` AND createdAt >= ?`;
+      params.push(startOfYesterday);
     }
 
     sql += ` ORDER BY createdAt DESC LIMIT 500`;
