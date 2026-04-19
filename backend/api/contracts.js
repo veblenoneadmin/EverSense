@@ -42,7 +42,7 @@ router.get('/', requireAuth, withOrgScope, requireContractAccess, async (req, re
 router.get('/my', requireAuth, withOrgScope, async (req, res) => {
   try {
     const rows = await prisma.$queryRawUnsafe(
-      'SELECT id, title, content, status, createdAt FROM contract_templates WHERE employeeEmail = ? AND orgId = ? ORDER BY createdAt DESC LIMIT 1',
+      'SELECT id, title, content, status, createdAt, signedAt FROM contract_templates WHERE employeeEmail = ? AND orgId = ? ORDER BY createdAt DESC LIMIT 1',
       req.user.email, req.orgId
     );
     res.json({ contract: rows[0] || null });

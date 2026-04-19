@@ -95,14 +95,12 @@ const MainLayout: React.FC = () => {
       profileCheckedRef.current = true;
 
       try {
-        const [contractRes, profileRes] = await Promise.all([
-          fetch('/api/contracts/my', { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/api/employee-profiles/me', { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
-        ]);
+        const contractRes = await fetch('/api/contracts/my', { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null);
 
-        const hasContract = !!contractRes?.contract;
-        const alreadySigned = !!profileRes?.profile?.contractSignedAt;
-        if (!hasContract || alreadySigned) return;
+        const contract = contractRes?.contract;
+        // Fire popup if: contract exists AND the CURRENT contract is not yet signed.
+        // This also handles delete-and-recreate: new contract has no signedAt → popup fires again.
+        if (!contract || contract.signedAt) return;
 
         // Create "Employee Signup" task for this user and start the timer
         try {

@@ -105,16 +105,24 @@ router.put('/me', requireAuth, withOrgScope, async (req, res) => {
     }
 
     // If the user just signed their contract, save the signed HTML snapshot
-    // to contract_templates so admins can view the exact signed version
+    // to the LATEST unsigned contract (so a newly-created contract can be signed
+    // even if an older one was already signed)
     if (data.contractSignature && data.contractSignedAt) {
       try {
         const signedHtml = req.body.signedContractHtml;
         if (signedHtml) {
-          await prisma.$executeRawUnsafe(
-            'UPDATE contract_templates SET signedContent = ?, signedAt = ?, status = ? WHERE employeeEmail = ? AND orgId = ? AND (signedContent IS NULL OR signedContent = "")',
-            signedHtml, data.contractSignedAt, 'signed', req.user.email, req.orgId
+          // Find the latest unsigned contract for this user
+          const unsignedRows = await prisma.$queryRawUnsafe(
+            'SELECT id FROM contract_templates WHERE employeeEmail = ? AND orgId = ? AND (signedAt IS NULL) ORDER BY createdAt DESC LIMIT 1',
+            req.user.email, req.orgId
           );
-          console.log(`📝 Signed contract snapshot saved for ${req.user.email}`);
+          if (unsignedRows.length > 0) {
+            await prisma.$executeRawUnsafe(
+              'UPDATE contract_templates SET signedContent = ?, signedAt = ?, status = ? WHERE id = ?',
+              signedHtml, data.contractSignedAt, 'signed', unsignedRows[0].id
+            );
+            console.log(`📝 Signed contract saved for ${req.user.email} (contract ${unsignedRows[0].id})`);
+          }
         }
       } catch (e) {
         console.warn('[EmployeeProfiles] signed contract save failed:', e.message);
