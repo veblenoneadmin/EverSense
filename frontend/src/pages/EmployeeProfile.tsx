@@ -211,8 +211,9 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: 
   );
 }
 
-// Inject the employee's signature image + signing date into the contract HTML
-// Replaces the last signature line (employee side) with the actual signature
+// Inject the employee's signature image + signing date into the contract HTML.
+// Replaces every employee-side signature line (keeping the first = employer),
+// fills in "Date: _______" everywhere, and fills "Signature & Date: ___" too.
 function injectSignature(html: string, form: Profile): string {
   if (!form.contractSignature) return html;
 
@@ -220,30 +221,30 @@ function injectSignature(html: string, form: Profile): string {
     ? new Date(form.contractSignedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  const signatureImg = `<img src="${form.contractSignature}" alt="Signature" style="max-width:200px;max-height:70px;display:block;margin:-10px auto 5px;" />`;
+  const sigImg = `<img src="${form.contractSignature}" alt="Signature" style="max-width:180px;max-height:60px;display:inline-block;vertical-align:middle;" />`;
   let out = html;
 
-  // Replace the LAST occurrence of the signature line with the actual image
-  // The contract has two signature lines: employer (first) and employee (second/last)
-  const sigLineRegex = /___________________________/g;
-  const matches = [...out.matchAll(sigLineRegex)];
-  if (matches.length >= 2) {
-    // Replace only the last one (employee)
-    const lastMatch = matches[matches.length - 1];
-    out = out.slice(0, lastMatch.index) + signatureImg + out.slice(lastMatch.index + lastMatch[0].length);
-  } else if (matches.length === 1) {
-    out = out.replace(sigLineRegex, signatureImg);
+  // 1) Replace ALL employee-side signature underscore lines with the signature image.
+  //    Keep the FIRST occurrence (that's the employer/director on the main signature block).
+  const sigLineRegex = /_{20,}/g;  // 20+ underscores
+  const sigMatches = [...out.matchAll(sigLineRegex)];
+  if (sigMatches.length > 1) {
+    // Walk from end to start so indices stay valid while replacing
+    for (let i = sigMatches.length - 1; i >= 1; i--) {
+      const m = sigMatches[i];
+      out = out.slice(0, m.index) + sigImg + out.slice(m.index + m[0].length);
+    }
+  } else if (sigMatches.length === 1) {
+    // Only one signature line → it's the employee's
+    out = out.replace(sigLineRegex, sigImg);
   }
 
-  // Fill in the Date: _______________ line near the signature (last occurrence)
-  const dateLineRegex = /Date: _______________/g;
-  const dateMatches = [...out.matchAll(dateLineRegex)];
-  if (dateMatches.length >= 2) {
-    const lastDate = dateMatches[dateMatches.length - 1];
-    out = out.slice(0, lastDate.index) + `Date: <strong>${dateStr}</strong>` + out.slice(lastDate.index + lastDate[0].length);
-  } else if (dateMatches.length === 1) {
-    out = out.replace(dateLineRegex, `Date: <strong>${dateStr}</strong>`);
-  }
+  // 2) Fill in all "Date: _______" placeholders with the signing date
+  out = out.replace(/Date:\s*_+/g, `Date: <strong>${dateStr}</strong>`);
+
+  // 3) Fill in "Signature & Date: _______" → signature image + date
+  out = out.replace(/Signature\s*&amp;\s*Date\s*:\s*_+/gi, `Signature &amp; Date: ${sigImg} <strong>${dateStr}</strong>`);
+  out = out.replace(/Signature\s*&\s*Date\s*:\s*_+/gi, `Signature & Date: ${sigImg} <strong>${dateStr}</strong>`);
 
   return out;
 }
@@ -253,6 +254,17 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
   const [myContract, setMyContract] = useState<{ id: string; title: string; content: string } | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [loadingContract, setLoadingContract] = useState(true);
+  const viewScrollRef = useRef<HTMLDivElement>(null);
+
+  // Reset scroll to top when viewer opens
+  useEffect(() => {
+    if (viewOpen && viewScrollRef.current) {
+      // Wait for DOM to paint, then scroll to top
+      requestAnimationFrame(() => {
+        if (viewScrollRef.current) viewScrollRef.current.scrollTop = 0;
+      });
+    }
+  }, [viewOpen]);
 
   // Fetch the contract linked to this employee's email
   useEffect(() => {
@@ -316,7 +328,7 @@ function ContractStep({ form, setForm, api }: { form: Profile; setForm: React.Di
               <span className="text-[14px] font-bold" style={{ color: VS.text0 }}>{myContract.title}</span>
               <button onClick={() => setViewOpen(false)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white/10" style={{ color: VS.text1 }}><X className="h-4 w-4" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-8" style={{ color: '#1a1a1a', fontSize: '13px', lineHeight: 1.7 }}
+            <div ref={viewScrollRef} className="flex-1 overflow-y-auto p-8" style={{ color: '#1a1a1a', fontSize: '13px', lineHeight: 1.7 }}
               dangerouslySetInnerHTML={{ __html: injectSignature(myContract.content || '', form) }} />
           </div>
         </div>
