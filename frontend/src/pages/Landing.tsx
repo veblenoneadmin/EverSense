@@ -197,8 +197,8 @@ export function Landing() {
           <div className="grid grid-cols-5 px-5 py-3 text-[11px] font-bold uppercase tracking-wider" style={{ borderBottom: `1px solid ${VS.border}`, color: VS.text2 }}>
             <div className="col-span-2">Feature</div>
             <div className="text-center" style={{ color: VS.accent }}>EverSense</div>
-            <div className="text-center">ClickUp / Asana</div>
-            <div className="text-center">Trello / Notion</div>
+            <div className="text-center">Generic PM Tools</div>
+            <div className="text-center">Simple Boards / Docs</div>
           </div>
 
           {[
@@ -234,7 +234,7 @@ export function Landing() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
           {[
-            { title: 'One platform', desc: 'No juggling between Slack, Asana, Toggl, DocuSign, and a dozen spreadsheets. It all lives here.' },
+            { title: 'One platform', desc: 'No juggling between chat apps, project boards, time trackers, document signers, and a dozen spreadsheets. It all lives here.' },
             { title: 'Built for agencies', desc: 'Client-specific projects, billable time, retainer tracking, invoice-ready hours — not generic PM.' },
             { title: 'Designed for speed', desc: 'Minimal clicks, keyboard shortcuts, instant search. Built by developers who use it every day.' },
           ].map(b => (
