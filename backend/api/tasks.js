@@ -1136,16 +1136,18 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
         'UPDATE macro_tasks SET isTeamTask = ?, mainAssigneeId = ? WHERE id = ?',
         putIsTeamTask ? 1 : 0, putMainAssigneeId || null, taskId
       );
-      if (Array.isArray(putChecklistItems)) {
-        await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
-        for (let i = 0; i < putChecklistItems.length; i++) {
-          const item = putChecklistItems[i];
-          if (!item.assigneeId || !item.title) continue;
-          await prisma.$executeRawUnsafe(
-            'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
-            randomUUID(), taskId, item.assigneeId, req.orgId, item.title, i
-          );
-        }
+    }
+    // Checklist items: save whenever the array is provided (regardless of team task)
+    if (Array.isArray(putChecklistItems)) {
+      await ensureTeamTaskSchema();
+      await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
+      for (let i = 0; i < putChecklistItems.length; i++) {
+        const item = putChecklistItems[i];
+        if (!item?.title) continue;
+        await prisma.$executeRawUnsafe(
+          'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
+          randomUUID(), taskId, item.assigneeId || req.user.id, req.orgId, item.title, i
+        );
       }
     }
 
@@ -1288,17 +1290,22 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
         'UPDATE macro_tasks SET isTeamTask = ?, mainAssigneeId = ? WHERE id = ?',
         putIsTeamTask ? 1 : 0, putMainAssigneeId || null, taskId
       );
-      if (Array.isArray(putChecklistItems)) {
-        await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
-        for (let i = 0; i < putChecklistItems.length; i++) {
-          const item = putChecklistItems[i];
-          if (!item.assigneeId || !item.title) continue;
-          await prisma.$executeRawUnsafe(
-            'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
-            randomUUID(), taskId, item.assigneeId, req.orgId, item.title, i
-          );
-        }
+    }
+
+    // Save checklist items whenever the array is provided (separate from isTeamTask check).
+    // Simple checklists don't have assigneeId; they use the current user as a placeholder.
+    if (Array.isArray(putChecklistItems)) {
+      await ensureTeamTaskSchema();
+      await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
+      for (let i = 0; i < putChecklistItems.length; i++) {
+        const item = putChecklistItems[i];
+        if (!item?.title) continue;
+        await prisma.$executeRawUnsafe(
+          'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
+          randomUUID(), taskId, item.assigneeId || req.user.id, req.orgId, item.title, i
+        );
       }
+      console.log(`📝 PATCH Updated ${putChecklistItems.length} checklist item(s) for task ${taskId}`);
     }
 
     console.log(`📝 PATCH Updated task ${taskId}`);
