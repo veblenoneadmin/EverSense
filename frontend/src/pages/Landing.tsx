@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckSquare, Clock, BarChart3, Users, Shield, ArrowRight, Zap, FileText, Calendar, X, Check, Sparkles } from 'lucide-react';
 import { EverSenseLogo } from '../components/EverSenseLogo';
@@ -18,16 +19,153 @@ const FEATURES = [
   { icon: Users,       title: 'Team Collaboration', desc: 'Comments, @mentions, attachments, and activity feeds',        color: VS.blue },
 ];
 
+// ── Interactive particle network hero — reacts to mouse movement ─────────────
+function InteractiveHero() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let width = 0, height = 0;
+    const mouse = { x: -9999, y: -9999 };
+
+    const resize = () => {
+      width = canvas.offsetWidth; height = canvas.offsetHeight;
+      canvas.width = width * window.devicePixelRatio;
+      canvas.height = height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    };
+    resize();
+
+    // Build particles
+    const particleCount = Math.min(90, Math.floor((width * height) / 16000));
+    const particles = Array.from({ length: particleCount }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      r: Math.random() * 1.8 + 0.6,
+    }));
+
+    const onMouse = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    };
+    const onLeave = () => { mouse.x = -9999; mouse.y = -9999; };
+
+    canvas.addEventListener('mousemove', onMouse);
+    canvas.addEventListener('mouseleave', onLeave);
+    window.addEventListener('resize', resize);
+
+    let rafId = 0;
+    const loop = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      // Mouse glow
+      if (mouse.x > -1000) {
+        const gradient = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 220);
+        gradient.addColorStop(0, 'rgba(0,122,204,0.18)');
+        gradient.addColorStop(1, 'rgba(0,122,204,0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      // Update + draw particles
+      for (const p of particles) {
+        // Mouse repulsion
+        const dx = p.x - mouse.x;
+        const dy = p.y - mouse.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 140) {
+          const force = (140 - dist) / 140;
+          p.vx += (dx / dist) * force * 0.3;
+          p.vy += (dy / dist) * force * 0.3;
+        }
+
+        // Damping
+        p.vx *= 0.97; p.vy *= 0.97;
+
+        // Keep some baseline drift
+        if (Math.abs(p.vx) < 0.1) p.vx += (Math.random() - 0.5) * 0.05;
+        if (Math.abs(p.vy) < 0.1) p.vy += (Math.random() - 0.5) * 0.05;
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Wrap
+        if (p.x < 0) p.x = width; if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height; if (p.y > height) p.y = 0;
+
+        ctx.fillStyle = 'rgba(0,122,204,0.7)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Connection lines between near particles
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const a = particles[i], b = particles[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < 120) {
+            ctx.strokeStyle = `rgba(78,201,176,${(1 - d / 120) * 0.18})`;
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+
+        // Lines to mouse
+        if (mouse.x > -1000) {
+          const dx = particles[i].x - mouse.x, dy = particles[i].y - mouse.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < 160) {
+            ctx.strokeStyle = `rgba(0,122,204,${(1 - d / 160) * 0.5})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(mouse.x, mouse.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      rafId = requestAnimationFrame(loop);
+    };
+    loop();
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      canvas.removeEventListener('mousemove', onMouse);
+      canvas.removeEventListener('mouseleave', onLeave);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {/* Base gradient orbs */}
+      <div className="absolute" style={{ background: 'radial-gradient(ellipse at 20% 30%, rgba(0,122,204,0.06) 0%, transparent 60%)', inset: 0 }} />
+      <div className="absolute" style={{ background: 'radial-gradient(ellipse at 80% 70%, rgba(78,201,176,0.04) 0%, transparent 60%)', inset: 0 }} />
+      {/* Interactive particle canvas */}
+      <canvas ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ pointerEvents: 'auto' }} />
+    </div>
+  );
+}
+
 export function Landing() {
   return (
     <div className="min-h-screen relative overflow-hidden" style={{ background: VS.bg0, color: VS.text0 }}>
-      {/* Pulsing background orbs */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute" style={{ background: 'radial-gradient(ellipse at 20% 30%, rgba(0,122,204,0.08) 0%, transparent 60%)', inset: 0 }} />
-        <div className="absolute" style={{ background: 'radial-gradient(ellipse at 80% 70%, rgba(78,201,176,0.05) 0%, transparent 60%)', inset: 0 }} />
-        <div className="absolute rounded-full blur-3xl animate-pulse" style={{ top: '10%', left: '10%', width: 480, height: 480, background: 'rgba(0,122,204,0.08)' }} />
-        <div className="absolute rounded-full blur-3xl animate-pulse" style={{ bottom: '10%', right: '10%', width: 440, height: 440, background: 'rgba(78,201,176,0.06)', animationDelay: '1.5s' }} />
-      </div>
+      <InteractiveHero />
 
       {/* Top bar */}
       <header className="relative z-10 flex items-center justify-between px-6 md:px-12 py-5">
