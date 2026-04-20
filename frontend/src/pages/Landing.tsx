@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckSquare, Clock, BarChart3, Users, ArrowRight, Zap, FileText, Calendar, X, Check, Sparkles } from 'lucide-react';
 import { EverSenseLogo } from '../components/EverSenseLogo';
@@ -163,9 +163,37 @@ function InteractiveHero() {
 }
 
 export function Landing() {
+  // Parallax tracking: mouse movement + scroll position for a layered depth effect
+  const [mouse, setMouse] = useState({ x: 0, y: 0 });
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleMouse = (e: MouseEvent) => {
+      // Normalize to -1..1 from center of viewport
+      const x = (e.clientX / window.innerWidth - 0.5) * 2;
+      const y = (e.clientY / window.innerHeight - 0.5) * 2;
+      setMouse({ x, y });
+    };
+    const handleScroll = () => setScrollY(window.scrollY);
+    window.addEventListener('mousemove', handleMouse);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', handleMouse);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Scroll-based fade/translate (hero gradually fades and lifts up as user scrolls)
+  const heroOpacity = Math.max(0, 1 - scrollY / 500);
+  const heroTranslate = scrollY * 0.3;          // foreground drifts up faster
+  const bgTranslate = scrollY * 0.12;            // background drifts up slower → depth
+
   return (
     <div className="min-h-screen relative overflow-hidden" style={{ background: VS.bg0, color: VS.text0 }}>
-      <InteractiveHero />
+      {/* Particle canvas — background parallax layer */}
+      <div style={{ transform: `translateY(${-bgTranslate}px)`, willChange: 'transform', position: 'absolute', inset: 0 }}>
+        <InteractiveHero />
+      </div>
 
       {/* Top bar */}
       <header className="relative z-10 flex items-center justify-between px-6 md:px-12 py-5">
@@ -179,25 +207,61 @@ export function Landing() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative z-10 flex flex-col items-center text-center px-6 pt-12 pb-16 max-w-5xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-6 text-[11px] font-semibold uppercase tracking-wider"
-          style={{ background: `${VS.accent}18`, color: VS.accent, border: `1px solid ${VS.accent}33` }}>
+      {/* Hero — with scroll + mouse parallax */}
+      <section
+        className="relative z-10 flex flex-col items-center text-center px-6 pt-12 pb-16 max-w-5xl mx-auto"
+        style={{
+          transform: `translateY(${-heroTranslate}px)`,
+          opacity: heroOpacity,
+          willChange: 'transform, opacity',
+        }}
+      >
+        <div
+          className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-6 text-[11px] font-semibold uppercase tracking-wider"
+          style={{
+            background: `${VS.accent}18`,
+            color: VS.accent,
+            border: `1px solid ${VS.accent}33`,
+            transform: `translate3d(${mouse.x * -8}px, ${mouse.y * -8}px, 0)`,
+            transition: 'transform 0.25s ease-out',
+          }}
+        >
           <Zap className="h-3 w-3" /> Intelligent Platform
         </div>
 
-        <h1 className="text-[40px] md:text-[56px] font-bold leading-[1.1] mb-5" style={{ color: VS.text0 }}>
+        <h1
+          className="text-[40px] md:text-[56px] font-bold leading-[1.1] mb-5"
+          style={{
+            color: VS.text0,
+            transform: `translate3d(${mouse.x * -14}px, ${mouse.y * -10}px, 0)`,
+            transition: 'transform 0.25s ease-out',
+          }}
+        >
           Run your agency<br />
           <span style={{ background: `linear-gradient(90deg, ${VS.accent}, ${VS.teal})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
             with one platform.
           </span>
         </h1>
 
-        <p className="text-[15px] md:text-[17px] max-w-2xl mb-8" style={{ color: VS.text2, lineHeight: 1.6 }}>
+        <p
+          className="text-[15px] md:text-[17px] max-w-2xl mb-8"
+          style={{
+            color: VS.text2,
+            lineHeight: 1.6,
+            transform: `translate3d(${mouse.x * -6}px, ${mouse.y * -6}px, 0)`,
+            transition: 'transform 0.3s ease-out',
+          }}
+        >
           Task management, time tracking, client reporting, and team collaboration — built for modern creative and technical agencies. One login. One source of truth.
         </p>
 
-        <div className="flex items-center gap-3 flex-wrap justify-center">
+        <div
+          className="flex items-center gap-3 flex-wrap justify-center"
+          style={{
+            transform: `translate3d(${mouse.x * -4}px, ${mouse.y * -4}px, 0)`,
+            transition: 'transform 0.35s ease-out',
+          }}
+        >
           <Link to="/login"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[14px] font-semibold transition-all hover:opacity-90"
             style={{ background: VS.accent, color: '#fff', textDecoration: 'none' }}>
