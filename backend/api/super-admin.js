@@ -6,6 +6,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/rbac.js';
 import { sendInviteEmail, formatDuration } from '../lib/mailer.js';
+import { runDailyPersonReportNow } from '../services/dailyPersonReportScheduler.js';
 
 const router = express.Router();
 
@@ -495,6 +496,17 @@ router.get('/errors', requireAuth, requireSuperAdminUser, (req, res) => {
 router.post('/errors/clear', requireAuth, requireSuperAdminUser, (req, res) => {
   ERROR_LOG.length = 0;
   res.json({ success: true });
+});
+
+// ── POST /api/super-admin/run-daily-report ────────────────────────────────────
+// Manually fire the 5pm per-person completion digest for today.
+router.post('/run-daily-report', requireAuth, requireSuperAdminUser, async (_req, res) => {
+  try {
+    await runDailyPersonReportNow();
+    res.json({ success: true, message: 'Daily report triggered. Check logs + inbox.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── DELETE /api/super-admin/orgs/:orgId ──────────────────────────────────────

@@ -39,6 +39,7 @@ import integrationsRoutes from './api/integrations.js';
 import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler.js';
+import { startDailyPersonReportScheduler, runDailyPersonReportNow } from './services/dailyPersonReportScheduler.js';
 import { startAttendanceCron } from './lib/attendance-cron.js';
 import {
   blockPublicRegistration,
@@ -3512,6 +3513,7 @@ async function startServer() {
   await ensureRecurringTaskSchema();
   await ensureTaskTemplatesSchema();
   startRecurringTaskScheduler();
+  startDailyPersonReportScheduler();
 
   // Inline attendance auto-clockout (runs directly in server process every minute)
   const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m production threshold
