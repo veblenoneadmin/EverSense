@@ -4,7 +4,6 @@
 // with actual hours logged today, plus project + milestone connections.
 // Recipients: admin@veblengroup.com.au + genesis@veblengroup.com.au
 
-import cron from 'node-cron';
 import nodemailer from 'nodemailer';
 import { prisma } from '../lib/prisma.js';
 
@@ -233,9 +232,18 @@ async function runAll() {
   await Promise.allSettled(orgs.map(org => sendForOrg(org, start, end, dateLabel)));
 }
 
+// Dependency-free daily scheduler: check every minute for 09:00 UTC (5pm AWST),
+// fire once per UTC day. Tracks last-run-day in memory to avoid re-firing.
+let lastFiredUtcDay = null;
 export function startDailyPersonReportScheduler() {
-  // 5:00 PM AWST (Perth UTC+8) = 09:00 UTC
-  cron.schedule('0 9 * * *', runAll, { timezone: 'UTC' });
+  setInterval(() => {
+    const now = new Date();
+    if (now.getUTCHours() !== 9 || now.getUTCMinutes() !== 0) return;
+    const dayKey = now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+    if (lastFiredUtcDay === dayKey) return;
+    lastFiredUtcDay = dayKey;
+    runAll().catch(e => console.error('[DailyPersonReport] runAll error:', e.message));
+  }, 60 * 1000);
   console.log('[DailyPersonReport] ✅ Scheduled — daily at 5:00 PM AWST (09:00 UTC)');
 }
 
