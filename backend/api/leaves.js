@@ -1,10 +1,14 @@
 // backend/api/leaves.js — Receives approved leave records synced from HRSense
+// Also exposes user-facing endpoints for in-app leave requests.
 
 import express from 'express';
 import { prisma } from '../lib/prisma.js';
 import { randomUUID } from 'crypto';
+import { requireAuth, withOrgScope, requireRole } from '../lib/rbac.js';
 
 const router = express.Router();
+
+export const LEAVE_ALLOWANCES = { annual: 10, sick: 5 };
 
 // Ensure leaves table exists (same raw-SQL pattern as other modules)
 let tableReady = false;
@@ -119,6 +123,122 @@ router.post('/', requireInternalSecret, async (req, res) => {
 
   } catch (err) {
     console.error('[Leaves] POST error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER-FACING ENDPOINTS (session-authenticated)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function normalizeType(raw) {
+  const s = String(raw || '').toLowerCase();
+  if (s.startsWith('sick')) return 'sick';
+  return 'annual';
+}
+
+function countDaysUsedThisYear(rows, type) {
+  const year = new Date().getUTCFullYear();
+  return rows
+    .filter(r => r.status === 'APPROVED' && normalizeType(r.type) === type && new Date(r.startDate).getUTCFullYear() === year)
+    .reduce((sum, r) => sum + Number(r.days || 0), 0);
+}
+
+// GET /api/leaves/my — user's own leaves + balance
+router.get('/my', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureTable();
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT id, type, status, startDate, endDate, days, reason, approvedAt, createdAt
+         FROM leaves
+        WHERE userId = ? AND orgId = ?
+        ORDER BY startDate DESC LIMIT 200`,
+      req.user.id, req.orgId
+    );
+
+    const annualUsed = countDaysUsedThisYear(rows, 'annual');
+    const sickUsed   = countDaysUsedThisYear(rows, 'sick');
+
+    res.json({
+      leaves: rows,
+      allowances: LEAVE_ALLOWANCES,
+      used: { annual: annualUsed, sick: sickUsed },
+      remaining: {
+        annual: Math.max(0, LEAVE_ALLOWANCES.annual - annualUsed),
+        sick: Math.max(0, LEAVE_ALLOWANCES.sick - sickUsed),
+      },
+    });
+  } catch (err) {
+    console.error('[Leaves] GET /my error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/leaves/my — user submits a leave request (status=PENDING)
+router.post('/my', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureTable();
+    const { type, startDate, endDate, reason } = req.body;
+    if (!type || !startDate || !endDate) {
+      return res.status(400).json({ error: 'type, startDate, endDate are required' });
+    }
+    const start = new Date(startDate);
+    const end   = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
+      return res.status(400).json({ error: 'Invalid date range' });
+    }
+    // Inclusive day count
+    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    const id = randomUUID();
+    await prisma.$executeRawUnsafe(
+      'INSERT INTO leaves (id, userId, orgId, type, status, startDate, endDate, days, reason, createdAt) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+      id, req.user.id, req.orgId, normalizeType(type), 'PENDING', start, end, days, reason || null
+    );
+    res.status(201).json({ success: true, id, days, status: 'PENDING' });
+  } catch (err) {
+    console.error('[Leaves] POST /my error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/leaves/pending — admin view of all pending requests
+router.get('/pending', requireAuth, withOrgScope, requireRole('ADMIN'), async (req, res) => {
+  try {
+    await ensureTable();
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT l.id, l.userId, l.type, l.status, l.startDate, l.endDate, l.days, l.reason, l.createdAt,
+              u.name AS userName, u.email AS userEmail
+         FROM leaves l
+         LEFT JOIN User u ON u.id = l.userId
+        WHERE l.orgId = ? AND l.status = 'PENDING'
+        ORDER BY l.createdAt DESC LIMIT 200`,
+      req.orgId
+    );
+    res.json({ leaves: rows });
+  } catch (err) {
+    console.error('[Leaves] GET /pending error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/leaves/:id/status — admin approve or reject
+router.patch('/:id/status', requireAuth, withOrgScope, requireRole('ADMIN'), async (req, res) => {
+  try {
+    await ensureTable();
+    const { id } = req.params;
+    const { status } = req.body; // APPROVED | REJECTED
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'status must be APPROVED or REJECTED' });
+    }
+    const approvedAt = status === 'APPROVED' ? new Date() : null;
+    await prisma.$executeRawUnsafe(
+      'UPDATE leaves SET status = ?, approvedAt = ? WHERE id = ? AND orgId = ?',
+      status, approvedAt, id, req.orgId
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Leaves] PATCH status error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

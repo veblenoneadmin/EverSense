@@ -612,6 +612,22 @@ const MainLayout: React.FC = () => {
                     Employee Info
                   </button>
                   <button
+                    onClick={() => { setShowDropdown(false); navigate('/leaves'); }}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] transition-colors duration-150"
+                    style={{ color: VS.text1 }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.background = `${VS.accent}14`;
+                      (e.currentTarget as HTMLElement).style.color = VS.accent;
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                      (e.currentTarget as HTMLElement).style.color = VS.text1;
+                    }}
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Leaves
+                  </button>
+                  <button
                     onClick={handleSignOut}
                     className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] transition-colors duration-150"
                     style={{ color: VS.text1, borderTop: `1px solid ${VS.border}` }}
