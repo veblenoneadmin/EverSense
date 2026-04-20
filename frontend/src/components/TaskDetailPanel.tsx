@@ -279,7 +279,6 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated, o
   };
 
   const fetchChecklist = async (silent = false) => {
-    if (!task.isTeamTask) return;
     if (!silent) setCLLoading(true);
     try {
       const data = await api.fetch(`/api/tasks/${task.id}/checklist`);
