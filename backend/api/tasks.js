@@ -1294,18 +1294,28 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
 
     // Save checklist items whenever the array is provided (separate from isTeamTask check).
     // Simple checklists don't have assigneeId; they use the current user as a placeholder.
+    console.log('📝 [PATCH checklist] raw body keys:', Object.keys(req.body));
+    console.log('📝 [PATCH checklist] putChecklistItems:', JSON.stringify(putChecklistItems));
     if (Array.isArray(putChecklistItems)) {
-      await ensureTeamTaskSchema();
-      await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
-      for (let i = 0; i < putChecklistItems.length; i++) {
-        const item = putChecklistItems[i];
-        if (!item?.title) continue;
-        await prisma.$executeRawUnsafe(
-          'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
-          randomUUID(), taskId, item.assigneeId || req.user.id, req.orgId, item.title, i
-        );
+      try {
+        await ensureTeamTaskSchema();
+        const delRes = await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
+        console.log(`📝 [PATCH checklist] DELETE affected ${delRes} rows for task ${taskId}`);
+        for (let i = 0; i < putChecklistItems.length; i++) {
+          const item = putChecklistItems[i];
+          if (!item?.title) { console.log('  skip empty item at', i); continue; }
+          const insRes = await prisma.$executeRawUnsafe(
+            'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
+            randomUUID(), taskId, item.assigneeId || req.user.id, req.orgId, item.title, i
+          );
+          console.log(`  inserted item "${item.title}" → ${insRes} rows`);
+        }
+        console.log(`📝 [PATCH checklist] DONE — ${putChecklistItems.length} item(s) for task ${taskId}`);
+      } catch (e) {
+        console.error('❌ [PATCH checklist] SAVE FAILED:', e.message, e.stack);
       }
-      console.log(`📝 PATCH Updated ${putChecklistItems.length} checklist item(s) for task ${taskId}`);
+    } else {
+      console.log('📝 [PATCH checklist] skipped — not an array');
     }
 
     console.log(`📝 PATCH Updated task ${taskId}`);
