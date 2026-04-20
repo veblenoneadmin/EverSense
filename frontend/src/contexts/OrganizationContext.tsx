@@ -6,7 +6,7 @@ interface Organization {
   id: string;
   name: string;
   slug: string;
-  role: 'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE';
+  role: 'OWNER' | 'ADMIN' | 'STAFF' | 'CLIENT' | 'HALL_OF_JUSTICE' | 'ACCOUNTANT';
   theme: Theme;
 }
 
