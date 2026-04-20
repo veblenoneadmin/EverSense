@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckSquare, Clock, BarChart3, Users, Shield, ArrowRight, Zap, FileText, Calendar, X, Check, Sparkles } from 'lucide-react';
+import { CheckSquare, Clock, BarChart3, Users, ArrowRight, Zap, FileText, Calendar, X, Check, Sparkles } from 'lucide-react';
 import { EverSenseLogo } from '../components/EverSenseLogo';
 
 const VS = {
@@ -210,10 +210,6 @@ export function Landing() {
           </a>
         </div>
 
-        <div className="mt-8 flex items-center gap-2 text-[12px]" style={{ color: VS.text2 }}>
-          <Shield className="h-3.5 w-3.5" style={{ color: VS.teal }} />
-          Invitation-only — internal platform for Veblen Group
-        </div>
       </section>
 
       {/* Features grid */}
