@@ -932,7 +932,7 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
     const { checklistItems: createChecklistItems } = req.body;
     if (Array.isArray(createChecklistItems) && createChecklistItems.length > 0) {
       try {
-        await ensureAssigneesTable();
+        await ensureTeamTaskSchema(); // creates task_checklist_items table if missing
         for (let i = 0; i < createChecklistItems.length; i++) {
           const it = createChecklistItems[i];
           if (!it?.title) continue;
@@ -941,7 +941,8 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
             randomUUID(), task.id, req.user.id, orgId, it.title, it.sortOrder ?? i
           );
         }
-      } catch (e) { console.warn('[Tasks] checklist create error:', e.message); }
+        console.log(`📝 Created ${createChecklistItems.length} checklist item(s) for task ${task.id}`);
+      } catch (e) { console.error('❌ [Tasks] checklist create error:', e.message); }
     }
 
     // Create sub-tasks as real MacroTask records (appear on each member's board)
@@ -1674,11 +1675,15 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
 router.delete('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (req, res) => {
   try {
     const { taskId } = req.params;
-    
-    await prisma.macroTask.delete({
-      where: { id: taskId }
-    });
-    
+
+    // Clean up child rows that aren't cascaded by Prisma (raw SQL tables)
+    await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId).catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM task_assignees WHERE taskId = ?', taskId).catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM task_status_reports WHERE taskId = ?', taskId).catch(() => {});
+    await prisma.$executeRawUnsafe('DELETE FROM active_timers WHERE taskId = ?', taskId).catch(() => {});
+
+    await prisma.macroTask.delete({ where: { id: taskId } });
+
     console.log(`🗑️ Deleted task ${taskId}`);
     broadcast(req.orgId, 'task', { action: 'delete', taskId, userId: req.user.id });
 
@@ -1687,8 +1692,8 @@ router.delete('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async
       taskId: taskId
     });
   } catch (error) {
-    console.error('Error deleting task:', error);
-    res.status(500).json({ error: 'Failed to delete task' });
+    console.error('❌ Error deleting task:', error?.message, error?.code, error?.meta);
+    res.status(500).json({ error: 'Failed to delete task', detail: error?.message });
   }
 });
 
