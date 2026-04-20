@@ -1033,6 +1033,10 @@ router.post('/', requireAuthOrApiKey, withOrgScope, validateBody(taskSchemas.cre
 router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (req, res) => {
   try {
     const { taskId } = req.params;
+    // Capture team-task fields BEFORE mutating req.body via `updates` alias.
+    const putIsTeamTask = req.body.isTeamTask;
+    const putMainAssigneeId = req.body.mainAssigneeId;
+    const putChecklistItems = req.body.checklistItems;
     const updates = req.body;
 
     console.log('🔄 Task update request:', {
@@ -1128,8 +1132,7 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
       ).catch(() => {});
     }
 
-    // Handle team task fields
-    const { isTeamTask: putIsTeamTask, mainAssigneeId: putMainAssigneeId, checklistItems: putChecklistItems } = req.body;
+    // Handle team task fields (captured before delete mutated req.body)
     if (putIsTeamTask !== undefined) {
       await ensureTeamTaskSchema();
       await prisma.$executeRawUnsafe(
@@ -1187,6 +1190,10 @@ router.put('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (r
 router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async (req, res) => {
   try {
     const { taskId } = req.params;
+    // Capture team-task fields BEFORE mutating req.body via `updates` alias.
+    const patchIsTeamTask = req.body.isTeamTask;
+    const patchMainAssigneeId = req.body.mainAssigneeId;
+    const patchChecklistItems = req.body.checklistItems;
     const updates = req.body;
 
     console.log('🔄 Task PATCH request:', {
@@ -1282,40 +1289,33 @@ router.patch('/:taskId', requireAuth, withOrgScope, requireTaskOwnership, async 
       ).catch(() => {});
     }
 
-    // Handle team task fields
-    const { isTeamTask: putIsTeamTask, mainAssigneeId: putMainAssigneeId, checklistItems: putChecklistItems } = req.body;
-    if (putIsTeamTask !== undefined) {
+    // Handle team task fields (captured before delete mutated req.body)
+    if (patchIsTeamTask !== undefined) {
       await ensureTeamTaskSchema();
       await prisma.$executeRawUnsafe(
         'UPDATE macro_tasks SET isTeamTask = ?, mainAssigneeId = ? WHERE id = ?',
-        putIsTeamTask ? 1 : 0, putMainAssigneeId || null, taskId
+        patchIsTeamTask ? 1 : 0, patchMainAssigneeId || null, taskId
       );
     }
 
     // Save checklist items whenever the array is provided (separate from isTeamTask check).
     // Simple checklists don't have assigneeId; they use the current user as a placeholder.
-    console.log('📝 [PATCH checklist] raw body keys:', Object.keys(req.body));
-    console.log('📝 [PATCH checklist] putChecklistItems:', JSON.stringify(putChecklistItems));
-    if (Array.isArray(putChecklistItems)) {
+    if (Array.isArray(patchChecklistItems)) {
       try {
         await ensureTeamTaskSchema();
-        const delRes = await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
-        console.log(`📝 [PATCH checklist] DELETE affected ${delRes} rows for task ${taskId}`);
-        for (let i = 0; i < putChecklistItems.length; i++) {
-          const item = putChecklistItems[i];
-          if (!item?.title) { console.log('  skip empty item at', i); continue; }
-          const insRes = await prisma.$executeRawUnsafe(
+        await prisma.$executeRawUnsafe('DELETE FROM task_checklist_items WHERE taskId = ?', taskId);
+        for (let i = 0; i < patchChecklistItems.length; i++) {
+          const item = patchChecklistItems[i];
+          if (!item?.title) continue;
+          await prisma.$executeRawUnsafe(
             'INSERT INTO task_checklist_items (id, taskId, assigneeId, orgId, title, sortOrder) VALUES (?, ?, ?, ?, ?, ?)',
             randomUUID(), taskId, item.assigneeId || req.user.id, req.orgId, item.title, i
           );
-          console.log(`  inserted item "${item.title}" → ${insRes} rows`);
         }
-        console.log(`📝 [PATCH checklist] DONE — ${putChecklistItems.length} item(s) for task ${taskId}`);
+        console.log(`📝 PATCH saved ${patchChecklistItems.length} checklist item(s) for task ${taskId}`);
       } catch (e) {
-        console.error('❌ [PATCH checklist] SAVE FAILED:', e.message, e.stack);
+        console.error('❌ [PATCH checklist] SAVE FAILED:', e.message);
       }
-    } else {
-      console.log('📝 [PATCH checklist] skipped — not an array');
     }
 
     console.log(`📝 PATCH Updated task ${taskId}`);
