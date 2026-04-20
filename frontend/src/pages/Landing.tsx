@@ -6,7 +6,7 @@ const VS = {
   bg0: '#1e1e1e', bg1: '#252526', bg2: '#2d2d2d', bg3: '#333333',
   border: '#3c3c3c', border2: '#454545',
   text0: '#f0f0f0', text1: '#c0c0c0', text2: '#909090',
-  accent: '#007acc', teal: '#4ec9b0', blue: '#569cd6', purple: '#c586c0', orange: '#ce9178', yellow: '#dcdcaa',
+  accent: '#007acc', teal: '#4ec9b0', blue: '#569cd6', purple: '#c586c0', orange: '#ce9178', yellow: '#dcdcaa', red: '#f44747',
 };
 
 const FEATURES = [
@@ -211,7 +211,7 @@ export function Landing() {
             ['VS Code-style dark interface', true, false, false],
             ['Meeting transcripts (Fireflies)', true, false, false],
             ['No monthly per-seat fees', true, false, 'partial'],
-          ].map(([feature, ever, competitor1, competitor2], i) => (
+          ].map(([feature, , competitor1, competitor2], i) => (
             <div key={i} className="grid grid-cols-5 px-5 py-3 text-[13px] items-center" style={{ borderBottom: i < 8 ? `1px solid ${VS.border}` : 'none' }}>
               <div className="col-span-2" style={{ color: VS.text1 }}>{feature as string}</div>
               <div className="text-center">
