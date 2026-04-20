@@ -28,6 +28,7 @@ import { Milestones } from './pages/Milestones';
 import { EmployeeProfile } from './pages/EmployeeProfile';
 import { EmployeeDirectory } from './pages/EmployeeDirectory';
 import { Contracts } from './pages/Contracts';
+import { Landing } from './pages/Landing';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingGuard } from './components/OnboardingGuard';
@@ -93,7 +94,7 @@ function AppContent() {
                 <Route path="contracts" element={<Contracts />} />
               </Route>
 
-              <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
+              <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Landing />} />
             </Routes>
           </div>
         </Router>
