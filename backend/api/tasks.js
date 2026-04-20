@@ -2019,11 +2019,12 @@ router.get('/:taskId/reports', requireAuth, withOrgScope, async (req, res) => {
   }
 });
 
-// ── GET /api/tasks/:taskId/checklist — fetch sub-tasks ───────────────────────
+// ── GET /api/tasks/:taskId/checklist — fetch sub-tasks + plain checklist items
 router.get('/:taskId/checklist', requireAuth, withOrgScope, async (req, res) => {
   const { taskId } = req.params;
   await ensureTeamTaskSchema();
   try {
+    // Team task sub-tasks (real MacroTask children)
     const subTasks = await prisma.$queryRawUnsafe(
       'SELECT mt.id, mt.title, mt.status, mt.userId as assigneeId, mt.updatedAt, ' +
       'u.name as assigneeName, u.email as assigneeEmail ' +
@@ -2031,8 +2032,16 @@ router.get('/:taskId/checklist', requireAuth, withOrgScope, async (req, res) => 
       'WHERE mt.parentTaskId = ? AND mt.orgId = ? ORDER BY mt.createdAt ASC',
       taskId, req.orgId
     );
-    res.json({
-      items: subTasks.map(s => ({
+
+    // Plain checklist items from task_checklist_items
+    const items = await prisma.$queryRawUnsafe(
+      'SELECT id, title, completed, sortOrder FROM task_checklist_items ' +
+      'WHERE taskId = ? AND orgId = ? ORDER BY sortOrder ASC, createdAt ASC',
+      taskId, req.orgId
+    ).catch(() => []);
+
+    const combined = [
+      ...subTasks.map(s => ({
         id: s.id,
         title: s.title,
         status: s.status,
@@ -2040,19 +2049,40 @@ router.get('/:taskId/checklist', requireAuth, withOrgScope, async (req, res) => 
         assigneeId: s.assigneeId,
         assigneeName: s.assigneeName,
         assigneeEmail: s.assigneeEmail,
-      }))
-    });
+        kind: 'subtask',
+      })),
+      ...items.map(i => ({
+        id: i.id,
+        title: i.title,
+        status: i.completed ? 'completed' : 'not_started',
+        completed: !!i.completed,
+        kind: 'item',
+      })),
+    ];
+
+    res.json({ items: combined });
   } catch (e) {
     console.error('[Checklist] fetch error:', e.message);
     res.status(500).json({ error: 'Failed to fetch checklist' });
   }
 });
 
-// ── PATCH /api/tasks/:taskId/checklist/:itemId — toggle sub-task done ─────────
+// ── PATCH /api/tasks/:taskId/checklist/:itemId — toggle sub-task or item done ─
 router.patch('/:taskId/checklist/:itemId', requireAuth, withOrgScope, async (req, res) => {
   const { itemId } = req.params;
   const { completed } = req.body;
   try {
+    // First try the checklist_items table (simple items)
+    const updateRes = await prisma.$executeRawUnsafe(
+      'UPDATE task_checklist_items SET completed = ?, completedAt = ?, completedBy = ? WHERE id = ?',
+      completed ? 1 : 0, completed ? new Date() : null, req.user.id, itemId
+    ).catch(() => 0);
+
+    if (Number(updateRes) > 0) {
+      return res.json({ ok: true, kind: 'item' });
+    }
+
+    // Fallback: MacroTask sub-task
     await prisma.macroTask.update({
       where: { id: itemId },
       data: {
@@ -2060,10 +2090,10 @@ router.patch('/:taskId/checklist/:itemId', requireAuth, withOrgScope, async (req
         completedAt: completed ? new Date() : null,
       },
     });
-    res.json({ ok: true });
+    res.json({ ok: true, kind: 'subtask' });
   } catch (e) {
     console.error('[Checklist] toggle error:', e.message);
-    res.status(500).json({ error: 'Failed to update sub-task' });
+    res.status(500).json({ error: 'Failed to update checklist item' });
   }
 });
 
