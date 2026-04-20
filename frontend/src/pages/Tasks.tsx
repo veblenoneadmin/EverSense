@@ -2224,7 +2224,7 @@ export function Tasks() {
           onClick={e => { if (e.target === e.currentTarget) setShowNewTaskForm(false); }}
         >
           <div
-            className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            className="w-full max-w-md rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
             style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}
           >
             <div className="flex items-center justify-between">
@@ -2743,7 +2743,7 @@ export function Tasks() {
           onClick={e => { if (e.target === e.currentTarget) setEditingTask(null); }}
         >
           <div
-            className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            className="w-full max-w-md rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
             style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}
           >
             <div className="flex items-center justify-between">
