@@ -726,6 +726,62 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated, o
                 </div>
               )}
 
+              {/* Standalone checklist for non-team tasks */}
+              {!task.isTeamTask && checklist.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: VS.text2 }}>
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      Checklist
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold" style={{ color: VS.teal }}>
+                        {checklist.filter(i => i.completed).length}/{checklist.length} done
+                      </span>
+                      <div className="h-1.5 w-24 rounded-full overflow-hidden" style={{ background: VS.bg3 }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.round(checklist.filter(i => i.completed).length / checklist.length * 100)}%`,
+                            background: VS.teal,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {checklist.map(item => (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-3 p-3 rounded-lg transition-all"
+                        style={{
+                          background: item.completed ? 'rgba(78,201,176,0.07)' : VS.bg1,
+                          border: `1px solid ${item.completed ? '#4ec9b033' : VS.border}`,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleToggleChecklist(item.id, !item.completed)}
+                          className="h-5 w-5 rounded flex items-center justify-center shrink-0 transition-all"
+                          style={{
+                            background: item.completed ? VS.teal : 'transparent',
+                            border: `2px solid ${item.completed ? VS.teal : '#555'}`,
+                          }}
+                        >
+                          {item.completed && <Check className="h-3 w-3" style={{ color: '#fff' }} strokeWidth={3} />}
+                        </button>
+                        <span className="flex-1 text-[13px]" style={{ color: item.completed ? VS.text2 : VS.text0, textDecoration: item.completed ? 'line-through' : 'none' }}>
+                          {item.title}
+                        </span>
+                        {item.completed && (
+                          <span className="text-[10px] shrink-0 font-semibold" style={{ color: VS.teal }}>✓ Done</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Description */}
               {(task.description || task.parentTaskId) && (
                 <div>
