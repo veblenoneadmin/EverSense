@@ -509,6 +509,27 @@ router.post('/run-daily-report', requireAuth, requireSuperAdminUser, async (_req
   }
 });
 
+// ── GET /api/super-admin/break-policies ───────────────────────────────────────
+// Read-only — current break policy for every org (1800=30min, 3600=60min, null=default 30min).
+router.get('/break-policies', requireAuth, requireSuperAdminUser, async (_req, res) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      "SELECT o.id, o.name, oi.value AS breakLimitSecs " +
+      "FROM organizations o " +
+      "LEFT JOIN org_integrations oi ON oi.orgId = o.id AND oi.`key` = 'break_limit_secs' " +
+      "ORDER BY o.name"
+    );
+    res.json({
+      orgs: rows.map(r => {
+        const secs = r.breakLimitSecs == null ? 1800 : parseInt(r.breakLimitSecs);
+        return { id: r.id, name: r.name, breakLimitSecs: secs, breakMinutes: Math.round(secs / 60) };
+      }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── DELETE /api/super-admin/orgs/:orgId ──────────────────────────────────────
 router.delete('/orgs/:orgId', requireAuth, requireSuperAdminUser, async (req, res) => {
   try {
