@@ -509,6 +509,102 @@ router.post('/run-daily-report', requireAuth, requireSuperAdminUser, async (_req
   }
 });
 
+// ── GET /api/super-admin/attendance-logs ──────────────────────────────────────
+// List recent attendance logs across all orgs. Supports optional filters:
+//   ?userId, ?orgId, ?email, ?limit (default 100, max 500)
+router.get('/attendance-logs', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { userId, orgId, email } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '100'), 1), 500);
+
+    const conds = [];
+    const params = [];
+    if (userId) { conds.push('al.userId = ?'); params.push(userId); }
+    if (orgId)  { conds.push('al.orgId = ?');  params.push(orgId); }
+    if (email)  { conds.push('LOWER(u.email) LIKE ?'); params.push(`%${String(email).toLowerCase()}%`); }
+
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT al.id, al.userId, al.orgId, al.timeIn, al.timeOut, al.duration,
+              al.breakDuration, al.notes, al.date, al.createdAt, al.updatedAt,
+              u.name AS userName, u.email AS userEmail,
+              o.name AS orgName
+         FROM attendance_logs al
+         LEFT JOIN \`User\` u ON u.id = al.userId
+         LEFT JOIN organizations o ON o.id = al.orgId
+         ${where}
+         ORDER BY al.timeIn DESC
+         LIMIT ${limit}`,
+      ...params
+    );
+    res.json({ logs: rows });
+  } catch (err) {
+    console.error('[SuperAdmin] attendance-logs list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/super-admin/attendance-logs/:id ────────────────────────────────
+// Edit timeIn / timeOut / breakDuration / notes. Recomputes duration from
+// (timeOut - timeIn - breakDuration). breakDuration takes seconds, or the
+// body may pass breakMinutes as a convenience.
+router.patch('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { timeIn, timeOut, breakDuration, breakMinutes, notes } = req.body || {};
+
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT id, timeIn, timeOut, breakDuration FROM attendance_logs WHERE id = ? LIMIT 1',
+      id
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Log not found' });
+    const log = rows[0];
+
+    const newTimeIn  = timeIn  !== undefined ? (timeIn  ? new Date(timeIn)  : null) : new Date(log.timeIn);
+    const newTimeOut = timeOut !== undefined ? (timeOut ? new Date(timeOut) : null) : (log.timeOut ? new Date(log.timeOut) : null);
+
+    if (!newTimeIn || isNaN(newTimeIn.getTime())) {
+      return res.status(400).json({ error: 'Invalid timeIn' });
+    }
+    if (newTimeOut && (isNaN(newTimeOut.getTime()) || newTimeOut < newTimeIn)) {
+      return res.status(400).json({ error: 'timeOut must be after timeIn' });
+    }
+
+    let newBreak;
+    if (breakDuration !== undefined) {
+      newBreak = Math.max(0, parseInt(breakDuration) || 0);
+    } else if (breakMinutes !== undefined) {
+      newBreak = Math.max(0, Math.floor(Number(breakMinutes) * 60));
+    } else {
+      newBreak = log.breakDuration || 0;
+    }
+
+    let duration = 0;
+    if (newTimeOut) {
+      const gross = Math.floor((newTimeOut.getTime() - newTimeIn.getTime()) / 1000);
+      duration = Math.max(0, gross - newBreak);
+    }
+
+    if (notes !== undefined) {
+      await prisma.$executeRawUnsafe(
+        'UPDATE attendance_logs SET timeIn = ?, timeOut = ?, duration = ?, breakDuration = ?, notes = ?, updatedAt = NOW(3) WHERE id = ?',
+        newTimeIn, newTimeOut, duration, newBreak, notes || null, id
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        'UPDATE attendance_logs SET timeIn = ?, timeOut = ?, duration = ?, breakDuration = ?, updatedAt = NOW(3) WHERE id = ?',
+        newTimeIn, newTimeOut, duration, newBreak, id
+      );
+    }
+
+    console.log(`[SuperAdmin] ✏️ attendance log ${id} updated`);
+    res.json({ success: true, duration, breakDuration: newBreak });
+  } catch (err) {
+    console.error('[SuperAdmin] attendance-logs patch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/super-admin/invoices/reset ──────────────────────────────────────
 // Wipe invoice records. Scopes:
 //   body: { orgId?, userId?, year?, month? }

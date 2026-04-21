@@ -6,6 +6,7 @@ import {
   Crown, Shield, UserCog, X, AlertTriangle, LayoutDashboard,
   RefreshCw, ChevronDown, ChevronUp, Search, ArrowLeft,
   Terminal, Settings, Activity, Trash, KeyRound, Eye, EyeOff,
+  Clock, Save, Pencil,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -29,7 +30,7 @@ const ROLE_CFG: Record<string, { color: string; label: string }> = {
 const inputCls = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
 const inputStyle: React.CSSProperties = { background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text0 };
 
-type Section = 'overview' | 'users' | 'companies' | 'leads' | 'errors' | 'settings';
+type Section = 'overview' | 'users' | 'companies' | 'leads' | 'attendance' | 'errors' | 'settings';
 
 interface Stats {
   totalUsers: number; totalOrgs: number; totalTasks: number;
@@ -392,6 +393,205 @@ function NavItem({ icon: Icon, label, active, badge, onClick }: {
   );
 }
 
+// ── Attendance Logs (super admin edit clock in/out) ─────────────────────────
+function AttendanceLogs() {
+  interface AttLog {
+    id: string; userId: string; orgId: string;
+    timeIn: string; timeOut: string | null;
+    duration: number; breakDuration: number;
+    notes: string | null; date: string;
+    userName: string | null; userEmail: string | null;
+    orgName: string | null;
+  }
+
+  const [logs, setLogs] = useState<AttLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [emailFilter, setEmailFilter] = useState('');
+  const [editing, setEditing] = useState<AttLog | null>(null);
+  const [form, setForm] = useState({ timeIn: '', timeOut: '', breakMinutes: 0, notes: '' });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const showToast = (msg: string, ok: boolean) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3000); };
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const qs = emailFilter ? `?email=${encodeURIComponent(emailFilter)}&limit=200` : '?limit=100';
+      const data = await saFetch(`/api/super-admin/attendance-logs${qs}`);
+      setLogs(data.logs || []);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // initial load only; refetch via the filter button
+
+  const openEdit = (l: AttLog) => {
+    setEditing(l);
+    setForm({
+      timeIn:  new Date(l.timeIn).toISOString().slice(0, 16),
+      timeOut: l.timeOut ? new Date(l.timeOut).toISOString().slice(0, 16) : '',
+      breakMinutes: Math.round((l.breakDuration || 0) / 60),
+      notes: l.notes || '',
+    });
+  };
+
+  const handleSave = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      const body: any = {
+        timeIn:  new Date(form.timeIn).toISOString(),
+        timeOut: form.timeOut ? new Date(form.timeOut).toISOString() : null,
+        breakMinutes: form.breakMinutes,
+        notes: form.notes,
+      };
+      const res = await saFetch(`/api/super-admin/attendance-logs/${editing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      if (res.error) { showToast(res.error, false); return; }
+      showToast('Attendance updated', true);
+      setEditing(null);
+      fetchLogs();
+    } catch {
+      showToast('Failed to update', false);
+    } finally { setSaving(false); }
+  };
+
+  const fmtDt = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }) : '—';
+  const fmtDur = (s: number) => {
+    if (!s) return '—';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          placeholder="Filter by email…" value={emailFilter}
+          onChange={e => setEmailFilter(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') fetchLogs(); }}
+          className="px-3 py-2 rounded-lg text-[13px]"
+          style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text0, minWidth: 240 }}
+        />
+        <button onClick={fetchLogs}
+          className="px-3 py-2 rounded-lg text-[12px] font-semibold"
+          style={{ background: VS.accent, color: '#fff' }}>
+          Search
+        </button>
+        {loading && <span className="text-[11px]" style={{ color: VS.text2 }}>Loading…</span>}
+      </div>
+
+      <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+        {logs.length === 0 ? (
+          <div className="p-10 text-center text-[13px]" style={{ color: VS.text2 }}>No logs found.</div>
+        ) : (
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}` }}>
+                {['Employee', 'Org', 'Clock In', 'Clock Out', 'Net', 'Break', ''].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left font-semibold uppercase tracking-wider text-[10px]"
+                    style={{ color: VS.text2 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map(l => (
+                <tr key={l.id} style={{ borderBottom: `1px solid ${VS.border}` }}
+                  className="hover:bg-white/[0.02]">
+                  <td className="px-4 py-2.5">
+                    <div className="font-semibold" style={{ color: VS.text0 }}>{l.userName || l.userEmail}</div>
+                    {l.userName && <div className="text-[11px]" style={{ color: VS.text2 }}>{l.userEmail}</div>}
+                  </td>
+                  <td className="px-4 py-2.5" style={{ color: VS.text1 }}>{l.orgName || '—'}</td>
+                  <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.text0 }}>{fmtDt(l.timeIn)}</td>
+                  <td className="px-4 py-2.5 tabular-nums" style={{ color: l.timeOut ? VS.text0 : VS.yellow }}>
+                    {l.timeOut ? fmtDt(l.timeOut) : 'Still active'}
+                  </td>
+                  <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.teal }}>{fmtDur(l.duration)}</td>
+                  <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.text2 }}>{fmtDur(l.breakDuration)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button onClick={() => openEdit(l)}
+                      className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                      style={{ color: VS.accent }}
+                      title="Edit">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={e => { if (e.target === e.currentTarget) setEditing(null); }}>
+          <div className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
+            <div>
+              <h3 className="text-sm font-bold" style={{ color: VS.text0 }}>Edit Attendance Log</h3>
+              <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
+                {editing.userName || editing.userEmail} · {editing.orgName}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Clock In</label>
+              <input type="datetime-local" value={form.timeIn}
+                onChange={e => setForm(p => ({ ...p, timeIn: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Clock Out</label>
+              <input type="datetime-local" value={form.timeOut}
+                onChange={e => setForm(p => ({ ...p, timeOut: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
+              <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>Leave blank to mark as still active.</p>
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Break (minutes)</label>
+              <input type="number" min="0" value={form.breakMinutes}
+                onChange={e => setForm(p => ({ ...p, breakMinutes: parseInt(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Notes</label>
+              <textarea value={form.notes} rows={2}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs resize-none"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setEditing(null)}
+                className="flex-1 px-4 py-2 rounded-lg text-xs font-semibold"
+                style={{ background: VS.bg2, color: VS.text1, border: `1px solid ${VS.border}` }}>
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-1 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
+                style={{ background: VS.accent, color: '#fff' }}>
+                <Save className="h-3.5 w-3.5" /> {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <Toast msg={toast.msg} ok={toast.ok} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export function SuperAdmin() {
   const { data: session } = useSession();
@@ -550,6 +750,7 @@ export function SuperAdmin() {
     { id: 'users',      label: 'User Management',  icon: Users,     badge: users.length },
     { id: 'companies',  label: 'Companies',        icon: Building2, badge: orgs.length },
     { id: 'leads',      label: 'Lead Accounts',    icon: Crown,     badge: owners.length },
+    { id: 'attendance', label: 'Attendance Logs',  icon: Clock },
     { id: 'errors',     label: 'Error Logs',       icon: Terminal,  badge: errors.length },
     { id: 'settings',   label: 'Admin Settings',   icon: Settings },
   ];
@@ -971,6 +1172,10 @@ export function SuperAdmin() {
                   </div>
                 )}
               </div>
+
+            /* ── ATTENDANCE LOGS ── */
+            ) : section === 'attendance' ? (
+              <AttendanceLogs />
 
             /* ── ERROR LOGS ── */
             ) : section === 'errors' ? (
