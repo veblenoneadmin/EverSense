@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from '../lib/auth-client';
 import { useApiClient } from '../lib/api-client';
 import {
-  Plus, FileText, Trash2, Save, X, Search, ArrowLeft,
+  Plus, FileText, Trash2, Save, X, Search, ArrowLeft, Pencil,
   Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight,
   Heading1, Heading2, Type, Undo2, Redo2, CheckCircle, AlertTriangle,
 } from 'lucide-react';
@@ -264,6 +264,26 @@ export function Contracts() {
     finally { setSaving(false); }
   };
 
+  const handleQuickEditSalary = async (c: Contract) => {
+    const current = c.salary != null && c.salary !== '' ? String(c.salary) : '';
+    const raw = window.prompt(`Set monthly salary for "${c.title}".\nLeave blank to clear.`, current);
+    if (raw === null) return;
+    const trimmed = raw.trim();
+    const value = trimmed === '' ? null : Number(trimmed);
+    if (trimmed !== '' && (isNaN(value!) || value! < 0)) {
+      showToast('Invalid salary amount', false);
+      return;
+    }
+    try {
+      await apiClient.fetch(`/api/contracts/${c.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ salary: value }),
+      });
+      showToast('Salary updated');
+      fetchContracts();
+    } catch (err: any) { showToast(err.message || 'Failed to update salary', false); }
+  };
+
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
     try {
@@ -385,6 +405,10 @@ export function Contracts() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(c => {
             const st = STATUS_CFG[c.status] || STATUS_CFG.draft;
+            const salaryNum = c.salary != null && c.salary !== '' ? Number(c.salary) : null;
+            const salaryDisplay = salaryNum != null && !isNaN(salaryNum)
+              ? salaryNum.toLocaleString('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 })
+              : null;
             return (
               <div key={c.id}
                 onClick={() => { apiClient.fetch(`/api/contracts/${c.id}`).then(d => openEditor(d.contract)).catch(() => {}); }}
@@ -402,11 +426,25 @@ export function Contracts() {
                   <p>Created {fmtDate(c.createdAt)} {c.createdByName ? `by ${c.createdByName}` : ''}</p>
                   <p>Last edited {fmtDate(c.updatedAt)} {c.updatedByName ? `by ${c.updatedByName}` : ''}</p>
                 </div>
-                <div className="flex items-center justify-end mt-3 pt-3" style={{ borderTop: `1px solid ${VS.border}` }}>
-                  <button onClick={e => { e.stopPropagation(); handleDelete(c.id, c.title); }}
-                    className="p-1.5 rounded-lg opacity-40 hover:opacity-100 transition-all" style={{ color: VS.red }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                <div className="flex items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop: `1px solid ${VS.border}` }}>
+                  <div className="text-[11px] min-w-0 truncate" style={{ color: salaryDisplay ? VS.teal : VS.text2 }}>
+                    {salaryDisplay
+                      ? <span className="font-semibold">{salaryDisplay}</span>
+                      : <span className="italic">No salary set</span>}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={e => { e.stopPropagation(); handleQuickEditSalary(c); }}
+                      className="p-1.5 rounded-lg opacity-60 hover:opacity-100 transition-all"
+                      style={{ color: VS.accent }}
+                      title={salaryDisplay ? 'Edit salary' : 'Set salary'}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); handleDelete(c.id, c.title); }}
+                      className="p-1.5 rounded-lg opacity-40 hover:opacity-100 transition-all" style={{ color: VS.red }}
+                      title="Delete contract">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

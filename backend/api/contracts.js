@@ -22,7 +22,8 @@ async function requireContractAccess(req, res, next) {
 router.get('/', requireAuth, withOrgScope, requireContractAccess, async (req, res) => {
   try {
     const contracts = await prisma.$queryRawUnsafe(`
-      SELECT ct.id, ct.title, ct.status, ct.createdAt, ct.updatedAt,
+      SELECT ct.id, ct.title, ct.status, ct.salary, ct.employeeEmail,
+             ct.createdAt, ct.updatedAt,
              u1.name AS createdByName, u2.name AS updatedByName
       FROM contract_templates ct
       LEFT JOIN User u1 ON u1.id = ct.createdBy
