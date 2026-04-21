@@ -324,6 +324,57 @@ router.patch('/:id', requireAuth, withOrgScope, requireRole('ACCOUNTANT'), async
 });
 
 // ── DELETE /api/invoices/:id ─────────────────────────────────────────────────
+// ── DELETE /api/invoices — bulk delete invoices in this org ─────────────────
+// Scoped to req.orgId so accountants can reset their own org without needing
+// super-admin. Optional body { year, month, status } narrows the wipe.
+router.delete('/', requireAuth, withOrgScope, requireRole('ACCOUNTANT'), async (req, res) => {
+  try {
+    await ensureInvoicesTable();
+    const { year, month, status } = req.body || {};
+    const conds = ['orgId = ?'];
+    const params = [req.orgId];
+
+    if (status && ['ISSUED', 'PAID', 'VOID'].includes(status)) {
+      conds.push('status = ?');
+      params.push(status);
+    }
+    if (year) {
+      const y = parseInt(year);
+      if (!isNaN(y)) {
+        const m = month != null ? parseInt(month) : null;
+        if (m != null && !isNaN(m) && m >= 1 && m <= 12) {
+          const s = new Date(Date.UTC(y, m - 1, 1));
+          const e = new Date(Date.UTC(y, m, 1));
+          conds.push('periodStart >= ? AND periodStart < ?');
+          params.push(s, e);
+        } else {
+          const s = new Date(Date.UTC(y, 0, 1));
+          const e = new Date(Date.UTC(y + 1, 0, 1));
+          conds.push('periodStart >= ? AND periodStart < ?');
+          params.push(s, e);
+        }
+      }
+    }
+
+    const countRows = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*) AS c FROM invoices WHERE ${conds.join(' AND ')}`,
+      ...params
+    );
+    const count = Number(countRows[0]?.c || 0);
+
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM invoices WHERE ${conds.join(' AND ')}`,
+      ...params
+    );
+
+    console.log(`[Invoices] 🗑 bulk delete by ${req.user.email} in org ${req.orgId}: ${count} row(s)`);
+    res.json({ success: true, deleted: count });
+  } catch (err) {
+    console.error('[Invoices] bulk delete error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/:id', requireAuth, withOrgScope, requireRole('ACCOUNTANT'), async (req, res) => {
   try {
     await ensureInvoicesTable();

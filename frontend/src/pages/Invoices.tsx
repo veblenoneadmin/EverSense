@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApiClient } from '../lib/api-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { VS } from '../lib/theme';
-import { FileText, Plus, RefreshCw, Check, X, Trash2, CalendarDays } from 'lucide-react';
+import { FileText, Plus, RefreshCw, Check, X, Trash2, CalendarDays, Trash } from 'lucide-react';
 
 type InvoiceStatus = 'ISSUED' | 'PAID' | 'VOID';
 
@@ -122,6 +122,16 @@ export function Invoices() {
     } catch { alert('Failed to delete.'); }
   };
 
+  const handleDeleteAll = async () => {
+    if (!isPrivileged) return;
+    if (!confirm(`Delete all ${invoices.length} invoice(s) in this org?\n\nThis cannot be undone. Click Generate Current Period afterwards to recreate them.`)) return;
+    try {
+      const r = await api.fetch('/api/invoices', { method: 'DELETE', body: JSON.stringify({}) });
+      alert(`Deleted ${r.deleted ?? 0} invoice(s).`);
+      await fetchInvoices();
+    } catch { alert('Failed to delete invoices.'); }
+  };
+
   const filtered = useMemo(() => invoices.filter(i =>
     (filterStatus === 'ALL' || i.status === filterStatus) &&
     (filterUser === 'ALL' || i.userId === filterUser)
@@ -151,7 +161,16 @@ export function Invoices() {
           </p>
         </div>
         {isPrivileged && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {invoices.length > 0 && (
+              <button
+                onClick={handleDeleteAll}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors"
+                style={{ background: 'rgba(244,71,71,0.1)', border: '1px solid rgba(244,71,71,0.3)', color: VS.red }}
+                title="Delete every invoice in this org">
+                <Trash className="h-3.5 w-3.5" /> Delete All
+              </button>
+            )}
             <button
               onClick={() => setShowCreate(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold"
