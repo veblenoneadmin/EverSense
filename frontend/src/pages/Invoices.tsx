@@ -120,12 +120,6 @@ export function Invoices() {
     (filterUser === 'ALL' || i.userId === filterUser)
   ), [invoices, filterStatus, filterUser]);
 
-  const totals = useMemo(() => {
-    const issued = filtered.filter(i => i.status === 'ISSUED').reduce((s, i) => s + i.amount, 0);
-    const paid   = filtered.filter(i => i.status === 'PAID').reduce((s, i) => s + i.amount, 0);
-    return { issued, paid, count: filtered.length };
-  }, [filtered]);
-
   const selected = selectedId ? invoices.find(i => i.id === selectedId) : null;
 
   if (loading) {
@@ -167,22 +161,6 @@ export function Invoices() {
             </button>
           </div>
         )}
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-xl p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-          <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: VS.text2 }}>Total Invoices</div>
-          <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color: VS.text0 }}>{totals.count}</div>
-        </div>
-        <div className="rounded-xl p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-          <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: VS.text2 }}>Outstanding</div>
-          <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color: VS.yellow }}>{fmtCurrency(totals.issued)}</div>
-        </div>
-        <div className="rounded-xl p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-          <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: VS.text2 }}>Paid</div>
-          <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color: VS.teal }}>{fmtCurrency(totals.paid)}</div>
-        </div>
       </div>
 
       {/* Filters */}
