@@ -77,23 +77,17 @@ function Avatar({ name, image, size = 26 }: { name: string; image?: string | nul
 }
 
 // ── Create Report Modal ───────────────────────────────────────────────────────
-function CreateModal({ projects, onClose, onCreated, editingReport }: {
+function CreateModal({ projects, onClose, onCreated }: {
   projects: ProjectItem[];
   onClose: () => void;
   onCreated: () => void;
-  editingReport?: Report | null;
 }) {
   const { data: session }   = useSession();
   const api                 = useApiClient();
-  const isEdit = !!editingReport;
-  const [name, setName]       = useState(
-    editingReport?.userName || session?.user?.name || (session?.user as any)?.email?.split('@')[0] || ''
-  );
-  const [project, setProject] = useState(editingReport?.project?.id || '');
-  const [desc, setDesc]       = useState(editingReport?.description || '');
-  const [attachments, setAttachments] = useState<{ name: string; type: string; dataUrl: string }[]>(
-    editingReport ? parseAttachments(editingReport.image) : []
-  );
+  const [name, setName]       = useState(session?.user?.name || (session?.user as any)?.email?.split('@')[0] || '');
+  const [project, setProject] = useState('');
+  const [desc, setDesc]       = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [lightbox, setLightbox] = useState<number | null>(null); // index into attachments
   const [saving, setSaving]   = useState(false);
   const [err, setErr]         = useState('');
@@ -124,16 +118,16 @@ function CreateModal({ projects, onClose, onCreated, editingReport }: {
     setErr('');
     try {
       const projName = projects.find(p => p.id === project)?.name;
-      const url    = isEdit ? `/api/user-reports/${editingReport!.id}` : '/api/user-reports';
-      const method = isEdit ? 'PATCH' : 'POST';
-      const body: any = {
-        title:       projName ? `${projName} — Report` : null,
-        description: desc.trim(),
-        image:       attachments.length > 0 ? JSON.stringify(attachments) : null,
-        projectId:   project || null,
-      };
-      if (!isEdit) body.userName = name.trim();
-      const res = await api.fetch(url, { method, body: JSON.stringify(body) });
+      const res = await api.fetch('/api/user-reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          title:       projName ? `${projName} — Report` : undefined,
+          description: desc.trim(),
+          userName:    name.trim(),
+          image:       attachments.length > 0 ? JSON.stringify(attachments) : undefined,
+          projectId:   project || undefined,
+        }),
+      });
       if (!res.success) throw new Error(res.error || 'Failed to save');
       onCreated();
       onClose();
@@ -156,7 +150,7 @@ function CreateModal({ projects, onClose, onCreated, editingReport }: {
         <div style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}`, padding: '16px 22px', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <FileText size={16} style={{ color: VS.blue }} />
-            <span style={{ fontSize: 15, fontWeight: 600, color: VS.text0 }}>{isEdit ? 'Edit Report' : 'Create Report'}</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: VS.text0 }}>Create Report</span>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: VS.text2, cursor: 'pointer', padding: 4, display: 'flex' }}>
             <X size={18} />
@@ -305,7 +299,7 @@ function CreateModal({ projects, onClose, onCreated, editingReport }: {
             </button>
             <button type="submit" disabled={saving || !name.trim() || !desc.trim()}
               style={{ background: VS.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving || !name.trim() || !desc.trim() ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Save size={14} />{saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Submit Report')}
+              <Save size={14} />{saving ? 'Saving…' : 'Submit Report'}
             </button>
           </div>
         </form>
@@ -482,6 +476,267 @@ function DetailModal({ report, isPrivileged, onClose, onDelete, onEdit, session 
             if (!atts.length) return null;
             return <ReportAttachments attachments={atts} />;
           })()}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Parse a structured report description back into accomplishments/links ─────
+function parseStructuredReport(desc: string): { accomplishments: string[]; links: string[]; notes: string } {
+  if (!desc) return { accomplishments: [''], links: [''], notes: '' };
+
+  const lines = desc.split(/\r?\n/);
+  const accomplishments: string[] = [];
+  const links: string[] = [];
+  const noteLines: string[] = [];
+  let section: 'idle' | 'acc' | 'links' = 'idle';
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (/^accomplishments?\s*:?$/i.test(line))   { section = 'acc';   continue; }
+    if (/^links?\s*:?$/i.test(line))             { section = 'links'; continue; }
+    if (/^attachments?\s*:/i.test(line))         { section = 'idle';  continue; }
+    if (!line) continue;
+    if (section === 'acc') {
+      const m = line.match(/^\d+\.\s*(.+)$/);
+      accomplishments.push(m ? m[1] : line);
+    } else if (section === 'links') {
+      const m = line.match(/^[-*]\s*(.+)$/);
+      links.push(m ? m[1] : line);
+    } else {
+      noteLines.push(raw);
+    }
+  }
+
+  return {
+    accomplishments: accomplishments.length ? accomplishments : (noteLines.length ? [noteLines.join('\n').trim()] : ['']),
+    links: links.length ? links : [''],
+    notes: accomplishments.length && noteLines.length ? noteLines.join('\n').trim() : '',
+  };
+}
+
+// ── Edit Report Modal — styled like the task-complete modal ──────────────────
+function EditReportModal({ report, projects, onClose, onSaved }: {
+  report: Report;
+  projects: ProjectItem[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const api = useApiClient();
+  const parsed = parseStructuredReport(report.description);
+  const [project, setProject] = useState(report.project?.id || '');
+  const [accomplishments, setAccomplishments] = useState<string[]>(parsed.accomplishments);
+  const [links, setLinks] = useState<string[]>(parsed.links);
+  const [notes, setNotes] = useState<string>(parsed.notes);
+  const [attachments, setAttachments] = useState<Attachment[]>(parseAttachments(report.image));
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const accent = VS.teal; // same accent as the complete-task modal
+
+  const addFiles = (files: File[]) => {
+    files.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = ev => setAttachments(prev => [...prev, { name: f.name, type: f.type, dataUrl: ev.target?.result as string }]);
+      reader.readAsDataURL(f);
+    });
+  };
+
+  const submit = async () => {
+    const filledAcc = accomplishments.filter(a => a.trim());
+    if (filledAcc.length === 0 && !notes.trim()) {
+      setErr('Add at least one accomplishment.');
+      return;
+    }
+    setSaving(true);
+    setErr('');
+    try {
+      let fullReport = '';
+      if (filledAcc.length) fullReport += 'Accomplishments:\n' + filledAcc.map((a, i) => `${i + 1}. ${a.trim()}`).join('\n');
+      const filledLinks = links.filter(l => l.trim());
+      if (filledLinks.length) fullReport += (fullReport ? '\n\n' : '') + 'Links:\n' + filledLinks.map(l => `- ${l.trim()}`).join('\n');
+      if (notes.trim()) fullReport += (fullReport ? '\n\n' : '') + notes.trim();
+      if (attachments.length) fullReport += (fullReport ? '\n\n' : '') + `Attachments: ${attachments.map(a => a.name).join(', ')}`;
+
+      const projName = projects.find(p => p.id === project)?.name;
+      const res = await api.fetch(`/api/user-reports/${report.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title:       projName ? `${projName} — Report` : null,
+          description: fullReport,
+          image:       attachments.length > 0 ? JSON.stringify(attachments) : null,
+          projectId:   project || null,
+        }),
+      });
+      if (!res.success) throw new Error(res.error || 'Failed to save');
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      setErr(e.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = { background: VS.bg2, border: `1px solid ${VS.border}`, borderRadius: 8, padding: '8px 12px', color: VS.text0, fontSize: 13, outline: 'none', width: '100%' };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-lg rounded-xl overflow-hidden max-h-[90vh] flex flex-col"
+        style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+
+        {/* Header — same accent treatment as complete-task modal */}
+        <div className="flex items-center justify-between px-5 py-4" style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}` }}>
+          <h3 className="text-[14px] font-bold" style={{ color: accent }}>
+            Edit Report — Accomplishment Update
+          </h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.text2 }}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto">
+          {err && (
+            <div style={{ background: `${VS.red}18`, border: `1px solid ${VS.red}44`, borderRadius: 8, padding: '10px 14px', color: VS.red, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertCircle size={14} />{err}
+            </div>
+          )}
+
+          {/* Project (optional) */}
+          <div>
+            <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>Project (optional)</label>
+            <select value={project} onChange={e => setProject(e.target.value)} style={inputStyle}>
+              <option value="">No project</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+
+          {/* Accomplishments */}
+          <div>
+            <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>Tasks Completed</label>
+            {accomplishments.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-bold shrink-0 w-5 text-center" style={{ color: accent }}>{idx + 1}.</span>
+                <input
+                  type="text" value={item}
+                  onChange={e => { const u = [...accomplishments]; u[idx] = e.target.value; setAccomplishments(u); }}
+                  placeholder="What did you accomplish?"
+                  style={inputStyle}
+                  onKeyDown={e => { if (e.key === 'Enter' && item.trim()) { e.preventDefault(); setAccomplishments([...accomplishments, '']); } }}
+                />
+                {accomplishments.length > 1 && (
+                  <button onClick={() => setAccomplishments(accomplishments.filter((_, i) => i !== idx))}
+                    className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center"
+                    style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.red, cursor: 'pointer' }}>
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={() => setAccomplishments([...accomplishments, ''])}
+              className="flex items-center gap-1.5 text-[12px] font-medium mt-1 px-2 py-1 rounded-md"
+              style={{ color: accent, background: `${accent}12`, border: `1px solid ${accent}30`, cursor: 'pointer' }}>
+              <Plus className="h-3 w-3" /> Add item
+            </button>
+          </div>
+
+          {/* Links */}
+          <div>
+            <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>Attach Links</label>
+            {links.map((link, idx) => (
+              <div key={idx} className="flex items-center gap-2 mb-2">
+                <input
+                  type="url" value={link}
+                  onChange={e => { const u = [...links]; u[idx] = e.target.value; setLinks(u); }}
+                  placeholder="https://..."
+                  style={inputStyle}
+                />
+                {links.length > 1 && (
+                  <button onClick={() => setLinks(links.filter((_, i) => i !== idx))}
+                    className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center"
+                    style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.red, cursor: 'pointer' }}>
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={() => setLinks([...links, ''])}
+              className="flex items-center gap-1.5 text-[12px] font-medium mt-1 px-2 py-1 rounded-md"
+              style={{ color: VS.blue, background: `${VS.blue}12`, border: `1px solid ${VS.blue}30`, cursor: 'pointer' }}>
+              <Plus className="h-3 w-3" /> Add link
+            </button>
+          </div>
+
+          {/* Files drag & drop */}
+          <div>
+            <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>Attach Files</label>
+            <div
+              className="rounded-lg p-4 text-center transition-colors"
+              style={{
+                border: `2px dashed ${isDraggingFile ? accent : VS.border}`,
+                background: isDraggingFile ? `${accent}08` : VS.bg3,
+                cursor: 'pointer',
+              }}
+              onDragOver={e => { e.preventDefault(); setIsDraggingFile(true); }}
+              onDragLeave={() => setIsDraggingFile(false)}
+              onDrop={e => {
+                e.preventDefault(); setIsDraggingFile(false);
+                addFiles(Array.from(e.dataTransfer.files));
+              }}
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file'; input.multiple = true;
+                input.onchange = () => { if (input.files?.length) addFiles(Array.from(input.files)); };
+                input.click();
+              }}>
+              <p className="text-[12px]" style={{ color: VS.text2 }}>
+                {isDraggingFile ? 'Drop files here…' : 'Drag & drop files or click to browse'}
+              </p>
+            </div>
+            {attachments.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {attachments.map((f, idx) => (
+                  <div key={idx} className="flex items-center justify-between px-3 py-1.5 rounded-md"
+                    style={{ background: VS.bg3, border: `1px solid ${VS.border}` }}>
+                    <span className="text-[12px] truncate" style={{ color: VS.text1 }}>{f.name}</span>
+                    <button onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: VS.red, padding: 2 }}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Notes (free-form additions kept after parsing) */}
+          {notes && (
+            <div>
+              <label className="block text-[11px] font-semibold mb-2 uppercase tracking-wide" style={{ color: VS.text2 }}>Additional Notes</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={onClose}
+              className="px-4 py-2 rounded-lg text-[13px] font-medium"
+              style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={submit} disabled={saving}
+              className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
+              style={{ background: accent, color: '#fff', cursor: 'pointer' }}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
         </div>
       </div>
     </div>,
@@ -775,12 +1030,20 @@ export function Reports() {
         </div>
       )}
 
-      {(showModal || editingReport) && (
+      {showModal && (
         <CreateModal
           projects={projects}
-          editingReport={editingReport}
-          onClose={() => { setShowModal(false); setEditingReport(null); }}
+          onClose={() => setShowModal(false)}
           onCreated={fetchReports}
+        />
+      )}
+
+      {editingReport && (
+        <EditReportModal
+          report={editingReport}
+          projects={projects}
+          onClose={() => setEditingReport(null)}
+          onSaved={fetchReports}
         />
       )}
 
