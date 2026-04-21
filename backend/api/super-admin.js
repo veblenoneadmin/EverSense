@@ -509,6 +509,53 @@ router.post('/run-daily-report', requireAuth, requireSuperAdminUser, async (_req
   }
 });
 
+// ── POST /api/super-admin/invoices/reset ──────────────────────────────────────
+// Wipe invoice records. Scopes:
+//   body: { orgId?, userId?, year?, month? }
+//   - year+month → delete only invoices whose periodStart falls in that month
+//   - year only  → delete only invoices in that calendar year
+//   - no filter  → wipe ALL invoices across all orgs
+router.post('/invoices/reset', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { orgId, userId, year, month } = req.body || {};
+    const conds = [];
+    const params = [];
+
+    if (orgId)  { conds.push('orgId = ?');  params.push(orgId); }
+    if (userId) { conds.push('userId = ?'); params.push(userId); }
+    if (year) {
+      const y = parseInt(year);
+      if (!isNaN(y)) {
+        const m = month != null ? parseInt(month) : null;
+        if (m != null && !isNaN(m) && m >= 1 && m <= 12) {
+          const start = new Date(Date.UTC(y, m - 1, 1));
+          const end   = new Date(Date.UTC(y, m, 1));
+          conds.push('periodStart >= ? AND periodStart < ?');
+          params.push(start, end);
+        } else {
+          const start = new Date(Date.UTC(y, 0, 1));
+          const end   = new Date(Date.UTC(y + 1, 0, 1));
+          conds.push('periodStart >= ? AND periodStart < ?');
+          params.push(start, end);
+        }
+      }
+    }
+
+    const countSql = `SELECT COUNT(*) AS c FROM invoices${conds.length ? ' WHERE ' + conds.join(' AND ') : ''}`;
+    const countRows = await prisma.$queryRawUnsafe(countSql, ...params);
+    const count = Number(countRows[0]?.c || 0);
+
+    const delSql = `DELETE FROM invoices${conds.length ? ' WHERE ' + conds.join(' AND ') : ''}`;
+    await prisma.$executeRawUnsafe(delSql, ...params);
+
+    console.log(`[SuperAdmin] 🗑 Reset invoices: ${count} record(s) deleted. filters=${JSON.stringify({ orgId, userId, year, month })}`);
+    res.json({ success: true, deleted: count });
+  } catch (err) {
+    console.error('[SuperAdmin] reset invoices error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/super-admin/leaves/reset ────────────────────────────────────────
 // Wipe leave records so balances reset. Scopes:
 //   body: { orgId?, userId?, year?, keepPending? }
