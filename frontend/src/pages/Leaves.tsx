@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApiClient } from '../lib/api-client';
+import { useOrganization } from '../contexts/OrganizationContext';
 import { VS } from '../lib/theme';
-import { CalendarDays, Plus, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { CalendarDays, Plus, Clock, CheckCircle2, XCircle, Check, X as XIcon } from 'lucide-react';
 
 type LeaveType = 'annual' | 'sick';
 type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -48,9 +49,19 @@ function StatusPill({ status }: { status: LeaveStatus }) {
   );
 }
 
+interface PendingTeamLeave extends LeaveRow {
+  userId: string;
+  userName: string;
+  userEmail: string;
+}
+
 export function Leaves() {
   const api = useApiClient();
+  const { currentOrg } = useOrganization();
+  const isApprover = ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(currentOrg?.role || '');
   const [data, setData] = useState<LeavesResponse | null>(null);
+  const [teamPending, setTeamPending] = useState<PendingTeamLeave[]>([]);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -70,7 +81,28 @@ export function Leaves() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchLeaves(); }, []);
+  const fetchTeamPending = async () => {
+    if (!isApprover) return;
+    try {
+      const d = await api.fetch('/api/leaves/pending');
+      setTeamPending(d.leaves ?? []);
+    } catch { /* non-fatal */ }
+  };
+
+  const handleAction = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+    setActionId(id);
+    try {
+      await api.fetch(`/api/leaves/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      await Promise.all([fetchTeamPending(), fetchLeaves()]);
+    } catch {
+      alert('Failed to update leave.');
+    } finally { setActionId(null); }
+  };
+
+  useEffect(() => { fetchLeaves(); fetchTeamPending(); }, [isApprover]);
 
   const pending  = useMemo(() => data?.leaves.filter(l => l.status === 'PENDING') ?? [], [data]);
   const approved = useMemo(() => data?.leaves.filter(l => l.status === 'APPROVED') ?? [], [data]);
@@ -173,9 +205,64 @@ export function Leaves() {
         <BalanceCard label="Sick Leave"   total={allowances.sick}   usedDays={used.sick}   remainDays={remaining.sick}   color={VS.purple} />
       </div>
 
+      {isApprover && (
+        <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.accent}33` }}>
+          <div className="p-4 flex items-center justify-between" style={{ background: `${VS.accent}0a` }}>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: VS.text0 }}>Team — Pending Approval</div>
+              <div className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>Requests waiting for your decision.</div>
+            </div>
+            <div className="text-xs px-2 py-1 rounded-full font-semibold" style={{ background: `${VS.accent}22`, color: VS.accent }}>
+              {teamPending.length}
+            </div>
+          </div>
+          {teamPending.length === 0 ? (
+            <div className="p-6 text-center text-xs" style={{ color: VS.text2, borderTop: `1px solid ${VS.border}` }}>
+              No pending team requests.
+            </div>
+          ) : teamPending.map(l => (
+            <div key={l.id} className="flex items-center justify-between p-4 gap-4" style={{ borderTop: `1px solid ${VS.border}` }}>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold" style={{ color: VS.text0 }}>{l.userName || l.userEmail}</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold capitalize"
+                    style={{ background: l.type === 'sick' ? `${VS.purple}22` : `${VS.teal}22`, color: l.type === 'sick' ? VS.purple : VS.teal }}>
+                    {l.type}
+                  </span>
+                </div>
+                <div className="text-xs mt-1" style={{ color: VS.text2 }}>
+                  {fmtDate(l.startDate)} → {fmtDate(l.endDate)} · {l.days} day{l.days > 1 ? 's' : ''}
+                </div>
+                {l.reason && <div className="text-xs mt-1 italic" style={{ color: VS.text1 }}>{l.reason}</div>}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  disabled={actionId === l.id}
+                  onClick={() => handleAction(l.id, 'APPROVED')}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-50"
+                  style={{ background: `${VS.teal}22`, color: VS.teal, border: `1px solid ${VS.teal}55` }}
+                  title="Approve"
+                >
+                  <Check className="h-3.5 w-3.5" /> Approve
+                </button>
+                <button
+                  disabled={actionId === l.id}
+                  onClick={() => handleAction(l.id, 'REJECTED')}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-50"
+                  style={{ background: `${VS.red}22`, color: VS.red, border: `1px solid ${VS.red}55` }}
+                  title="Reject"
+                >
+                  <XIcon className="h-3.5 w-3.5" /> Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
         <div className="p-4 flex items-center justify-between">
-          <div className="text-sm font-semibold" style={{ color: VS.text0 }}>Pending Requests</div>
+          <div className="text-sm font-semibold" style={{ color: VS.text0 }}>Your Pending Requests</div>
           <div className="text-xs" style={{ color: VS.text2 }}>{pending.length}</div>
         </div>
         {pending.length === 0

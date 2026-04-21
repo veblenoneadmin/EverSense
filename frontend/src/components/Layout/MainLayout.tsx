@@ -40,6 +40,7 @@ const MainLayout: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
+  const [pendingLeaveCount, setPendingLeaveCount] = useState<number>(0);
   const [orgId, setOrgId] = useState<string>('');
 
   // Notifications
@@ -224,6 +225,24 @@ const MainLayout: React.FC = () => {
     fetchNotifs();
   }, [session?.user?.id, orgId, fetchNotifs]);
 
+  // Poll pending leave count for approvers (OWNER/ADMIN/HoJ)
+  useEffect(() => {
+    if (!session?.user?.id || !orgId) return;
+    if (!['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(userRole)) return;
+    let cancelled = false;
+    const fetchPending = async () => {
+      try {
+        const res = await fetch('/api/leaves/pending');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setPendingLeaveCount(Array.isArray(data.leaves) ? data.leaves.length : 0);
+      } catch { /* ignore */ }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 60_000); // 1 min
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [session?.user?.id, orgId, userRole]);
+
   // SSE — real-time push updates (replaces polling intervals)
   useSSE(orgId || undefined, (event) => {
     if (event === 'attendance')   fetchStatus();
@@ -374,6 +393,30 @@ const MainLayout: React.FC = () => {
 
         {/* Right — notifications + user dropdown */}
         <div className="flex items-center gap-2">
+
+          {/* Leave-approval glass card — only for approvers, only when pending > 0 */}
+          {['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(userRole) && pendingLeaveCount > 0 && (
+            <button
+              onClick={() => navigate('/leaves')}
+              title={`${pendingLeaveCount} leave${pendingLeaveCount > 1 ? 's' : ''} awaiting approval`}
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all"
+              style={{
+                background: 'rgba(86, 156, 214, 0.12)',
+                border: '1px solid rgba(86, 156, 214, 0.32)',
+                color: VS.text0,
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                boxShadow: '0 4px 16px rgba(86, 156, 214, 0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(86, 156, 214, 0.2)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(86, 156, 214, 0.12)'; }}
+            >
+              <CalendarDays className="h-4 w-4" style={{ color: VS.accent }} />
+              <span className="text-[11px] font-semibold" style={{ color: VS.text0 }}>
+                {pendingLeaveCount} pending leave{pendingLeaveCount > 1 ? 's' : ''}
+              </span>
+            </button>
+          )}
 
           {/* Bell icon */}
           <div className="relative">
