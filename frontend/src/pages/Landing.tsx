@@ -209,6 +209,8 @@ export function Landing() {
   // Parallax tracking: mouse movement + scroll position for a layered depth effect
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [scrollY, setScrollY] = useState(0);
+  // Entrance animation — flips to true on first paint so hero elements slide in
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const handleMouse = (e: MouseEvent) => {
@@ -220,11 +222,16 @@ export function Landing() {
     const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener('mousemove', handleMouse);
     window.addEventListener('scroll', handleScroll, { passive: true });
+    // Kick off entrance animation on next frame so the initial (hidden) style
+    // is actually painted before we transition to the shown state.
+    const raf = requestAnimationFrame(() => setMounted(true));
     return () => {
       window.removeEventListener('mousemove', handleMouse);
       window.removeEventListener('scroll', handleScroll);
+      cancelAnimationFrame(raf);
     };
   }, []);
+
 
   // Scroll-based fade/translate (hero gradually fades and lifts up as user scrolls)
   const heroOpacity = Math.max(0, 1 - scrollY / 500);
@@ -233,6 +240,12 @@ export function Landing() {
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={{ background: VS.bg0, color: VS.text0 }}>
+      <style>{`
+        @keyframes heroShimmer {
+          0%, 100% { background-position: 0% 50%; }
+          50%      { background-position: 100% 50%; }
+        }
+      `}</style>
       {/* Particle canvas — background parallax layer */}
       <div style={{ transform: `translateY(${-bgTranslate}px)`, willChange: 'transform', position: 'absolute', inset: 0 }}>
         <InteractiveHero />
@@ -265,8 +278,11 @@ export function Landing() {
             background: `${VS.accent}18`,
             color: VS.accent,
             border: `1px solid ${VS.accent}33`,
-            transform: `translate3d(${mouse.x * -8}px, ${mouse.y * -8}px, 0)`,
-            transition: 'transform 0.25s ease-out',
+            opacity: mounted ? 1 : 0,
+            transform: mounted
+              ? `translate3d(${mouse.x * -8}px, ${mouse.y * -8}px, 0)`
+              : 'translate3d(0, 16px, 0)',
+            transition: 'opacity 650ms cubic-bezier(0.22, 1, 0.36, 1) 100ms, transform 650ms cubic-bezier(0.22, 1, 0.36, 1) 100ms',
           }}
         >
           <Zap className="h-3 w-3" /> Intelligent Platform
@@ -276,12 +292,22 @@ export function Landing() {
           className="text-[40px] md:text-[56px] font-bold leading-[1.1] mb-5"
           style={{
             color: VS.text0,
-            transform: `translate3d(${mouse.x * -14}px, ${mouse.y * -10}px, 0)`,
-            transition: 'transform 0.25s ease-out',
+            opacity: mounted ? 1 : 0,
+            transform: mounted
+              ? `translate3d(${mouse.x * -14}px, ${mouse.y * -10}px, 0)`
+              : 'translate3d(0, 32px, 0)',
+            transition: 'opacity 850ms cubic-bezier(0.22, 1, 0.36, 1) 220ms, transform 850ms cubic-bezier(0.22, 1, 0.36, 1) 220ms',
           }}
         >
           Run your agency<br />
-          <span style={{ background: `linear-gradient(90deg, ${VS.accent}, ${VS.teal})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+          <span style={{
+            background: `linear-gradient(90deg, ${VS.accent}, ${VS.teal}, ${VS.accent})`,
+            backgroundSize: '200% 100%',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            animation: 'heroShimmer 6s ease-in-out infinite',
+          }}>
             with one platform.
           </span>
         </h1>
@@ -291,8 +317,11 @@ export function Landing() {
           style={{
             color: VS.text2,
             lineHeight: 1.6,
-            transform: `translate3d(${mouse.x * -6}px, ${mouse.y * -6}px, 0)`,
-            transition: 'transform 0.3s ease-out',
+            opacity: mounted ? 1 : 0,
+            transform: mounted
+              ? `translate3d(${mouse.x * -6}px, ${mouse.y * -6}px, 0)`
+              : 'translate3d(0, 24px, 0)',
+            transition: 'opacity 750ms cubic-bezier(0.22, 1, 0.36, 1) 380ms, transform 750ms cubic-bezier(0.22, 1, 0.36, 1) 380ms',
           }}
         >
           Task management, time tracking, client reporting, and team collaboration — built for modern creative and technical agencies. One login. One source of truth.
@@ -301,8 +330,11 @@ export function Landing() {
         <div
           className="flex items-center gap-3 flex-wrap justify-center"
           style={{
-            transform: `translate3d(${mouse.x * -4}px, ${mouse.y * -4}px, 0)`,
-            transition: 'transform 0.35s ease-out',
+            opacity: mounted ? 1 : 0,
+            transform: mounted
+              ? `translate3d(${mouse.x * -4}px, ${mouse.y * -4}px, 0)`
+              : 'translate3d(0, 20px, 0)',
+            transition: 'opacity 700ms cubic-bezier(0.22, 1, 0.36, 1) 540ms, transform 700ms cubic-bezier(0.22, 1, 0.36, 1) 540ms',
           }}
         >
           <Link to="/login"
