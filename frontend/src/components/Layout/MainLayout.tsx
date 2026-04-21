@@ -249,7 +249,16 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     syncActiveTimerFromServer();
     const id = setInterval(syncActiveTimerFromServer, 30_000);
-    return () => clearInterval(id);
+    // Also re-sync when the tab regains focus — mobile browsers freeze setInterval
+    // when backgrounded, so this catches the "unlock phone, reopen app" case.
+    const onVis = () => { if (document.visibilityState === 'visible') syncActiveTimerFromServer(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onVis);
+    };
   }, [syncActiveTimerFromServer]);
 
   useEffect(() => {
