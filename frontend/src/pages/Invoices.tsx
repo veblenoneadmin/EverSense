@@ -298,13 +298,24 @@ function DetailModal({ invoice, onClose }: { invoice: Invoice; onClose: () => vo
     return `INV-${yyyy}${mm}${half}-${suffix}`;
   }, [invoice]);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const previous = document.title;
+    const employee = (invoice.userName || invoice.userEmail || 'Employee').replace(/[^\w\s-]/g, '').trim();
+    // Browsers use document.title for the print header and the default PDF filename.
+    document.title = `${invoiceNumber} — ${employee}`;
+    const restore = () => { document.title = previous; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    // Fallback in case afterprint doesn't fire (some Safari versions).
+    setTimeout(restore, 5000);
+    window.print();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:p-0"
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <style>{`
+        @page { margin: 12mm; }
         @media print {
           body > * { visibility: hidden; }
           .invoice-document, .invoice-document * { visibility: visible; }
