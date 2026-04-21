@@ -3522,36 +3522,62 @@ async function startServer() {
   startDailyPersonReportScheduler();
   startInvoiceScheduler();
 
-  // Inline attendance auto-clockout (runs directly in server process every minute)
-  const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m production threshold
+  // Inline attendance auto-clockout (runs directly in server process every minute).
+  // Auto-closes a session when the user's CUMULATIVE net worked time within a
+  // rolling 16-hour window (closed logs' duration + current open session's age)
+  // reaches the threshold. This catches the case where someone clocks out after
+  // 8h and then starts a new session — the second session counts toward the cap
+  // so they can't exceed 9h30m total per day. Applies to every user (including
+  // newly-added accounts) because there's no user filter.
+  const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m daily cumulative cap
   let tickCount = 0;
   async function runInlineClockout() {
     if (!process.env.DATABASE_URL) return;
     try {
-      // Every 10 ticks (~10 min), log open-session stats so we can confirm the cron is alive + see what's open.
       tickCount++;
       if (tickCount % 10 === 1) {
         const open = await prisma.$queryRawUnsafe(
-          `SELECT al.id, al.userId, al.timeIn, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS ageSecs, u.email
+          `SELECT al.id, al.userId, al.timeIn, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS ageSecs, u.email,
+                  COALESCE((
+                    SELECT SUM(al2.duration) FROM attendance_logs al2
+                    WHERE al2.userId = al.userId AND al2.orgId = al.orgId
+                      AND al2.timeIn >= DATE_SUB(NOW(), INTERVAL 16 HOUR)
+                      AND al2.timeOut IS NOT NULL
+                  ), 0) AS closedSecs
              FROM attendance_logs al LEFT JOIN \`User\` u ON u.id = al.userId
             WHERE al.timeOut IS NULL ORDER BY al.timeIn ASC LIMIT 20`
         ).catch(() => []);
-        console.log(`[InlineClockout] heartbeat: ${open.length} open session(s). Threshold=${AUTO_CLOCKOUT_SEC}s (9h30m).`);
-        open.forEach(o => console.log(`  · ${o.email} userId=${o.userId} ageSecs=${o.ageSecs} overdue=${Number(o.ageSecs) >= AUTO_CLOCKOUT_SEC}`));
+        console.log(`[InlineClockout] heartbeat: ${open.length} open session(s). Cumulative cap=${AUTO_CLOCKOUT_SEC}s (9h30m).`);
+        open.forEach(o => {
+          const total = Number(o.closedSecs || 0) + Number(o.ageSecs || 0);
+          console.log(`  · ${o.email} userId=${o.userId} ageSecs=${o.ageSecs} closedTodaySecs=${o.closedSecs} totalSecs=${total} overdue=${total >= AUTO_CLOCKOUT_SEC}`);
+        });
       }
-      // Use TIMESTAMPDIFF with direct interpolation (no parameter binding = no BigInt issue)
+
+      // Cumulative: (current open session age) + (sum of closed sessions in last 16h) >= threshold.
       const overdue = await prisma.$queryRawUnsafe(
-        `SELECT id, userId, orgId FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SEC}`
+        `SELECT al.id, al.userId, al.orgId,
+                TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS openSecs,
+                COALESCE((
+                  SELECT SUM(al2.duration) FROM attendance_logs al2
+                  WHERE al2.userId = al.userId AND al2.orgId = al.orgId
+                    AND al2.timeIn >= DATE_SUB(NOW(), INTERVAL 16 HOUR)
+                    AND al2.timeOut IS NOT NULL
+                ), 0) AS closedSecs
+           FROM attendance_logs al
+          WHERE al.timeOut IS NULL
+         HAVING (openSecs + closedSecs) >= ${AUTO_CLOCKOUT_SEC}`
       );
       if (!overdue.length) return;
-      console.log(`[InlineClockout] Found ${overdue.length} overdue session(s)`);
+      console.log(`[InlineClockout] Found ${overdue.length} session(s) over daily cap`);
       for (const row of overdue) {
         try {
+          // Clock out with duration = this session's gross age (matches existing behaviour).
           const affected = await prisma.$executeRawUnsafe(
             `UPDATE attendance_logs SET timeOut = NOW(3), duration = TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
             row.id
           );
-          console.log(`[InlineClockout] Closed session ${row.id} (${row.userId}), rowsAffected=${Number(affected)}`);
+          console.log(`[InlineClockout] Closed ${row.id} userId=${row.userId} openSecs=${row.openSecs} closedTodaySecs=${row.closedSecs} rowsAffected=${Number(affected)}`);
           try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch {}
         } catch (e) { console.error(`[InlineClockout] Row error ${row.id}:`, e.message); }
       }

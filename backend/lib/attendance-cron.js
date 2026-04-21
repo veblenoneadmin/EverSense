@@ -18,12 +18,22 @@ function fmtDuration(seconds) {
 async function runAutoClockout() {
   if (!process.env.DATABASE_URL) return;
   try {
-    // TIMESTAMPDIFF with direct interpolation — no parameter binding, no BigInt issue
+    // Cumulative daily cap — close an open session when (its age) + (sum of the user's
+    // closed sessions in the last 16h) reaches the threshold. Catches the case where
+    // someone clocks out and starts a new session — the second one still counts toward
+    // the daily 9h30m cap. Applies to every user (no filter).
     const overdueRows = await prisma.$queryRawUnsafe(
-      `SELECT id, userId, orgId, timeIn
-       FROM attendance_logs
-       WHERE timeOut IS NULL
-         AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SECONDS}`
+      `SELECT al.id, al.userId, al.orgId, al.timeIn,
+              TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS openSecs,
+              COALESCE((
+                SELECT SUM(al2.duration) FROM attendance_logs al2
+                WHERE al2.userId = al.userId AND al2.orgId = al.orgId
+                  AND al2.timeIn >= DATE_SUB(NOW(), INTERVAL 16 HOUR)
+                  AND al2.timeOut IS NOT NULL
+              ), 0) AS closedSecs
+         FROM attendance_logs al
+        WHERE al.timeOut IS NULL
+       HAVING (openSecs + closedSecs) >= ${AUTO_CLOCKOUT_SECONDS}`
     );
 
     if (!overdueRows.length) return;
