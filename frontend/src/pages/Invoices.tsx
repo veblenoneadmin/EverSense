@@ -92,7 +92,14 @@ export function Invoices() {
     setGenerating(true);
     try {
       const r = await api.fetch('/api/invoices/generate', { method: 'POST', body: JSON.stringify({}) });
-      alert(`Generated ${r.created} invoice(s). Skipped ${r.skipped} (already exist).`);
+      const missing: Array<{ name: string; email: string }> = r.employeesMissingSalary || [];
+      let msg = `Generated ${r.created ?? 0} invoice(s). Skipped ${r.skipped ?? 0} (already exist for this period).`;
+      if (missing.length) {
+        msg += `\n\n${missing.length} employee(s) have no salary set (not on their latest contract and not on their employee profile):\n` +
+          missing.slice(0, 20).map(m => `• ${m.name || m.email}`).join('\n');
+        if (missing.length > 20) msg += `\n… and ${missing.length - 20} more`;
+      }
+      alert(msg);
       await fetchInvoices();
     } catch {
       alert('Failed to generate invoices.');

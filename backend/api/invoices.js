@@ -97,47 +97,85 @@ async function leavesInPeriod(userId, orgId, start, end) {
   return { count, breakdown };
 }
 
+// Resolve each employee's salary. Priority:
+//   1. latest contract_templates.salary matched by employeeEmail (most recent)
+//   2. employee_profiles.salary (fallback)
+// Returns an array of { userId, userName, userEmail, salary } for every non-CLIENT member.
+async function resolveOrgSalaries(orgId) {
+  // Pull every non-client member, with their employee_profile salary (fallback),
+  // and the most recent contract salary matched by email.
+  const rows = await prisma.$queryRawUnsafe(
+    "SELECT m.userId, u.email AS userEmail, COALESCE(u.name, u.email) AS userName, " +
+    "       ep.salary AS profileSalary, " +
+    "       (SELECT ct.salary FROM contract_templates ct " +
+    "          WHERE ct.orgId = m.orgId AND ct.salary IS NOT NULL " +
+    "            AND LOWER(ct.employeeEmail) = LOWER(u.email) " +
+    "          ORDER BY ct.createdAt DESC LIMIT 1) AS contractSalary " +
+    "FROM memberships m " +
+    "JOIN `User` u ON u.id = m.userId " +
+    "LEFT JOIN employee_profiles ep ON ep.userId = m.userId AND ep.orgId = m.orgId " +
+    "WHERE m.orgId = ? AND m.role <> 'CLIENT'",
+    orgId
+  ).catch(e => { console.error('[Invoices] salary resolve error:', e.message); return []; });
+
+  return rows.map(r => ({
+    userId: r.userId,
+    userName: r.userName,
+    userEmail: r.userEmail,
+    salary: r.contractSalary != null ? Number(r.contractSalary) :
+            r.profileSalary  != null ? Number(r.profileSalary)  : 0,
+    source: r.contractSalary != null ? 'contract' : r.profileSalary != null ? 'profile' : null,
+  }));
+}
+
 // ── Core: generate (or refresh) invoices for a given issue date across org ──
-// For each employee with a salary on their employee_profile, create one invoice
-// for the current period if it doesn't already exist. Returns { created, skipped }.
+// For each employee with a salary (from latest contract, falling back to employee
+// profile), create one invoice for the current period if it doesn't already
+// exist. Returns details of who was created, skipped, and who had no salary.
 export async function generateInvoicesForOrg(orgId, issueDate = new Date()) {
   await ensureInvoicesTable();
   const { start, end } = periodForIssueDate(issueDate);
   const issueIso = isoDate(issueDate);
 
-  // Non-client employees who have a salary set
-  const profiles = await prisma.$queryRawUnsafe(
-    "SELECT ep.userId, ep.salary " +
-    "FROM employee_profiles ep " +
-    "JOIN memberships m ON m.userId = ep.userId AND m.orgId = ep.orgId " +
-    "WHERE ep.orgId = ? AND m.role <> 'CLIENT' AND ep.salary IS NOT NULL AND ep.salary > 0",
-    orgId
-  ).catch(() => []);
+  const members = await resolveOrgSalaries(orgId);
+  const withSalary    = members.filter(m => m.salary > 0);
+  const missingSalary = members.filter(m => m.salary <= 0);
+
+  console.log(`[Invoices] org=${orgId}: ${members.length} members, ${withSalary.length} with salary (${withSalary.filter(m => m.source === 'contract').length} from contract, ${withSalary.filter(m => m.source === 'profile').length} from profile), ${missingSalary.length} missing`);
 
   let created = 0, skipped = 0;
-  for (const p of profiles) {
-    // Dedupe on (userId, orgId, periodStart, periodEnd)
+  for (const p of withSalary) {
     const exists = await prisma.$queryRawUnsafe(
       'SELECT id FROM invoices WHERE userId = ? AND orgId = ? AND periodStart = ? AND periodEnd = ? LIMIT 1',
       p.userId, orgId, isoDate(start), isoDate(end)
     ).catch(() => []);
     if (exists.length) { skipped++; continue; }
 
-    const salary = Number(p.salary);
-    const amount = +(salary / 2).toFixed(2);
+    const amount = +(p.salary / 2).toFixed(2);
     const leaves = await leavesInPeriod(p.userId, orgId, start, end);
 
-    await prisma.$executeRawUnsafe(
-      'INSERT INTO invoices (id, userId, orgId, periodStart, periodEnd, issueDate, salary, amount, leaveDays, leaveBreakdown, status, createdAt, updatedAt) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))',
-      randomUUID(), p.userId, orgId, isoDate(start), isoDate(end), issueIso,
-      salary, amount, leaves.count, leaves.breakdown.length ? JSON.stringify(leaves.breakdown) : null, 'ISSUED'
-    );
-    created++;
+    try {
+      await prisma.$executeRawUnsafe(
+        'INSERT INTO invoices (id, userId, orgId, periodStart, periodEnd, issueDate, salary, amount, leaveDays, leaveBreakdown, status, createdAt, updatedAt) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))',
+        randomUUID(), p.userId, orgId, isoDate(start), isoDate(end), issueIso,
+        p.salary, amount, leaves.count,
+        leaves.breakdown.length ? JSON.stringify(leaves.breakdown) : null, 'ISSUED'
+      );
+      created++;
+    } catch (e) {
+      console.error(`[Invoices] insert failed for ${p.userEmail}:`, e.message);
+    }
   }
 
-  console.log(`[Invoices] org=${orgId} period=${isoDate(start)}→${isoDate(end)} created=${created} skipped=${skipped}`);
-  return { created, skipped, periodStart: isoDate(start), periodEnd: isoDate(end) };
+  console.log(`[Invoices] ✅ org=${orgId} period=${isoDate(start)}→${isoDate(end)} created=${created} skipped=${skipped}`);
+  return {
+    created, skipped,
+    periodStart: isoDate(start),
+    periodEnd: isoDate(end),
+    totalEmployees: members.length,
+    employeesMissingSalary: missingSalary.map(m => ({ name: m.userName, email: m.userEmail })),
+  };
 }
 
 // ── Middleware: decide if user sees everyone or just themselves ─────────────
@@ -196,14 +234,22 @@ router.post('/', requireAuth, withOrgScope, requireRole('ACCOUNTANT'), async (re
     const end   = new Date(periodEnd);
     const issue = issueDate ? new Date(issueDate) : end;
 
-    // Pull salary from employee_profile if not provided
+    // Pull salary from latest contract (by email), falling back to employee_profile
     let salaryNum = salary != null ? Number(salary) : null;
     if (salaryNum == null) {
       const rows = await prisma.$queryRawUnsafe(
-        'SELECT salary FROM employee_profiles WHERE userId = ? AND orgId = ? LIMIT 1',
-        userId, req.orgId
+        "SELECT (SELECT ct.salary FROM contract_templates ct " +
+        "          WHERE ct.orgId = ? AND ct.salary IS NOT NULL AND LOWER(ct.employeeEmail) = LOWER(u.email) " +
+        "          ORDER BY ct.createdAt DESC LIMIT 1) AS contractSalary, " +
+        "       ep.salary AS profileSalary " +
+        "FROM `User` u " +
+        "LEFT JOIN employee_profiles ep ON ep.userId = u.id AND ep.orgId = ? " +
+        "WHERE u.id = ? LIMIT 1",
+        req.orgId, req.orgId, userId
       ).catch(() => []);
-      salaryNum = rows[0]?.salary != null ? Number(rows[0].salary) : 0;
+      const r = rows[0] || {};
+      salaryNum = r.contractSalary != null ? Number(r.contractSalary)
+                : r.profileSalary  != null ? Number(r.profileSalary)  : 0;
     }
     const amountNum = amount != null ? Number(amount) : +(salaryNum / 2).toFixed(2);
 

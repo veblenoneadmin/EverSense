@@ -70,12 +70,14 @@ router.get('/:id', requireAuth, withOrgScope, requireContractAccess, async (req,
 // ── POST /api/contracts — create new contract ────────────────────────────────
 router.post('/', requireAuth, withOrgScope, requireContractAccess, async (req, res) => {
   try {
-    const { title, content = '', status = 'draft', employeeEmail = null } = req.body;
+    const { title, content = '', status = 'draft', employeeEmail = null, salary = null } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
     const id = randomUUID();
+    const salaryNum = salary != null && salary !== '' ? Number(salary) : null;
     await prisma.$executeRawUnsafe(
-      'INSERT INTO contract_templates (id, orgId, title, content, status, employeeEmail, createdBy, updatedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      id, req.orgId, title.trim(), content, status, employeeEmail || null, req.user.id, req.user.id
+      'INSERT INTO contract_templates (id, orgId, title, content, status, employeeEmail, salary, createdBy, updatedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, req.orgId, title.trim(), content, status, employeeEmail || null,
+      isNaN(salaryNum) ? null : salaryNum, req.user.id, req.user.id
     );
     res.status(201).json({ success: true, id });
   } catch (err) {
@@ -87,12 +89,16 @@ router.post('/', requireAuth, withOrgScope, requireContractAccess, async (req, r
 // ── PUT /api/contracts/:id — update contract ─────────────────────────────────
 router.put('/:id', requireAuth, withOrgScope, requireContractAccess, async (req, res) => {
   try {
-    const { title, content, status } = req.body;
+    const { title, content, status, salary } = req.body;
     const sets = [];
     const vals = [];
     if (title !== undefined) { sets.push('title = ?'); vals.push(title.trim()); }
     if (content !== undefined) { sets.push('content = ?'); vals.push(content); }
     if (status !== undefined) { sets.push('status = ?'); vals.push(status); }
+    if (salary !== undefined) {
+      const n = salary == null || salary === '' ? null : Number(salary);
+      sets.push('salary = ?'); vals.push(n != null && !isNaN(n) ? n : null);
+    }
     sets.push('updatedBy = ?'); vals.push(req.user.id);
 
     await prisma.$executeRawUnsafe(

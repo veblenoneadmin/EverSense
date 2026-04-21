@@ -3494,6 +3494,9 @@ async function ensureContractTemplatesTable() {
     // Add signed contract snapshot columns
     try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD COLUMN signedContent LONGTEXT'); } catch (_) {}
     try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD COLUMN signedAt DATETIME(3)'); } catch (_) {}
+    // Structured salary column (the contract modal also writes it to the HTML blob; this
+    // column is what the invoice generator reads).
+    try { await prisma.$executeRawUnsafe('ALTER TABLE contract_templates ADD COLUMN salary DECIMAL(12,2) NULL'); } catch (_) {}
     console.log('  ✅ contract_templates table ready');
   } catch (e) { console.warn('  ⚠️  ensureContractTemplatesTable:', e.message); }
 }
