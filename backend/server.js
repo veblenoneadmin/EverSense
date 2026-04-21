@@ -33,6 +33,7 @@ import notificationsRoutes from './api/notifications.js';
 import firefliesRoutes, { startFirefliesPolling } from './api/fireflies.js';
 import eventsRoutes from './api/events.js';
 import leavesRoutes from './api/leaves.js';
+import invoicesRoutes from './api/invoices.js';
 import apikeysRoutes from './api/apikeys.js';
 import extRoutes from './api/ext.js';
 import integrationsRoutes from './api/integrations.js';
@@ -40,6 +41,7 @@ import superAdminRoutes, { logError } from './api/super-admin.js';
 import { startNotificationScheduler } from './services/notificationScheduler.js';
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler.js';
 import { startDailyPersonReportScheduler, runDailyPersonReportNow } from './services/dailyPersonReportScheduler.js';
+import { startInvoiceScheduler } from './services/invoiceScheduler.js';
 import { startAttendanceCron } from './lib/attendance-cron.js';
 import {
   blockPublicRegistration,
@@ -535,6 +537,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/fireflies', firefliesRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/leaves', leavesRoutes);
+app.use('/api/invoices', invoicesRoutes);
 app.use('/api/apikeys', apikeysRoutes);
 app.use('/api/ext', extApiLimiter, extRoutes);
 app.use('/api/integrations', integrationsRoutes);
@@ -3514,6 +3517,7 @@ async function startServer() {
   await ensureTaskTemplatesSchema();
   startRecurringTaskScheduler();
   startDailyPersonReportScheduler();
+  startInvoiceScheduler();
 
   // Inline attendance auto-clockout (runs directly in server process every minute)
   const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m production threshold

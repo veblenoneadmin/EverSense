@@ -29,6 +29,7 @@ import { EmployeeProfile } from './pages/EmployeeProfile';
 import { EmployeeDirectory } from './pages/EmployeeDirectory';
 import { Contracts } from './pages/Contracts';
 import { Leaves } from './pages/Leaves';
+import { Invoices } from './pages/Invoices';
 import { Landing } from './pages/Landing';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -94,6 +95,7 @@ function AppContent() {
                 <Route path="employee-directory" element={<EmployeeDirectory />} />
                 <Route path="contracts" element={<Contracts />} />
                 <Route path="leaves" element={<Leaves />} />
+                <Route path="invoices" element={<Invoices />} />
               </Route>
 
               <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Landing />} />

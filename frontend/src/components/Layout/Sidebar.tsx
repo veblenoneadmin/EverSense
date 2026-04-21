@@ -23,6 +23,7 @@ import {
   User,
   Landmark,
   FileSignature,
+  Receipt,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -47,6 +48,7 @@ const navItems = [
   { name: 'My Profile',     href: '#my-profile',  icon: User,            roles: ['ACCOUNTANT'], action: 'profile-modal' },
   { name: 'Employee Info',  href: '/employee-directory', icon: Landmark, roles: ['ACCOUNTANT'] },
   { name: 'Contracts',      href: '/contracts',   icon: FileSignature,   roles: ['ACCOUNTANT'] },
+  { name: 'Invoices',       href: '/invoices',    icon: Receipt,         roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
   { name: 'Estimates',      href: '/estimates-report', icon: Timer,      roles: ['OWNER', 'ADMIN'] },
   { name: 'Administration', href: '/admin',       icon: Shield,          roles: ['OWNER', 'ADMIN'] },
 ];
