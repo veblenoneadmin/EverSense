@@ -298,13 +298,68 @@ export function Tasks() {
 
   useEffect(() => { fetchTasks(); }, [session?.user?.id, currentOrg?.id, showAllTasks]);
 
+  // ── Sync our own task timer state from the backend (cross-device) ─────────
+  // When the user starts/stops a timer on another device, that device POSTs
+  // /api/tasks/timer/start|stop which updates active_timers and broadcasts SSE.
+  // Here we re-fetch the canonical active timer and mirror it into our local
+  // timerTaskId/timerStart state so the Kanban card highlight + Recording
+  // strip + play/stop button all reflect the other device's action.
+  const syncLocalTimerFromServer = useCallback(async () => {
+    if (!session?.user?.id || !currentOrg?.id) return;
+    try {
+      const data = await apiClient.fetch('/api/tasks/timer/active');
+      const t = data?.timer;
+      if (t?.taskId) {
+        // Another device is running this timer. Mirror it locally if different.
+        if (timerTaskId !== t.taskId || timerStart !== t.startedAt) {
+          if (timerInterval.current) { clearInterval(timerInterval.current); timerInterval.current = null; }
+          setTimerTaskId(t.taskId);
+          setTimerStart(t.startedAt);
+          localStorage.setItem('task_timer_active', JSON.stringify({ taskId: t.taskId, startTime: t.startedAt, title: t.title || null }));
+          localStorage.setItem('task_timer_start', String(t.startedAt));
+          window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: { taskId: t.taskId, startTime: t.startedAt, title: t.title || null } }));
+          timerInterval.current = setInterval(() => setTick(x => x + 1), 1000);
+        }
+      } else if (timerTaskId) {
+        // Backend says no timer, but local state thinks one is running — clear it.
+        if (timerInterval.current) { clearInterval(timerInterval.current); timerInterval.current = null; }
+        setTimerTaskId(null);
+        setTimerStart(null);
+        localStorage.removeItem('task_timer_active');
+        localStorage.removeItem('task_timer_start');
+        window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: null }));
+      }
+    } catch { /* non-fatal */ }
+  }, [session?.user?.id, currentOrg?.id, timerTaskId, timerStart]);
+
+  // Initial sync + refocus sync + 30s poll fallback (SSE handles near-real-time).
+  useEffect(() => {
+    syncLocalTimerFromServer();
+    const id = setInterval(syncLocalTimerFromServer, 30_000);
+    const onVis = () => { if (document.visibilityState === 'visible') syncLocalTimerFromServer(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onVis);
+    };
+  }, [syncLocalTimerFromServer]);
+
   // ── Real-time task updates via SSE ────────────────────────────────────────
   useSSE(currentOrg?.id || undefined, useCallback((event: string, data: any) => {
-    if (event === 'task' && data?.userId !== session?.user?.id) {
-      // Another user changed a task — silently refetch
-      fetchTasks(false);
+    if (event === 'task') {
+      // Timer-start/stop: always re-sync our own state (user could have the
+      // same account logged in on another device).
+      if (data?.action === 'timer-start' || data?.action === 'timer-stop') {
+        syncLocalTimerFromServer();
+      }
+      // Other task actions by other users — silently refetch the list.
+      if (data?.userId !== session?.user?.id && data?.action !== 'timer-start' && data?.action !== 'timer-stop') {
+        fetchTasks(false);
+      }
     }
-  }, [session?.user?.id]));
+  }, [session?.user?.id, syncLocalTimerFromServer])); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── fetch projects ─────────────────────────────────────────────────────────
   const fetchProjects = async () => {
