@@ -313,7 +313,7 @@ const MainLayout: React.FC = () => {
   const getInitials = (name: string) =>
     name.split(' ').map(n => n[0]?.toUpperCase()).filter(Boolean).join('').slice(0, 2) || 'U';
 
-  const pageTitle = pageTitles[location.pathname] ?? 'EverSense Ai';
+  const pageTitle = pageTitles[location.pathname] ?? '';
   const email = session?.user?.email ?? '';
   const displayName = session?.user?.name || email.split('@')[0] || 'User';
 
@@ -359,7 +359,7 @@ const MainLayout: React.FC = () => {
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          <h1 className="text-sm font-semibold" style={{ color: VS.text2 }}>{pageTitle}</h1>
+          {pageTitle && <h1 className="text-sm font-semibold" style={{ color: VS.text2 }}>{pageTitle}</h1>}
         </div>
 
         {/* Center — wall clock + attendance elapsed (absolutely centered, hidden on small screens) */}
