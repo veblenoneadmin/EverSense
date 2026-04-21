@@ -9,6 +9,11 @@
     <!-- Apple devices -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Force browsers to always re-validate the HTML shell so users get new JS
+         bundles immediately after a deploy. Bundled assets keep their hashed
+         filenames + long cache. -->
+    <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
     <title>EverSense Intelligent Platform</title>
   </head>
   <body>
