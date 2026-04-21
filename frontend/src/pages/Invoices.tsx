@@ -562,12 +562,12 @@ function CreateModal({ members, onClose, onCreated }: {
         </div>
 
         <div>
-          <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Monthly Salary</label>
+          <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Monthly Salary (PHP)</label>
           <input type="number" step="0.01" value={salary} onChange={e => setSalary(parseFloat(e.target.value) || 0)}
             className="w-full px-3 py-2 rounded-lg text-xs"
             style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
           <div className="text-[11px] mt-1" style={{ color: VS.text2 }}>
-            Invoice amount will be {fmtCurrency(salary / 2)} (½ month).
+            Converted to USD on the invoice. Invoice amount will be approximately {fmtCurrency((salary * 0.0175) / 2)} (½ month).
           </div>
         </div>
 

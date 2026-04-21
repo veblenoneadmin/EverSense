@@ -10,6 +10,10 @@ import { requireAuth, withOrgScope, requireRole } from '../lib/rbac.js';
 
 const router = express.Router();
 
+// Salaries on contracts are in PHP. Invoices are issued in USD.
+// Override via env var if the rate drifts — e.g. PHP_TO_USD=0.0172
+const PHP_TO_USD = parseFloat(process.env.PHP_TO_USD || '0.0175');
+
 // ── Lazy invoices table ───────────────────────────────────────────────────────
 let tableReady = false;
 export async function ensureInvoicesTable() {
@@ -151,7 +155,9 @@ export async function generateInvoicesForOrg(orgId, issueDate = new Date()) {
     ).catch(() => []);
     if (exists.length) { skipped++; continue; }
 
-    const amount = +(p.salary / 2).toFixed(2);
+    // Convert PHP → USD at generation time. salary/amount stored on invoice are USD.
+    const salaryUsd = +(p.salary * PHP_TO_USD).toFixed(2);
+    const amountUsd = +(salaryUsd / 2).toFixed(2);
     const leaves = await leavesInPeriod(p.userId, orgId, start, end);
 
     try {
@@ -159,7 +165,7 @@ export async function generateInvoicesForOrg(orgId, issueDate = new Date()) {
         'INSERT INTO invoices (id, userId, orgId, periodStart, periodEnd, issueDate, salary, amount, leaveDays, leaveBreakdown, status, createdAt, updatedAt) ' +
         'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))',
         randomUUID(), p.userId, orgId, isoDate(start), isoDate(end), issueIso,
-        p.salary, amount, leaves.count,
+        salaryUsd, amountUsd, leaves.count,
         leaves.breakdown.length ? JSON.stringify(leaves.breakdown) : null, 'ISSUED'
       );
       created++;
@@ -234,9 +240,10 @@ router.post('/', requireAuth, withOrgScope, requireRole('ACCOUNTANT'), async (re
     const end   = new Date(periodEnd);
     const issue = issueDate ? new Date(issueDate) : end;
 
-    // Pull salary from latest contract (by email), falling back to employee_profile
-    let salaryNum = salary != null ? Number(salary) : null;
-    if (salaryNum == null) {
+    // Pull salary (in PHP) from latest contract (by email), falling back to employee_profile.
+    // Input `salary` from the UI is also assumed to be PHP to stay consistent with contracts.
+    let salaryPhp = salary != null ? Number(salary) : null;
+    if (salaryPhp == null) {
       const rows = await prisma.$queryRawUnsafe(
         "SELECT (SELECT ct.salary FROM contract_templates ct " +
         "          WHERE ct.orgId = ? AND ct.salary IS NOT NULL AND LOWER(ct.employeeEmail) = LOWER(u.email) " +
@@ -248,9 +255,11 @@ router.post('/', requireAuth, withOrgScope, requireRole('ACCOUNTANT'), async (re
         req.orgId, req.orgId, userId
       ).catch(() => []);
       const r = rows[0] || {};
-      salaryNum = r.contractSalary != null ? Number(r.contractSalary)
+      salaryPhp = r.contractSalary != null ? Number(r.contractSalary)
                 : r.profileSalary  != null ? Number(r.profileSalary)  : 0;
     }
+    // Convert to USD for the invoice
+    const salaryNum = +(salaryPhp * PHP_TO_USD).toFixed(2);
     const amountNum = amount != null ? Number(amount) : +(salaryNum / 2).toFixed(2);
 
     const leaves = await leavesInPeriod(userId, req.orgId, start, end);
