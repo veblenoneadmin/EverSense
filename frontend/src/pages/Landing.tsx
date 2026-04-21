@@ -170,15 +170,13 @@ function Reveal({
   direction = 'up',
   delay = 0,
   className = '',
-  as: Tag = 'div',
 }: {
   children: React.ReactNode;
   direction?: 'up' | 'down' | 'left' | 'right' | 'fade';
   delay?: number;
   className?: string;
-  as?: keyof JSX.IntrinsicElements;
 }) {
-  const ref = useRef<HTMLElement | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
@@ -204,7 +202,7 @@ function Reveal({
     willChange: 'opacity, transform',
   };
 
-  return <Tag ref={ref as any} className={className} style={style}>{children}</Tag>;
+  return <div ref={ref} className={className} style={style}>{children}</div>;
 }
 
 export function Landing() {
