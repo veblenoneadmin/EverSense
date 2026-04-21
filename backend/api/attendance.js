@@ -107,23 +107,27 @@ async function handleClockIn(req, res) {
       return res.status(400).json({ error: 'Already clocked in', activeLog: existing });
     }
 
-    const now   = new Date();
-    const today = todayStr();
+    const now = new Date();
 
-    // Resume rule: if the user clocked out earlier today and total net
-    // time worked today is still under 8h, reopen the most recent log
-    // so it becomes one continuous session. The accidental gap between
-    // timeOut and this clock-in is added to breakDuration (unpaid).
-    const todaysLogs = await prisma.attendanceLog.findMany({
-      where: { userId, orgId, date: today },
+    // Resume rule: if the user clocked out recently (same work-day window)
+    // AND total net time worked in that window is still under 8h, reopen
+    // the most recent log so it becomes one continuous session. The
+    // accidental gap between timeOut and this clock-in is added to
+    // breakDuration (unpaid). Uses a 16h rolling window to tolerate
+    // UTC-midnight straddling and timezone differences.
+    const windowStart = new Date(now.getTime() - 16 * 3600 * 1000);
+    const recentLogs = await prisma.attendanceLog.findMany({
+      where: { userId, orgId, timeIn: { gte: windowStart } },
       orderBy: { timeIn: 'desc' },
     });
-    const netSecondsToday = todaysLogs.reduce((sum, l) => sum + (l.duration || 0), 0);
-    const mostRecent      = todaysLogs[0];
+    const netSecondsWindow = recentLogs.reduce((sum, l) => sum + (l.duration || 0), 0);
+    const mostRecent       = recentLogs[0];
 
-    if (mostRecent && mostRecent.timeOut && netSecondsToday < WORK_DAY) {
-      const gapSeconds   = Math.max(0, Math.floor((now.getTime() - new Date(mostRecent.timeOut).getTime()) / 1000));
-      const newBreak     = (mostRecent.breakDuration || 0) + gapSeconds;
+    console.log(`[Attendance] clock-in check for ${req.user.email}: recent=${recentLogs.length}, net=${Math.round(netSecondsWindow/60)}min, lastOut=${mostRecent?.timeOut || 'none'}`);
+
+    if (mostRecent && mostRecent.timeOut && netSecondsWindow < WORK_DAY) {
+      const gapSeconds = Math.max(0, Math.floor((now.getTime() - new Date(mostRecent.timeOut).getTime()) / 1000));
+      const newBreak   = (mostRecent.breakDuration || 0) + gapSeconds;
       await prisma.$executeRawUnsafe(
         `UPDATE attendance_logs SET timeOut = NULL, duration = 0, breakDuration = ?, updatedAt = NOW(3) WHERE id = ?`,
         newBreak, mostRecent.id
@@ -138,7 +142,7 @@ async function handleClockIn(req, res) {
     await prisma.$executeRawUnsafe(
       `INSERT INTO attendance_logs (id, userId, orgId, timeIn, duration, breakDuration, notes, date, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, 0, 0, ?, ?, NOW(3), NOW(3))`,
-      id, userId, orgId, now, notes || null, today
+      id, userId, orgId, now, notes || null, todayStr()
     );
 
     const log = await prisma.attendanceLog.findUnique({ where: { id } });
