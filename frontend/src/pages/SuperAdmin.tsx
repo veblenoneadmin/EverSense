@@ -489,6 +489,18 @@ function AttendanceLogs() {
     }
   };
 
+  const handleDeleteLog = async (id: string, who: string) => {
+    if (!window.confirm(`Delete attendance log for ${who}? This cannot be undone.`)) return;
+    try {
+      const res = await saFetch(`/api/super-admin/attendance-logs/${id}`, { method: 'DELETE' });
+      if (res.error) { showToast(res.error, false); return; }
+      setLogs(prev => prev.filter(l => l.id !== id));
+      showToast('Log deleted', true);
+    } catch {
+      showToast('Failed to delete', false);
+    }
+  };
+
   const handleClockIn = async () => {
     if (!clockInForm.userId || !clockInForm.timeIn) {
       showToast('User and clock-in time required', false);
@@ -567,12 +579,20 @@ function AttendanceLogs() {
                   <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.teal }}>{fmtDur(l.duration)}</td>
                   <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.text2 }}>{fmtDur(l.breakDuration)}</td>
                   <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => openEdit(l)}
-                      className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
-                      style={{ color: VS.accent }}
-                      title="Edit">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => openEdit(l)}
+                        className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                        style={{ color: VS.accent }}
+                        title="Edit">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteLog(l.id, l.userName || l.userEmail || l.userId)}
+                        className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                        style={{ color: VS.red }}
+                        title="Delete">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
