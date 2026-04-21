@@ -63,20 +63,30 @@ async function getOrgDailyReport(orgId, start, end) {
     ...taskIds
   ).catch(() => []);
 
-  // 4. Hours logged today per (userId, taskId)
+  // 4. Hours logged today per (userId, taskId).
+  // Computes overlap with [start, end] so a log's contribution is the time
+  // it actually spent in today's window — even if begin/end straddle midnight
+  // or the log is still open (end IS NULL).
   const logRows = await prisma.$queryRawUnsafe(
-    `SELECT userId, taskId, SUM(duration) as secs
+    `SELECT userId, taskId,
+            SUM(GREATEST(0, TIMESTAMPDIFF(
+              SECOND,
+              GREATEST(\`begin\`, ?),
+              LEAST(COALESCE(\`end\`, NOW(3)), ?)
+            ))) AS secs
        FROM time_logs
       WHERE orgId = ?
-        AND begin >= ? AND begin <= ?
         AND taskId IN (${ph})
+        AND \`begin\` <= ?
+        AND (\`end\` IS NULL OR \`end\` >= ?)
       GROUP BY userId, taskId`,
-    orgId, start, end, ...taskIds
-  ).catch(() => []);
+    start, end, orgId, ...taskIds, end, start
+  ).catch((e) => { console.error('[DailyPersonReport] time_logs query error:', e.message); return []; });
   const hoursMap = new Map(); // key = `${userId}:${taskId}` → hours
   for (const r of logRows) {
     hoursMap.set(`${r.userId}:${r.taskId}`, Number(r.secs || 0) / 3600);
   }
+  console.log(`[DailyPersonReport] time_logs overlap rows: ${logRows.length}`);
 
   // 5. Attribute each task to users who "finished" it today
   // owner + assignees-with-completed-status, deduped
