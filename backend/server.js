@@ -3524,9 +3524,21 @@ async function startServer() {
 
   // Inline attendance auto-clockout (runs directly in server process every minute)
   const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m production threshold
+  let tickCount = 0;
   async function runInlineClockout() {
     if (!process.env.DATABASE_URL) return;
     try {
+      // Every 10 ticks (~10 min), log open-session stats so we can confirm the cron is alive + see what's open.
+      tickCount++;
+      if (tickCount % 10 === 1) {
+        const open = await prisma.$queryRawUnsafe(
+          `SELECT al.id, al.userId, al.timeIn, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS ageSecs, u.email
+             FROM attendance_logs al LEFT JOIN \`User\` u ON u.id = al.userId
+            WHERE al.timeOut IS NULL ORDER BY al.timeIn ASC LIMIT 20`
+        ).catch(() => []);
+        console.log(`[InlineClockout] heartbeat: ${open.length} open session(s). Threshold=${AUTO_CLOCKOUT_SEC}s (9h30m).`);
+        open.forEach(o => console.log(`  · ${o.email} userId=${o.userId} ageSecs=${o.ageSecs} overdue=${Number(o.ageSecs) >= AUTO_CLOCKOUT_SEC}`));
+      }
       // Use TIMESTAMPDIFF with direct interpolation (no parameter binding = no BigInt issue)
       const overdue = await prisma.$queryRawUnsafe(
         `SELECT id, userId, orgId FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SEC}`
