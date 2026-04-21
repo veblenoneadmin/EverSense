@@ -428,8 +428,8 @@ function AttendanceLogs() {
   const openEdit = (l: AttLog) => {
     setEditing(l);
     setForm({
-      timeIn:  new Date(l.timeIn).toISOString().slice(0, 16),
-      timeOut: l.timeOut ? new Date(l.timeOut).toISOString().slice(0, 16) : '',
+      timeIn:  toLocalInput(new Date(l.timeIn)),
+      timeOut: l.timeOut ? toLocalInput(new Date(l.timeOut)) : '',
       breakMinutes: Math.round((l.breakDuration || 0) / 60),
       notes: l.notes || '',
     });
@@ -461,6 +461,13 @@ function AttendanceLogs() {
   const fmtDt = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-AU', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
   }) : '—';
+
+  // datetime-local inputs expect LOCAL time (not UTC). toISOString() returns UTC
+  // and makes the displayed value shift by the timezone offset.
+  const toLocalInput = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
   const fmtDur = (s: number) => {
     if (!s) return '—';
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -478,7 +485,7 @@ function AttendanceLogs() {
   const openClockIn = async () => {
     // Default timeIn = now (rounded to minute, local)
     const d = new Date(); d.setSeconds(0, 0);
-    setClockInForm({ userId: '', timeIn: d.toISOString().slice(0, 16), timeOut: '', breakMinutes: 0, notes: '' });
+    setClockInForm({ userId: '', timeIn: toLocalInput(d), timeOut: '', breakMinutes: 0, notes: '' });
     setShowClockIn(true);
     // Lazy-load users
     if (usersList.length === 0) {
