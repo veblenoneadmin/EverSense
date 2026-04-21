@@ -195,6 +195,58 @@ router.post('/', requireAuth, withOrgScope, async (req, res) => {
   }
 });
 
+// ── PATCH /api/user-reports/:id ──────────────────────────────────────────────
+// Update title/description/projectId/image. Owner of the report can edit their own;
+// privileged roles can edit any report in the org.
+router.patch('/:id', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const orgId  = req.orgId;
+
+    const role         = await getRole(userId, orgId);
+    const isPrivileged = role === 'OWNER' || role === 'ADMIN' || role === 'HALL_OF_JUSTICE' || role === 'ACCOUNTANT';
+
+    const checkSql = isPrivileged
+      ? `SELECT id FROM reports WHERE id = ? AND orgId = ? LIMIT 1`
+      : `SELECT id FROM reports WHERE id = ? AND orgId = ? AND userId = ? LIMIT 1`;
+    const checkParams = isPrivileged ? [id, orgId] : [id, orgId, userId];
+    const rows = await prisma.$queryRawUnsafe(checkSql, ...checkParams);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Report not found or access denied' });
+
+    const { title, description, projectId, image } = req.body;
+
+    if (description !== undefined && !String(description).trim()) {
+      return res.status(400).json({ success: false, error: 'Description cannot be empty' });
+    }
+
+    if (projectId) {
+      const pRows = await prisma.$queryRawUnsafe(
+        `SELECT id FROM projects WHERE id = ? AND orgId = ? LIMIT 1`, projectId, orgId
+      );
+      if (!pRows.length) return res.status(400).json({ success: false, error: 'Project not found in this organization' });
+    }
+
+    const sets = [];
+    const vals = [];
+    if (title !== undefined)       { sets.push('title = ?');       vals.push(title?.trim() || null); }
+    if (description !== undefined) { sets.push('description = ?'); vals.push(String(description).trim()); }
+    if (projectId !== undefined)   { sets.push('projectId = ?');   vals.push(projectId || null); }
+    if (image !== undefined)       { sets.push('image = ?');       vals.push(image || null); }
+    if (!sets.length) return res.json({ success: true });
+
+    sets.push('updatedAt = NOW()');
+    await prisma.$executeRawUnsafe(
+      `UPDATE reports SET ${sets.join(', ')} WHERE id = ?`,
+      ...vals, id
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('PATCH /api/user-reports/:id error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── DELETE /api/user-reports/:id ─────────────────────────────────────────────
 router.delete('/:id', requireAuth, withOrgScope, async (req, res) => {
   try {

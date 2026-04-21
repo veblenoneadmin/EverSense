@@ -4,7 +4,7 @@ import { useApiClient } from '../lib/api-client';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { createPortal } from 'react-dom';
 import {
-  FileText, Plus, Users, X, Save, Trash2,
+  FileText, Plus, Users, X, Save, Trash2, Pencil,
   Calendar, Search, Clock, TrendingUp, FolderOpen, AlertCircle,
   Paperclip, File, ChevronLeft, ChevronRight,
 } from 'lucide-react';
@@ -77,17 +77,23 @@ function Avatar({ name, image, size = 26 }: { name: string; image?: string | nul
 }
 
 // ── Create Report Modal ───────────────────────────────────────────────────────
-function CreateModal({ projects, onClose, onCreated }: {
+function CreateModal({ projects, onClose, onCreated, editingReport }: {
   projects: ProjectItem[];
   onClose: () => void;
   onCreated: () => void;
+  editingReport?: Report | null;
 }) {
   const { data: session }   = useSession();
   const api                 = useApiClient();
-  const [name, setName]       = useState(session?.user?.name || (session?.user as any)?.email?.split('@')[0] || '');
-  const [project, setProject] = useState('');
-  const [desc, setDesc]       = useState('');
-  const [attachments, setAttachments] = useState<{ name: string; type: string; dataUrl: string }[]>([]);
+  const isEdit = !!editingReport;
+  const [name, setName]       = useState(
+    editingReport?.userName || session?.user?.name || (session?.user as any)?.email?.split('@')[0] || ''
+  );
+  const [project, setProject] = useState(editingReport?.project?.id || '');
+  const [desc, setDesc]       = useState(editingReport?.description || '');
+  const [attachments, setAttachments] = useState<{ name: string; type: string; dataUrl: string }[]>(
+    editingReport ? parseAttachments(editingReport.image) : []
+  );
   const [lightbox, setLightbox] = useState<number | null>(null); // index into attachments
   const [saving, setSaving]   = useState(false);
   const [err, setErr]         = useState('');
@@ -118,16 +124,16 @@ function CreateModal({ projects, onClose, onCreated }: {
     setErr('');
     try {
       const projName = projects.find(p => p.id === project)?.name;
-      const res = await api.fetch('/api/user-reports', {
-        method: 'POST',
-        body: JSON.stringify({
-          title:       projName ? `${projName} — Report` : undefined,
-          description: desc.trim(),
-          userName:    name.trim(),
-          image:       attachments.length > 0 ? JSON.stringify(attachments) : undefined,
-          projectId:   project || undefined,
-        }),
-      });
+      const url    = isEdit ? `/api/user-reports/${editingReport!.id}` : '/api/user-reports';
+      const method = isEdit ? 'PATCH' : 'POST';
+      const body: any = {
+        title:       projName ? `${projName} — Report` : null,
+        description: desc.trim(),
+        image:       attachments.length > 0 ? JSON.stringify(attachments) : null,
+        projectId:   project || null,
+      };
+      if (!isEdit) body.userName = name.trim();
+      const res = await api.fetch(url, { method, body: JSON.stringify(body) });
       if (!res.success) throw new Error(res.error || 'Failed to save');
       onCreated();
       onClose();
@@ -150,7 +156,7 @@ function CreateModal({ projects, onClose, onCreated }: {
         <div style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}`, padding: '16px 22px', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <FileText size={16} style={{ color: VS.blue }} />
-            <span style={{ fontSize: 15, fontWeight: 600, color: VS.text0 }}>Create Report</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: VS.text0 }}>{isEdit ? 'Edit Report' : 'Create Report'}</span>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: VS.text2, cursor: 'pointer', padding: 4, display: 'flex' }}>
             <X size={18} />
@@ -299,7 +305,7 @@ function CreateModal({ projects, onClose, onCreated }: {
             </button>
             <button type="submit" disabled={saving || !name.trim() || !desc.trim()}
               style={{ background: VS.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving || !name.trim() || !desc.trim() ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Save size={14} />{saving ? 'Saving…' : 'Submit Report'}
+              <Save size={14} />{saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Submit Report')}
             </button>
           </div>
         </form>
@@ -378,9 +384,10 @@ function ReportAttachments({ attachments }: { attachments: Attachment[] }) {
 }
 
 // ── Report Detail Modal ───────────────────────────────────────────────────────
-function DetailModal({ report, isPrivileged, onClose, onDelete, session }: {
+function DetailModal({ report, isPrivileged, onClose, onDelete, onEdit, session }: {
   report: Report;
   isPrivileged: boolean;
+  onEdit: (r: Report) => void;
   onClose: () => void;
   onDelete: (id: string) => void;
   session: any;
@@ -414,6 +421,16 @@ function DetailModal({ report, isPrivileged, onClose, onDelete, session }: {
             </h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {(isPrivileged || isOwn) && (
+              <button
+                onClick={() => onEdit(report)}
+                style={{ background: 'transparent', border: `1px solid ${VS.border}`, color: VS.text2, cursor: 'pointer', padding: '5px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = VS.accent; (e.currentTarget as HTMLButtonElement).style.borderColor = VS.accent; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = VS.text2; (e.currentTarget as HTMLButtonElement).style.borderColor = VS.border; }}
+              >
+                <Pencil size={13} />Edit
+              </button>
+            )}
             {(isPrivileged || isOwn) && (
               <button
                 onClick={() => { onDelete(report.id); onClose(); }}
@@ -486,6 +503,7 @@ export function Reports() {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
   const [showModal, setShowModal]           = useState(false);
+  const [editingReport, setEditingReport]   = useState<Report | null>(null);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
   // Filters
@@ -689,12 +707,22 @@ export function Reports() {
                     </div>
                   </div>
                   {(isPrivileged || isOwn) && (
-                    <button onClick={e => { e.stopPropagation(); handleDelete(report.id); }}
-                      style={{ background: 'transparent', border: 'none', color: VS.text2, cursor: 'pointer', padding: 4, borderRadius: 4, display: 'flex', flexShrink: 0 }}
-                      onMouseEnter={e => (e.currentTarget.style.color = VS.red)}
-                      onMouseLeave={e => (e.currentTarget.style.color = VS.text2)}>
-                      <Trash2 size={13} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                      <button onClick={e => { e.stopPropagation(); setEditingReport(report); }}
+                        style={{ background: 'transparent', border: 'none', color: VS.text2, cursor: 'pointer', padding: 4, borderRadius: 4, display: 'flex' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = VS.accent)}
+                        onMouseLeave={e => (e.currentTarget.style.color = VS.text2)}
+                        title="Edit report">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); handleDelete(report.id); }}
+                        style={{ background: 'transparent', border: 'none', color: VS.text2, cursor: 'pointer', padding: 4, borderRadius: 4, display: 'flex' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = VS.red)}
+                        onMouseLeave={e => (e.currentTarget.style.color = VS.text2)}
+                        title="Delete report">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -747,10 +775,11 @@ export function Reports() {
         </div>
       )}
 
-      {showModal && (
+      {(showModal || editingReport) && (
         <CreateModal
           projects={projects}
-          onClose={() => setShowModal(false)}
+          editingReport={editingReport}
+          onClose={() => { setShowModal(false); setEditingReport(null); }}
           onCreated={fetchReports}
         />
       )}
@@ -762,6 +791,7 @@ export function Reports() {
           session={session}
           onClose={() => setSelectedReport(null)}
           onDelete={id => { handleDelete(id); setSelectedReport(null); }}
+          onEdit={r => { setSelectedReport(null); setEditingReport(r); }}
         />
       )}
     </div>
