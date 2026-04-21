@@ -17,6 +17,7 @@ interface Contract {
   title: string;
   content: string;
   status: string;
+  salary?: number | string | null;
   createdAt: string;
   updatedAt: string;
   createdByName: string | null;
@@ -124,6 +125,7 @@ export function Contracts() {
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editStatus, setEditStatus] = useState('draft');
+  const [editSalary, setEditSalary] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
   // New contract
@@ -239,6 +241,7 @@ export function Contracts() {
     setEditTitle(c.title);
     setEditContent(c.content || '');
     setEditStatus(c.status);
+    setEditSalary(c.salary != null && c.salary !== '' ? String(c.salary) : '');
   };
 
   const handleSave = async () => {
@@ -247,7 +250,12 @@ export function Contracts() {
     try {
       await apiClient.fetch(`/api/contracts/${editing.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ title: editTitle, content: editContent, status: editStatus }),
+        body: JSON.stringify({
+          title: editTitle,
+          content: editContent,
+          status: editStatus,
+          salary: editSalary === '' ? null : Number(editSalary),
+        }),
       });
       showToast('Contract saved');
       fetchContracts();
@@ -295,6 +303,19 @@ export function Contracts() {
             <option value="active">Active</option>
             <option value="archived">Archived</option>
           </select>
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+            style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}
+            title="Monthly salary — read by the invoice generator">
+            <span className="text-[11px] font-semibold" style={{ color: VS.text2 }}>Salary</span>
+            <input
+              type="number" step="0.01" min="0"
+              value={editSalary}
+              onChange={e => setEditSalary(e.target.value)}
+              placeholder="0.00"
+              className="w-24 px-2 py-0.5 rounded text-[12px] text-right focus:outline-none"
+              style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text0 }}
+            />
+          </div>
           <button onClick={handleSave} disabled={saving}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-semibold disabled:opacity-50 transition-all hover:opacity-90"
             style={{ background: VS.accent, color: '#fff' }}>
