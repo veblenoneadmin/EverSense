@@ -62,6 +62,17 @@ const MainLayout: React.FC = () => {
   const [attendanceActive, setAttendanceActive] = useState<{ timeIn: string } | null>(null);
   const [navOnBreak, setNavOnBreak] = useState(false);
   const [navElapsed, setNavElapsed] = useState(0);
+
+  // Active task timer (shown as a pill in the navbar while any task timer is running)
+  const [taskTimer, setTaskTimer] = useState<{ taskId: string; startTime: number; title: string | null } | null>(() => {
+    try {
+      const raw = localStorage.getItem('task_timer_active');
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      return obj?.taskId ? { taskId: obj.taskId, startTime: obj.startTime, title: obj.title || null } : null;
+    } catch { return null; }
+  });
+  const [taskTimerElapsed, setTaskTimerElapsed] = useState(0);
   const navTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -185,6 +196,50 @@ const MainLayout: React.FC = () => {
     const id = setInterval(() => setCurrentTime(nowClock()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Active task timer — react to cross-page changes + tick the elapsed time
+  useEffect(() => {
+    const readFromStorage = () => {
+      try {
+        const raw = localStorage.getItem('task_timer_active');
+        if (!raw) return setTaskTimer(null);
+        const obj = JSON.parse(raw);
+        if (obj?.taskId && obj?.startTime) {
+          setTaskTimer({ taskId: obj.taskId, startTime: obj.startTime, title: obj.title || null });
+        } else {
+          setTaskTimer(null);
+        }
+      } catch { setTaskTimer(null); }
+    };
+    const onChange = () => readFromStorage();
+    window.addEventListener('task-timer-changed', onChange);
+    window.addEventListener('storage', onChange); // cross-tab sync
+    readFromStorage();
+    return () => {
+      window.removeEventListener('task-timer-changed', onChange);
+      window.removeEventListener('storage', onChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!taskTimer) { setTaskTimerElapsed(0); return; }
+    const tick = () => setTaskTimerElapsed(Math.max(0, Math.floor((Date.now() - taskTimer.startTime) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [taskTimer]);
+
+  // Fetch the running task title if we only have the id (so the pill shows a name)
+  useEffect(() => {
+    if (!taskTimer || taskTimer.title) return;
+    let cancelled = false;
+    fetch(`/api/tasks/${taskTimer.taskId}`).then(r => r.ok ? r.json() : null).then(d => {
+      if (!cancelled && d?.task?.title) {
+        setTaskTimer(prev => prev ? { ...prev, title: d.task.title } : prev);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [taskTimer?.taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch attendance status
   const fetchStatus = useCallback(async () => {
@@ -359,7 +414,25 @@ const MainLayout: React.FC = () => {
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          {pageTitle && <h1 className="text-sm font-semibold" style={{ color: VS.text2 }}>{pageTitle}</h1>}
+          {pageTitle && <h1 className="text-sm font-semibold hidden sm:block" style={{ color: VS.text2 }}>{pageTitle}</h1>}
+          {taskTimer && (
+            <button
+              onClick={() => navigate('/tasks')}
+              title={taskTimer.title ? `Running task: ${taskTimer.title}` : 'Task timer running'}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-opacity hover:opacity-90"
+              style={{ background: `${VS.teal}22`, border: `1px solid ${VS.teal}55` }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0" style={{ background: VS.teal }} />
+              <span className="text-[12px] font-mono font-bold tabular-nums" style={{ color: VS.teal }}>
+                {fmtElapsed(taskTimerElapsed)}
+              </span>
+              {taskTimer.title && (
+                <span className="text-[11px] truncate max-w-[120px] sm:max-w-[180px]" style={{ color: VS.text1 }}>
+                  {taskTimer.title}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Center — wall clock + attendance elapsed (absolutely centered, hidden on small screens) */}

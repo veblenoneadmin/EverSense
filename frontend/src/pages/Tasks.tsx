@@ -523,8 +523,10 @@ export function Tasks() {
     const startTime = Date.now();
     setTimerTaskId(taskId);
     setTimerStart(startTime);
-    localStorage.setItem('task_timer_active', JSON.stringify({ taskId, startTime }));
+    const title = tasks.find(t => t.id === taskId)?.title || null;
+    localStorage.setItem('task_timer_active', JSON.stringify({ taskId, startTime, title }));
     localStorage.setItem('task_timer_start', String(startTime));
+    window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: { taskId, startTime, title } }));
     timerInterval.current = setInterval(() => setTick(t => t + 1), 1000);
     // Notify backend so admins can see this timer
     apiClient.fetch('/api/tasks/timer/start', {
@@ -556,6 +558,7 @@ export function Tasks() {
     })();
     localStorage.removeItem('task_timer_active');
     localStorage.removeItem('task_timer_start');
+    window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: null }));
 
     const effectiveStart = storedStart ?? timerStart;
     const elapsed = effectiveStart !== null ? Math.floor((Date.now() - effectiveStart) / 1000) : 0;
@@ -1763,10 +1766,14 @@ export function Tasks() {
                           </div>
                         </div>
 
-                        {/* ── Centered hover timer button ── */}
+                        {/* ── Centered timer button (hover on desktop, always visible on mobile or when running) ── */}
                         {userRole !== 'CLIENT' && (
                           <div
-                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none"
+                            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 z-10 pointer-events-none ${
+                              timerTaskId === task.id
+                                ? 'opacity-100'
+                                : 'sm:opacity-0 sm:group-hover:opacity-100 opacity-100'
+                            }`}
                           >
                             <span
                               onClick={e => { e.stopPropagation(); if (timerTaskId === task.id) { handleStopTimer(task.id); } else { handleMoveToInProgress(task.id); handleStartTimer(task.id); } }}
