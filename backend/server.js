@@ -2453,8 +2453,20 @@ function generateSimpleId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Serve static files from frontend dist directory
-app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
+// Serve static files from frontend dist directory. Hashed bundle assets
+// (index-abc123.js / index-abc123.css) are immutable — cache them hard.
+// index.html must revalidate every load so clients pick up new deploys.
+app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (/\.(js|css|woff2?|png|jpg|jpeg|svg|webp|ico)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 
 // Auth configuration endpoint
 app.get('/api/auth-config', (req, res) => {
@@ -3144,6 +3156,9 @@ app.get('*', (req, res) => {
     return res.json({ status: 'ok', service: 'vebtask', timestamp: new Date() });
   }
   
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
 });
 
