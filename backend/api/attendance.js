@@ -107,12 +107,38 @@ async function handleClockIn(req, res) {
       return res.status(400).json({ error: 'Already clocked in', activeLog: existing });
     }
 
-    const id  = randomUUID();
-    const now = new Date();
+    const now   = new Date();
+    const today = todayStr();
+
+    // Resume rule: if the user clocked out earlier today and total net
+    // time worked today is still under 8h, reopen the most recent log
+    // so it becomes one continuous session. The accidental gap between
+    // timeOut and this clock-in is added to breakDuration (unpaid).
+    const todaysLogs = await prisma.attendanceLog.findMany({
+      where: { userId, orgId, date: today },
+      orderBy: { timeIn: 'desc' },
+    });
+    const netSecondsToday = todaysLogs.reduce((sum, l) => sum + (l.duration || 0), 0);
+    const mostRecent      = todaysLogs[0];
+
+    if (mostRecent && mostRecent.timeOut && netSecondsToday < WORK_DAY) {
+      const gapSeconds   = Math.max(0, Math.floor((now.getTime() - new Date(mostRecent.timeOut).getTime()) / 1000));
+      const newBreak     = (mostRecent.breakDuration || 0) + gapSeconds;
+      await prisma.$executeRawUnsafe(
+        `UPDATE attendance_logs SET timeOut = NULL, duration = 0, breakDuration = ?, updatedAt = NOW(3) WHERE id = ?`,
+        newBreak, mostRecent.id
+      );
+      const log = await prisma.attendanceLog.findUnique({ where: { id: mostRecent.id } });
+      console.log(`[Attendance] ▶ Resumed log for ${req.user.email} — gap ${Math.round(gapSeconds / 60)}min added to break`);
+      broadcast(orgId, 'attendance', { action: 'clock-in', userId });
+      return res.status(200).json({ message: 'Resumed previous session', log, resumed: true });
+    }
+
+    const id = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO attendance_logs (id, userId, orgId, timeIn, duration, breakDuration, notes, date, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, 0, 0, ?, ?, NOW(3), NOW(3))`,
-      id, userId, orgId, now, notes || null, todayStr()
+      id, userId, orgId, now, notes || null, today
     );
 
     const log = await prisma.attendanceLog.findUnique({ where: { id } });
