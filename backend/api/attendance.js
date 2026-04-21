@@ -7,8 +7,23 @@ import { broadcast } from '../lib/sse.js';
 
 const router = express.Router();
 
-const BREAK_LIMIT = 1800;  // 30 minutes in seconds
+const BREAK_LIMIT = 3600;  // 60 minutes (default) — overridable per org via org_integrations
 const WORK_DAY    = 8 * 3600; // 8-hour standard day in seconds
+
+// Resolve the effective break limit for an org (per-org policy or fallback default).
+async function getOrgBreakLimitSecs(orgId) {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      "SELECT `value` FROM org_integrations WHERE orgId = ? AND `key` = 'break_limit_secs' LIMIT 1",
+      orgId
+    );
+    if (rows.length && rows[0].value != null) {
+      const n = parseInt(rows[0].value);
+      if (!isNaN(n) && n >= 0) return n;
+    }
+  } catch { /* table missing or other — fall back to default */ }
+  return BREAK_LIMIT;
+}
 
 // ── One-time startup: create attendance_logs table and ensure columns ─────────
 async function ensureAttendanceTable() {
@@ -437,12 +452,15 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
       console.log(`[Attendance] leaves fetched: ${rawLeaves.length} record(s) for orgId=${orgId}`);
     } catch (e) { console.error('[Attendance] leaves fetch failed:', e.message); }
 
+    const breakLimitSecs = await getOrgBreakLimitSecs(orgId);
+
     return res.json({
       role,
       isPrivileged: showTeamView,
       allMembers,
       leaves,
-      logs: logs.map(l => formatLog(l, usersMap[l.userId], roleMap[l.userId] || role)),
+      breakLimitSecs,
+      logs: logs.map(l => formatLog(l, usersMap[l.userId], roleMap[l.userId] || role, breakLimitSecs)),
     });
   } catch (err) {
     console.error('[Attendance] logs error:', err);
@@ -451,9 +469,9 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
 });
 
 // ── Format a log record for the API response ──────────────────────────────────
-function formatLog(log, user, memberRole) {
+function formatLog(log, user, memberRole, breakLimitSecs = BREAK_LIMIT) {
   const breakDuration = log.breakDuration || 0;
-  const overBreak     = Math.max(0, breakDuration - BREAK_LIMIT);
+  const overBreak     = Math.max(0, breakDuration - breakLimitSecs);
   const overtime      = log.timeOut ? Math.max(0, (log.duration || 0) - WORK_DAY) : 0;
   const durationMins  = log.duration ? Math.round(log.duration / 60) : null;
 
@@ -570,7 +588,7 @@ router.get('/policy', requireAuth, withOrgScope, async (req, res) => {
     );
     const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
     res.json({
-      breakLimitSecs:    parseInt(map.break_limit_secs   ?? '1800'),
+      breakLimitSecs:    parseInt(map.break_limit_secs   ?? '3600'),
       breakCountPerDay:  parseInt(map.break_count_per_day ?? '1'),
     });
   } catch (e) {
@@ -591,7 +609,7 @@ router.put('/policy', requireAuth, withOrgScope, async (req, res) => {
     }
 
     const { breakLimitSecs, breakCountPerDay } = req.body;
-    const limitSecs = Math.max(0, parseInt(breakLimitSecs) || 1800);
+    const limitSecs = Math.max(0, parseInt(breakLimitSecs) || 3600);
     const countDay  = Math.max(1, parseInt(breakCountPerDay) || 1);
 
     const upsert = async (key, value) => {
