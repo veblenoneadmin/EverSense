@@ -10,7 +10,7 @@ import {
   Clock, LogIn, LogOut, CheckCircle2, Timer, AlertTriangle,
   FolderOpen, Users, TrendingUp, TrendingDown, Minus,
   CheckSquare, BarChart3, ArrowRight, Circle,
-  Target, Zap, CalendarClock, Activity,
+  Target, Zap, CalendarClock, Activity, CalendarDays, Check, X as XIcon,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -109,6 +109,8 @@ export function Dashboard() {
 
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
+  const isLeaveApprover = ['OWNER', 'ADMIN', 'HALL_OF_JUSTICE'].includes(currentOrg?.role || '');
 
   // ── Attendance state ───────────────────────────────────────────────────────
   const [attendanceActive, setAttendanceActive] = useState<{ id: string; timeIn: string } | null>(null);
@@ -192,6 +194,33 @@ export function Dashboard() {
   }, [session?.user?.id, currentOrg?.id]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  // Pending leave requests (approvers only) — list + actions live on the dashboard.
+  const fetchPendingLeaves = useCallback(async () => {
+    if (!isLeaveApprover || !currentOrg?.id) return;
+    try {
+      const res = await fetch('/api/leaves/pending', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPendingLeaves(Array.isArray(data.leaves) ? data.leaves : []);
+    } catch { /* ignore */ }
+  }, [isLeaveApprover, currentOrg?.id]);
+
+  useEffect(() => { fetchPendingLeaves(); }, [fetchPendingLeaves]);
+
+  const handleLeaveAction = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+    setPendingLeaves(prev => prev.filter(l => l.id !== id)); // optimistic
+    try {
+      await fetch(`/api/leaves/${id}/status`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    } catch {
+      fetchPendingLeaves(); // restore on error
+    }
+  };
 
   // ── Re-fetch attendance when cron auto-clocks out (SSE or window event) ───
   const fetchAttendance = useCallback(async () => {
@@ -712,6 +741,64 @@ export function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pending Leaves — approvers only */}
+          {isLeaveApprover && pendingLeaves.length > 0 && (
+            <div
+              className="rounded-xl p-5"
+              style={{ background: VS.bg1, border: `1px solid ${VS.accent}33` }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <CalendarDays className="h-4 w-4" style={{ color: VS.accent }} />
+                <h2 className="text-[13px] font-bold" style={{ color: VS.text0 }}>Pending Leave Approvals</h2>
+                <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: `${VS.accent}22`, color: VS.accent }}>
+                  {pendingLeaves.length}
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {pendingLeaves.slice(0, 4).map((l: any) => (
+                  <div key={l.id} className="rounded-lg p-3" style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[12px] font-semibold" style={{ color: VS.text0 }}>{l.userName || l.userEmail}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold capitalize"
+                        style={{ background: l.type === 'sick' ? `${VS.purple}22` : `${VS.teal}22`, color: l.type === 'sick' ? VS.purple : VS.teal }}>
+                        {l.type}
+                      </span>
+                    </div>
+                    <div className="text-[11px] mb-2" style={{ color: VS.text2 }}>
+                      {new Date(l.startDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                      {' → '}
+                      {new Date(l.endDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                      {' · '}{l.days} day{l.days > 1 ? 's' : ''}
+                    </div>
+                    {l.reason && <div className="text-[11px] italic mb-2" style={{ color: VS.text1 }}>{l.reason}</div>}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleLeaveAction(l.id, 'APPROVED')}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-opacity"
+                        style={{ background: `${VS.teal}22`, color: VS.teal, border: `1px solid ${VS.teal}55` }}>
+                        <Check className="h-3 w-3" /> Approve
+                      </button>
+                      <button
+                        onClick={() => handleLeaveAction(l.id, 'REJECTED')}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-opacity"
+                        style={{ background: `${VS.red}22`, color: VS.red, border: `1px solid ${VS.red}55` }}>
+                        <XIcon className="h-3 w-3" /> Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {pendingLeaves.length > 4 && (
+                  <button onClick={() => navigate('/leaves')}
+                    className="w-full text-center text-[11px] py-1.5 rounded-md transition-opacity"
+                    style={{ color: VS.accent, background: `${VS.accent}10`, border: `1px solid ${VS.accent}22` }}>
+                    View all {pendingLeaves.length} pending →
+                  </button>
+                )}
               </div>
             </div>
           )}
