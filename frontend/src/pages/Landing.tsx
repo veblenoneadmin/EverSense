@@ -162,6 +162,51 @@ function InteractiveHero() {
   );
 }
 
+// Reveal-on-scroll wrapper — fades + translates children into view once they
+// intersect the viewport. Supports directions and per-element delays so a
+// block can stagger its children.
+function Reveal({
+  children,
+  direction = 'up',
+  delay = 0,
+  className = '',
+  as: Tag = 'div',
+}: {
+  children: React.ReactNode;
+  direction?: 'up' | 'down' | 'left' | 'right' | 'fade';
+  delay?: number;
+  className?: string;
+  as?: keyof JSX.IntrinsicElements;
+}) {
+  const ref = useRef<HTMLElement | null>(null);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      entries => {
+        entries.forEach(e => { if (e.isIntersecting) { setShown(true); io.disconnect(); } });
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -8% 0px' }
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+
+  const offset = { up: 'translate3d(0, 28px, 0)', down: 'translate3d(0, -28px, 0)',
+    left: 'translate3d(28px, 0, 0)', right: 'translate3d(-28px, 0, 0)', fade: 'none' }[direction];
+
+  const style: React.CSSProperties = {
+    opacity: shown ? 1 : 0,
+    transform: shown ? 'none' : offset,
+    transition: `opacity 650ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms, transform 650ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms`,
+    willChange: 'opacity, transform',
+  };
+
+  return <Tag ref={ref as any} className={className} style={style}>{children}</Tag>;
+}
+
 export function Landing() {
   // Parallax tracking: mouse movement + scroll position for a layered depth effect
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
@@ -278,37 +323,40 @@ export function Landing() {
 
       {/* Features grid */}
       <section id="features" className="relative z-10 px-6 md:px-12 py-16 max-w-6xl mx-auto">
-        <div className="text-center mb-12">
+        <Reveal direction="up" className="text-center mb-12 block">
           <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: VS.accent }}>Everything you need</p>
           <h2 className="text-[28px] md:text-[36px] font-bold" style={{ color: VS.text0 }}>Built for how agencies actually work</h2>
-        </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="rounded-xl p-5 transition-all hover:translate-y-[-2px]"
-              style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-              <div className="h-10 w-10 rounded-lg flex items-center justify-center mb-3"
-                style={{ background: `${f.color}18`, border: `1px solid ${f.color}33` }}>
-                <f.icon className="h-5 w-5" style={{ color: f.color }} />
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} direction="up" delay={i * 80}>
+              <div className="rounded-xl p-5 transition-all hover:translate-y-[-2px]"
+                style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+                <div className="h-10 w-10 rounded-lg flex items-center justify-center mb-3"
+                  style={{ background: `${f.color}18`, border: `1px solid ${f.color}33` }}>
+                  <f.icon className="h-5 w-5" style={{ color: f.color }} />
+                </div>
+                <h3 className="text-[15px] font-bold mb-1.5" style={{ color: VS.text0 }}>{f.title}</h3>
+                <p className="text-[13px]" style={{ color: VS.text2, lineHeight: 1.6 }}>{f.desc}</p>
               </div>
-              <h3 className="text-[15px] font-bold mb-1.5" style={{ color: VS.text0 }}>{f.title}</h3>
-              <p className="text-[13px]" style={{ color: VS.text2, lineHeight: 1.6 }}>{f.desc}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* Interface Preview — look and feel */}
       <section className="relative z-10 px-6 md:px-12 py-16 max-w-6xl mx-auto">
-        <div className="text-center mb-10">
+        <Reveal direction="up" className="text-center mb-10 block">
           <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: VS.teal }}>Look & Feel</p>
           <h2 className="text-[28px] md:text-[36px] font-bold mb-3" style={{ color: VS.text0 }}>A developer-inspired interface</h2>
           <p className="text-[14px] max-w-2xl mx-auto" style={{ color: VS.text2 }}>
             VS Code dark theme, keyboard-friendly navigation, monospace accents. Fast, focused, no-nonsense.
           </p>
-        </div>
+        </Reveal>
 
         {/* Mockup dashboard */}
+        <Reveal direction="up" delay={120}>
         <div className="rounded-2xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border2}`, boxShadow: '0 24px 80px rgba(0,122,204,0.15)' }}>
           {/* Window chrome */}
           <div className="flex items-center gap-2 px-4 py-3" style={{ background: '#323233', borderBottom: `1px solid ${VS.border}` }}>
@@ -377,11 +425,12 @@ export function Landing() {
             <span>EverSense Ai v1.0 · Intelligent Platform</span>
           </div>
         </div>
+        </Reveal>
       </section>
 
       {/* Why EverSense — comparison */}
       <section className="relative z-10 px-6 md:px-12 py-16 max-w-5xl mx-auto">
-        <div className="text-center mb-10">
+        <Reveal direction="up" className="text-center mb-10 block">
           <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: VS.purple }}>
             <Sparkles className="inline h-3 w-3 mr-1" /> Why EverSense
           </p>
@@ -389,8 +438,9 @@ export function Landing() {
           <p className="text-[14px] max-w-2xl mx-auto" style={{ color: VS.text2 }}>
             We didn't bolt features onto a generic tool. Every piece is designed for an agency's actual workflow.
           </p>
-        </div>
+        </Reveal>
 
+        <Reveal direction="up" delay={120}>
         <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
           <div className="grid grid-cols-5 px-5 py-3 text-[11px] font-bold uppercase tracking-wider" style={{ borderBottom: `1px solid ${VS.border}`, color: VS.text2 }}>
             <div className="col-span-2">Feature</div>
@@ -429,33 +479,38 @@ export function Landing() {
             </div>
           ))}
         </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
           {[
             { title: 'One platform', desc: 'No juggling between chat apps, project boards, time trackers, document signers, and a dozen spreadsheets. It all lives here.' },
             { title: 'Built for agencies', desc: 'Client-specific projects, billable time, retainer tracking, invoice-ready hours — not generic PM.' },
             { title: 'Designed for speed', desc: 'Minimal clicks, keyboard shortcuts, instant search. Built by developers who use it every day.' },
-          ].map(b => (
-            <div key={b.title} className="rounded-xl p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
-              <p className="text-[13px] font-bold mb-1.5" style={{ color: VS.accent }}>{b.title}</p>
-              <p className="text-[12px]" style={{ color: VS.text2, lineHeight: 1.6 }}>{b.desc}</p>
-            </div>
+          ].map((b, i) => (
+            <Reveal key={b.title} direction="up" delay={i * 100}>
+              <div className="rounded-xl p-4" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+                <p className="text-[13px] font-bold mb-1.5" style={{ color: VS.accent }}>{b.title}</p>
+                <p className="text-[12px]" style={{ color: VS.text2, lineHeight: 1.6 }}>{b.desc}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* CTA */}
       <section className="relative z-10 px-6 py-16 text-center">
-        <div className="max-w-2xl mx-auto rounded-2xl p-10"
-          style={{ background: `linear-gradient(135deg, ${VS.bg1}, ${VS.bg2})`, border: `1px solid ${VS.accent}33` }}>
-          <h3 className="text-[22px] md:text-[28px] font-bold mb-3" style={{ color: VS.text0 }}>Ready to get started?</h3>
-          <p className="text-[14px] mb-6" style={{ color: VS.text2 }}>Sign in with your team email to access your dashboard.</p>
-          <Link to="/login"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[14px] font-semibold transition-all hover:opacity-90"
-            style={{ background: VS.accent, color: '#fff', textDecoration: 'none' }}>
-            Sign In to EverSense <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
+        <Reveal direction="up">
+          <div className="max-w-2xl mx-auto rounded-2xl p-10"
+            style={{ background: `linear-gradient(135deg, ${VS.bg1}, ${VS.bg2})`, border: `1px solid ${VS.accent}33` }}>
+            <h3 className="text-[22px] md:text-[28px] font-bold mb-3" style={{ color: VS.text0 }}>Ready to get started?</h3>
+            <p className="text-[14px] mb-6" style={{ color: VS.text2 }}>Sign in with your team email to access your dashboard.</p>
+            <Link to="/login"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[14px] font-semibold transition-all hover:opacity-90"
+              style={{ background: VS.accent, color: '#fff', textDecoration: 'none' }}>
+              Sign In to EverSense <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </Reveal>
       </section>
 
       {/* Footer */}
