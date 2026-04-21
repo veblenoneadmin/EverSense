@@ -197,7 +197,9 @@ const MainLayout: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Active task timer — react to cross-page changes + tick the elapsed time
+  // Active task timer — read localStorage first for instant render, then
+  // authoritatively sync from the backend every 30s + on SSE ticks so the
+  // pill stays in sync across devices (phone + desktop).
   useEffect(() => {
     const readFromStorage = () => {
       try {
@@ -206,20 +208,49 @@ const MainLayout: React.FC = () => {
         const obj = JSON.parse(raw);
         if (obj?.taskId && obj?.startTime) {
           setTaskTimer({ taskId: obj.taskId, startTime: obj.startTime, title: obj.title || null });
-        } else {
-          setTaskTimer(null);
         }
-      } catch { setTaskTimer(null); }
+      } catch { /* ignore */ }
     };
     const onChange = () => readFromStorage();
     window.addEventListener('task-timer-changed', onChange);
-    window.addEventListener('storage', onChange); // cross-tab sync
+    window.addEventListener('storage', onChange); // cross-tab sync on same device
     readFromStorage();
     return () => {
       window.removeEventListener('task-timer-changed', onChange);
       window.removeEventListener('storage', onChange);
     };
   }, []);
+
+  // Cross-device sync: poll the backend for the user's active timer.
+  const syncActiveTimerFromServer = useCallback(async () => {
+    if (!session?.user?.id || !orgId) return;
+    try {
+      const res = await fetch('/api/tasks/timer/active', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.timer?.taskId) {
+        const next = { taskId: data.timer.taskId, startTime: data.timer.startedAt, title: data.timer.title || null };
+        setTaskTimer(prev => {
+          // Only update if different to avoid re-renders
+          if (prev && prev.taskId === next.taskId && prev.startTime === next.startTime) return prev;
+          localStorage.setItem('task_timer_active', JSON.stringify(next));
+          return next;
+        });
+      } else {
+        setTaskTimer(prev => {
+          if (prev === null) return prev;
+          localStorage.removeItem('task_timer_active');
+          return null;
+        });
+      }
+    } catch { /* ignore */ }
+  }, [session?.user?.id, orgId]);
+
+  useEffect(() => {
+    syncActiveTimerFromServer();
+    const id = setInterval(syncActiveTimerFromServer, 30_000);
+    return () => clearInterval(id);
+  }, [syncActiveTimerFromServer]);
 
   useEffect(() => {
     if (!taskTimer) { setTaskTimerElapsed(0); return; }
@@ -302,6 +333,7 @@ const MainLayout: React.FC = () => {
   useSSE(orgId || undefined, (event) => {
     if (event === 'attendance')   fetchStatus();
     if (event === 'notification') fetchNotifs();
+    if (event === 'task')         syncActiveTimerFromServer();
   });
 
   const handleMarkAllRead = async () => {
