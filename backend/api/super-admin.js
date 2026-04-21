@@ -2,7 +2,7 @@
 // Completely DB-free super admin — credentials live in env vars only.
 // Uses an HMAC-signed cookie (sa_token) for session. No user record in the DB.
 import express from 'express';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/rbac.js';
 import { sendInviteEmail, formatDuration } from '../lib/mailer.js';
