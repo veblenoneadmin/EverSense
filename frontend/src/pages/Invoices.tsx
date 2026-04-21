@@ -284,86 +284,186 @@ export function Invoices() {
   );
 }
 
-// ── Detail Modal ─────────────────────────────────────────────────────────────
+// ── Detail Modal — styled as a real invoice document ─────────────────────────
 function DetailModal({ invoice, onClose }: { invoice: Invoice; onClose: () => void }) {
+  const { currentOrg } = useOrganization();
+
+  // Short invoice number built from period + id suffix so it's stable and readable.
+  const invoiceNumber = useMemo(() => {
+    const p = new Date(invoice.periodStart);
+    const yyyy = p.getUTCFullYear();
+    const mm = String(p.getUTCMonth() + 1).padStart(2, '0');
+    const half = new Date(invoice.periodStart).getUTCDate() <= 15 ? 'A' : 'B';
+    const suffix = invoice.id.slice(0, 6).toUpperCase();
+    return `INV-${yyyy}${mm}${half}-${suffix}`;
+  }, [invoice]);
+
+  const handlePrint = () => window.print();
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:p-0"
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-lg rounded-2xl overflow-hidden max-h-[90vh] flex flex-col"
-        style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
+      <style>{`
+        @media print {
+          body > * { visibility: hidden; }
+          .invoice-document, .invoice-document * { visibility: visible; }
+          .invoice-document { position: absolute; left: 0; top: 0; width: 100%; max-width: none !important; box-shadow: none !important; border: none !important; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+      <div className="w-full max-w-2xl rounded-xl overflow-hidden max-h-[92vh] flex flex-col invoice-document"
+        style={{ background: VS.bg0, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
 
-        <div className="px-5 py-4 flex items-center justify-between"
+        {/* Action bar (hidden on print) */}
+        <div className="no-print flex items-center justify-between px-5 py-2.5"
           style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}` }}>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest" style={{ color: VS.text2 }}>Invoice</div>
-            <div className="text-sm font-bold" style={{ color: VS.text0 }}>{invoice.userName || invoice.userEmail}</div>
-          </div>
           <StatusPill status={invoice.status} />
+          <div className="flex items-center gap-2">
+            <button onClick={handlePrint}
+              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-90"
+              style={{ background: VS.accent, color: '#fff' }}>
+              Print / Save PDF
+            </button>
+            <button onClick={onClose}
+              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold"
+              style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}>
+              Close
+            </button>
+          </div>
         </div>
 
-        <div className="p-5 space-y-5 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: VS.text2 }}>Period</div>
-              <div className="text-sm" style={{ color: VS.text0 }}>{fmtDate(invoice.periodStart)}</div>
-              <div className="text-xs" style={{ color: VS.text2 }}>→ {fmtDate(invoice.periodEnd)}</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: VS.text2 }}>Issue Date</div>
-              <div className="text-sm" style={{ color: VS.text0 }}>{fmtDate(invoice.issueDate)}</div>
-            </div>
-          </div>
+        {/* Invoice document body */}
+        <div className="overflow-y-auto" style={{ background: VS.bg0 }}>
+          <div className="p-8" style={{ background: VS.bg0 }}>
 
-          <div className="rounded-lg p-4 space-y-2" style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
-            <div className="flex justify-between items-center">
-              <span className="text-xs" style={{ color: VS.text2 }}>Monthly Salary</span>
-              <span className="text-sm tabular-nums" style={{ color: VS.text1 }}>{fmtCurrency(invoice.salary)}</span>
-            </div>
-            <div className="flex justify-between items-center pt-2" style={{ borderTop: `1px solid ${VS.border}` }}>
-              <span className="text-xs font-semibold" style={{ color: VS.text0 }}>Amount Due (½ month)</span>
-              <span className="text-lg font-bold tabular-nums" style={{ color: VS.accent }}>{fmtCurrency(invoice.amount)}</span>
-            </div>
-          </div>
-
-          {invoice.leaveBreakdown.length > 0 && (
-            <div>
-              <div className="text-[10px] uppercase tracking-widest mb-2 flex items-center gap-1.5" style={{ color: VS.purple }}>
-                <CalendarDays className="h-3 w-3" /> Leave in this period
+            {/* Top header — company + INVOICE title */}
+            <div className="flex items-start justify-between mb-8 pb-6" style={{ borderBottom: `2px solid ${VS.accent}` }}>
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: VS.accent }}>From</div>
+                <div className="text-xl font-bold" style={{ color: VS.text0 }}>{currentOrg?.name || 'Company'}</div>
+                <div className="text-[11px] mt-1" style={{ color: VS.text2 }}>Payroll department</div>
               </div>
-              <div className="space-y-1.5">
-                {invoice.leaveBreakdown.map((l, i) => (
-                  <div key={i} className="flex justify-between items-center px-3 py-2 rounded-lg text-xs"
-                    style={{ background: `${VS.purple}11`, border: `1px solid ${VS.purple}33` }}>
-                    <div>
-                      <span className="capitalize font-semibold" style={{ color: VS.purple }}>{l.type}</span>
-                      <span className="ml-2" style={{ color: VS.text1 }}>{fmtDateShort(l.from)} → {fmtDateShort(l.to)}</span>
-                      {l.reason && <span className="ml-2 italic" style={{ color: VS.text2 }}>· {l.reason}</span>}
-                    </div>
-                    <span className="font-semibold tabular-nums" style={{ color: VS.purple }}>{l.days}d</span>
+              <div className="text-right">
+                <div className="text-3xl font-bold tracking-tight" style={{ color: VS.text0 }}>INVOICE</div>
+                <div className="text-[11px] font-mono mt-1" style={{ color: VS.text2 }}>{invoiceNumber}</div>
+              </div>
+            </div>
+
+            {/* Bill to + meta */}
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.2em] mb-2" style={{ color: VS.text2 }}>Bill To</div>
+                <div className="text-sm font-semibold" style={{ color: VS.text0 }}>{invoice.userName || 'Employee'}</div>
+                {invoice.userEmail && <div className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>{invoice.userEmail}</div>}
+              </div>
+              <div>
+                <div className="space-y-1.5 text-[12px]">
+                  <div className="flex justify-between">
+                    <span style={{ color: VS.text2 }}>Issue Date</span>
+                    <span style={{ color: VS.text0 }}>{fmtDate(invoice.issueDate)}</span>
                   </div>
-                ))}
+                  <div className="flex justify-between">
+                    <span style={{ color: VS.text2 }}>Pay Period</span>
+                    <span style={{ color: VS.text0 }}>{fmtDateShort(invoice.periodStart)} – {fmtDateShort(invoice.periodEnd)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span style={{ color: VS.text2 }}>Status</span>
+                    <span className="font-semibold capitalize" style={{
+                      color: invoice.status === 'PAID' ? VS.teal : invoice.status === 'VOID' ? VS.red : VS.yellow
+                    }}>{invoice.status.toLowerCase()}</span>
+                  </div>
+                </div>
               </div>
-              <p className="text-[11px] italic mt-2" style={{ color: VS.text2 }}>
-                Leave is shown for reference — no deduction applied to the invoice amount.
+            </div>
+
+            {/* Line items table */}
+            <div className="rounded-lg overflow-hidden mb-6" style={{ border: `1px solid ${VS.border}` }}>
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr style={{ background: VS.bg2 }}>
+                    <th className="px-4 py-2.5 text-left font-semibold uppercase tracking-wider text-[10px]" style={{ color: VS.text2 }}>Description</th>
+                    <th className="px-4 py-2.5 text-right font-semibold uppercase tracking-wider text-[10px]" style={{ color: VS.text2 }}>Rate</th>
+                    <th className="px-4 py-2.5 text-right font-semibold uppercase tracking-wider text-[10px]" style={{ color: VS.text2 }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderTop: `1px solid ${VS.border}` }}>
+                    <td className="px-4 py-3" style={{ color: VS.text0 }}>
+                      <div className="font-semibold">Bi-weekly salary</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
+                        Covering {fmtDate(invoice.periodStart)} to {fmtDate(invoice.periodEnd)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums" style={{ color: VS.text2 }}>
+                      {fmtCurrency(invoice.salary)} / mo
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: VS.text0 }}>
+                      {fmtCurrency(invoice.amount)}
+                    </td>
+                  </tr>
+                  {invoice.leaveBreakdown.map((l, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${VS.border}` }}>
+                      <td className="px-4 py-3" style={{ color: VS.text0 }}>
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="h-3.5 w-3.5" style={{ color: VS.purple }} />
+                          <span className="capitalize font-semibold">{l.type} leave</span>
+                        </div>
+                        <div className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
+                          {fmtDate(l.from)} – {fmtDate(l.to)}{l.reason ? ` · ${l.reason}` : ''}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums" style={{ color: VS.text2 }}>
+                        {l.days} day{l.days > 1 ? 's' : ''}
+                      </td>
+                      <td className="px-4 py-3 text-right text-[11px] italic" style={{ color: VS.text2 }}>
+                        — no deduction —
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals */}
+            <div className="flex justify-end mb-8">
+              <div className="w-72 space-y-1.5">
+                <div className="flex justify-between text-[12px]">
+                  <span style={{ color: VS.text2 }}>Subtotal</span>
+                  <span className="tabular-nums" style={{ color: VS.text1 }}>{fmtCurrency(invoice.amount)}</span>
+                </div>
+                <div className="flex justify-between text-[12px]">
+                  <span style={{ color: VS.text2 }}>Leave days</span>
+                  <span className="tabular-nums" style={{ color: VS.text1 }}>{invoice.leaveDays}</span>
+                </div>
+                <div className="flex justify-between pt-2 mt-1"
+                  style={{ borderTop: `2px solid ${VS.accent}` }}>
+                  <span className="text-sm font-bold" style={{ color: VS.text0 }}>Total Due</span>
+                  <span className="text-lg font-bold tabular-nums" style={{ color: VS.accent }}>{fmtCurrency(invoice.amount)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            {invoice.notes && (
+              <div className="rounded-lg p-4 mb-6" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+                <div className="text-[10px] uppercase tracking-[0.2em] mb-2" style={{ color: VS.text2 }}>Notes</div>
+                <div className="text-[12px] whitespace-pre-wrap" style={{ color: VS.text1 }}>{invoice.notes}</div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="text-center pt-6" style={{ borderTop: `1px solid ${VS.border}` }}>
+              <p className="text-[10px]" style={{ color: VS.text2 }}>
+                This invoice was generated by EverSense · {fmtDate(invoice.createdAt)}
               </p>
+              {invoice.leaveBreakdown.length > 0 && (
+                <p className="text-[10px] italic mt-1" style={{ color: VS.text2 }}>
+                  Leave days listed for reference only — no deductions applied to amount due.
+                </p>
+              )}
             </div>
-          )}
-
-          {invoice.notes && (
-            <div>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: VS.text2 }}>Notes</div>
-              <div className="text-xs" style={{ color: VS.text1 }}>{invoice.notes}</div>
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 py-3 flex justify-end" style={{ borderTop: `1px solid ${VS.border}` }}>
-          <button onClick={onClose}
-            className="px-4 py-2 rounded-lg text-xs font-semibold"
-            style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text1 }}>
-            Close
-          </button>
+          </div>
         </div>
       </div>
     </div>
