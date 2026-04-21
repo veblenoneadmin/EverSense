@@ -509,6 +509,51 @@ router.post('/run-daily-report', requireAuth, requireSuperAdminUser, async (_req
   }
 });
 
+// ── POST /api/super-admin/leaves/reset ────────────────────────────────────────
+// Wipe leave records so balances reset. Scopes:
+//   body: { orgId?, userId?, year?, keepPending? }
+//   - orgId only → reset everyone in that org
+//   - userId only → reset just that user (across all orgs)
+//   - year (YYYY) → only delete leaves whose startDate falls in that calendar year
+//   - keepPending=true → only wipe APPROVED/REJECTED, leave PENDING alone
+// With no filter, deletes ALL leaves across all orgs (global reset).
+router.post('/leaves/reset', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { orgId, userId, year, keepPending } = req.body || {};
+    const conds = [];
+    const params = [];
+
+    if (orgId)  { conds.push('orgId = ?');  params.push(orgId); }
+    if (userId) { conds.push('userId = ?'); params.push(userId); }
+    if (year) {
+      const y = parseInt(year);
+      if (!isNaN(y)) {
+        const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0));
+        const end   = new Date(Date.UTC(y + 1, 0, 1, 0, 0, 0));
+        conds.push('startDate >= ? AND startDate < ?');
+        params.push(start, end);
+      }
+    }
+    if (keepPending) {
+      conds.push("status <> 'PENDING'");
+    }
+
+    // Count first so we can report what was deleted
+    const countSql = `SELECT COUNT(*) AS c FROM leaves${conds.length ? ' WHERE ' + conds.join(' AND ') : ''}`;
+    const countRows = await prisma.$queryRawUnsafe(countSql, ...params);
+    const count = Number(countRows[0]?.c || 0);
+
+    const delSql = `DELETE FROM leaves${conds.length ? ' WHERE ' + conds.join(' AND ') : ''}`;
+    await prisma.$executeRawUnsafe(delSql, ...params);
+
+    console.log(`[SuperAdmin] 🗑 Reset leaves: ${count} record(s) deleted. filters=${JSON.stringify({ orgId, userId, year, keepPending })}`);
+    res.json({ success: true, deleted: count });
+  } catch (err) {
+    console.error('[SuperAdmin] reset leaves error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/super-admin/break-policies ───────────────────────────────────────
 // Read-only — current break policy for every org (1800=30min, 3600=60min, null=default 30min).
 router.get('/break-policies', requireAuth, requireSuperAdminUser, async (_req, res) => {

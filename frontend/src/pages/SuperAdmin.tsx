@@ -474,6 +474,31 @@ export function SuperAdmin() {
     showToast('Error log cleared', true);
   }
 
+  async function handleResetLeaves() {
+    const yearRaw = window.prompt(
+      'Reset leaves — enter a year (e.g. 2026) to reset only that year, or leave blank to wipe ALL leave records across every org.\n\nType CANCEL to abort.'
+    );
+    if (yearRaw === null) return;
+    if (yearRaw.trim().toUpperCase() === 'CANCEL') return;
+    const year = yearRaw.trim() ? parseInt(yearRaw.trim()) : null;
+    if (yearRaw.trim() && (isNaN(year!) || year! < 2000 || year! > 2100)) {
+      showToast('Invalid year', false);
+      return;
+    }
+    const scope = year ? `year ${year}` : 'ALL YEARS, ALL ORGS';
+    if (!window.confirm(`This will permanently delete leave records for ${scope}. Continue?`)) return;
+    try {
+      const res = await saFetch('/api/super-admin/leaves/reset', {
+        method: 'POST',
+        body: JSON.stringify(year ? { year } : {}),
+      });
+      if (res.error) { showToast(res.error, false); return; }
+      showToast(`Reset complete — ${res.deleted ?? 0} leave record(s) deleted`, true);
+    } catch {
+      showToast('Failed to reset leaves', false);
+    }
+  }
+
   if (!isSuperAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: VS.bg0 }}>
@@ -990,11 +1015,18 @@ export function SuperAdmin() {
                 <div className="rounded-xl p-5" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
                   <h2 className="text-[13px] font-bold mb-3" style={{ color: VS.text0 }}>Danger Zone</h2>
                   <p className="text-[12px] mb-4" style={{ color: VS.text2 }}>Destructive actions. Use with caution.</p>
-                  <button onClick={handleClearErrors}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] transition-all"
-                    style={{ background: 'rgba(244,71,71,0.1)', border: `1px solid rgba(244,71,71,0.3)`, color: VS.red }}>
-                    <Trash className="h-3.5 w-3.5" /> Clear Error Log
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleClearErrors}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] transition-all"
+                      style={{ background: 'rgba(244,71,71,0.1)', border: `1px solid rgba(244,71,71,0.3)`, color: VS.red }}>
+                      <Trash className="h-3.5 w-3.5" /> Clear Error Log
+                    </button>
+                    <button onClick={handleResetLeaves}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] transition-all"
+                      style={{ background: 'rgba(244,71,71,0.1)', border: `1px solid rgba(244,71,71,0.3)`, color: VS.red }}>
+                      <Trash className="h-3.5 w-3.5" /> Reset Leaves
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null
