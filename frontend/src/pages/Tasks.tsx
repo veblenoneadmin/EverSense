@@ -164,6 +164,18 @@ export function Tasks() {
   // New task form
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [newTaskColumnStatus, setNewTaskColumnStatus] = useState<Task['status']>('not_started');
+
+  // Blank template for resetting the New Task form — kept here so every close
+  // path can reset identically (modal X, backdrop click, successful submit).
+  const BLANK_NEW_TASK = {
+    title: '', description: '', priority: 'Medium' as Task['priority'],
+    projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
+    isTeamTask: false, subTasks: [] as { assigneeId: string; title: string }[],
+    checklistItems: [] as string[],
+    recurringPattern: '' as '' | 'daily' | 'weekly' | 'biweekly' | 'monthly',
+    recurringEndDate: '',
+  };
+  const closeNewTaskForm = () => { setShowNewTaskForm(false); setNewTaskForm(BLANK_NEW_TASK); };
   const [newTaskForm, setNewTaskForm] = useState({
     title: '', description: '', priority: 'Medium' as Task['priority'],
     projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
@@ -618,7 +630,10 @@ export function Tasks() {
     const effectiveStart = storedStart ?? timerStart;
     const elapsed = effectiveStart !== null ? Math.floor((Date.now() - effectiveStart) / 1000) : 0;
 
-    // Always read accumulated time from localStorage (source of truth) — avoids stale React closure
+    // Keep localStorage accum in sync for the in-page live display, but the
+    // authoritative actualHours value on the server is computed by ADDING this
+    // session's elapsed to whatever the server already has. Using a local-only
+    // accumulator clobbers time logged from other devices/sessions.
     const stored: Record<string, number> = (() => {
       try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
     })();
@@ -627,11 +642,16 @@ export function Tasks() {
     setTimerAccum(newAccum);
     setTimerTaskId(null);
     setTimerStart(null);
+
+    // Server-known actualHours → increment by this session's elapsed.
+    const serverActualHours = tasks.find(t => t.id === taskId)?.actualHours || 0;
+    const newActualHours = parseFloat((serverActualHours + elapsed / 3600).toFixed(2));
+
     try {
       await Promise.all([
         apiClient.fetch(`/api/tasks/${taskId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ actualHours: parseFloat((newAccum[taskId] / 3600).toFixed(2)) }),
+          body: JSON.stringify({ actualHours: newActualHours }),
         }),
         apiClient.fetch('/api/tasks/timer/stop', { method: 'POST', body: JSON.stringify({}) }).catch(() => {}),
       ]);
@@ -2283,7 +2303,7 @@ export function Tasks() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.75)' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowNewTaskForm(false); }}
+          onClick={e => { if (e.target === e.currentTarget) closeNewTaskForm(); }}
         >
           <div
             className="w-full max-w-md rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
@@ -2321,7 +2341,7 @@ export function Tasks() {
                 </p>
               </div>
               <button
-                onClick={() => setShowNewTaskForm(false)}
+                onClick={closeNewTaskForm}
                 className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
                 style={{ color: VS.text1 }}
               >
@@ -2759,7 +2779,7 @@ export function Tasks() {
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowNewTaskForm(false)}
+                  onClick={closeNewTaskForm}
                   className="flex-1 py-2.5 rounded-xl text-sm transition-colors"
                   style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
                 >
