@@ -43,16 +43,20 @@ async function runAutoClockout() {
 
     for (const row of overdueRows) {
       try {
-        const now = new Date();
         const timeIn = new Date(row.timeIn);
-        const grossSeconds = Math.floor((now.getTime() - timeIn.getTime()) / 1000);
+        const grossSeconds = Math.floor((Date.now() - timeIn.getTime()) / 1000);
+        // Cap duration + timeOut at AUTO_CLOCKOUT_SECONDS so the stored row
+        // never shows a > 9h30m session (e.g. if the cron was delayed or was
+        // off when the session was actually past the cap).
+        const cappedSeconds = Math.min(grossSeconds, AUTO_CLOCKOUT_SECONDS);
+        const cappedTimeOut = new Date(timeIn.getTime() + cappedSeconds * 1000);
 
         // Clock out
         await prisma.$executeRawUnsafe(
           `UPDATE attendance_logs
            SET timeOut = ?, duration = ?, updatedAt = NOW(3)
            WHERE id = ? AND timeOut IS NULL`,
-          now, grossSeconds, row.id
+          cappedTimeOut, cappedSeconds, row.id
         );
 
         // Broadcast SSE so all connected clients (admin view) refresh immediately
@@ -72,7 +76,7 @@ async function runAutoClockout() {
           }
         } catch { /* non-fatal */ }
 
-        const durationStr = fmtDuration(grossSeconds);
+        const durationStr = fmtDuration(cappedSeconds);
         const clockInTime = timeIn.toLocaleTimeString('en-AU', {
           hour: '2-digit', minute: '2-digit', hour12: true,
         });

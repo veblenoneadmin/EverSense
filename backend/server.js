@@ -3592,9 +3592,15 @@ async function startServer() {
       console.log(`[InlineClockout] Found ${overdue.length} session(s) over daily cap`);
       for (const row of overdue) {
         try {
-          // Clock out with duration = this session's gross age (matches existing behaviour).
+          // Clock out at timeIn + AUTO_CLOCKOUT_SEC (or actual age if less).
+          // Capping ensures no stored session shows > 9h30m duration, even if
+          // the cron was late or was off when the threshold was crossed.
           const affected = await prisma.$executeRawUnsafe(
-            `UPDATE attendance_logs SET timeOut = NOW(3), duration = TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
+            `UPDATE attendance_logs
+                SET timeOut = DATE_ADD(timeIn, INTERVAL LEAST(TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), ${AUTO_CLOCKOUT_SEC}) SECOND),
+                    duration = LEAST(TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), ${AUTO_CLOCKOUT_SEC}),
+                    updatedAt = NOW(3)
+              WHERE id = ? AND timeOut IS NULL`,
             row.id
           );
           console.log(`[InlineClockout] Closed ${row.id} userId=${row.userId} openSecs=${row.openSecs} closedTodaySecs=${row.closedSecs} rowsAffected=${Number(affected)}`);
