@@ -610,10 +610,20 @@ export function Tasks() {
     setTimerTaskId(null);
     setTimerStart(null);
 
-    // Source of truth for the PATCH: server-known actualHours + this session's elapsed.
-    // This preserves any manual edits the user made since the timer last stopped.
-    const serverActualHours = tasks.find(t => t.id === taskId)?.actualHours || 0;
-    const newActualHours = parseFloat((Number(serverActualHours) + elapsed / 3600).toFixed(2));
+    // Source of truth for the PATCH: latest actualHours from the server
+    // (NOT local state, which can be stale if another device/assignee or a
+    // manual edit just landed) plus this session's elapsed. Preserves both
+    // manual edits and concurrent-timer work from other accounts.
+    let serverActualHours = 0;
+    try {
+      const res = await apiClient.fetch(`/api/tasks/${taskId}`);
+      const t = res?.task || res;
+      serverActualHours = Number(t?.actualHours) || 0;
+    } catch {
+      // If the fetch fails, fall back to local state — still better than 0.
+      serverActualHours = Number(tasks.find(t => t.id === taskId)?.actualHours) || 0;
+    }
+    const newActualHours = parseFloat((serverActualHours + elapsed / 3600).toFixed(2));
 
     try {
       await Promise.all([
