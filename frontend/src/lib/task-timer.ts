@@ -6,8 +6,19 @@ function safeParse<T>(key: string): T | null {
   try { return JSON.parse(localStorage.getItem(key) || 'null') as T; } catch { return null; }
 }
 
-function clearBackendTimer() {
-  fetch('/api/tasks/timer/stop', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
+function clearBackendTimer(taskId?: string, beganAt?: number, elapsed?: number) {
+  // If we have session data, POST it so the backend writes a time_logs row
+  // for the Time-by-Person breakdown. Otherwise just clear active_timers
+  // (old behaviour — preserved for any caller that doesn't know the session).
+  const body = taskId && beganAt && elapsed && elapsed > 0
+    ? JSON.stringify({ taskId, beganAt, endedAt: Date.now(), duration: elapsed })
+    : '{}';
+  fetch('/api/tasks/timer/stop', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  }).catch(() => {});
 }
 
 function notifyBackendTimerStart(taskId: string, startedAt: number) {
@@ -26,7 +37,8 @@ export function pauseTaskTimer() {
   localStorage.removeItem('task_timer_start');
   localStorage.setItem('task_timer_paused', active.taskId);
 
-  clearBackendTimer();
+  // Pass session data so the backend writes a time_logs row for this segment.
+  clearBackendTimer(active.taskId, storedStart || undefined, elapsed);
   window.dispatchEvent(new CustomEvent('task-timer-pause'));
 }
 
@@ -60,6 +72,8 @@ export function stopTaskTimer() {
   localStorage.removeItem('task_timer_start');
   localStorage.removeItem('task_timer_paused');
 
-  clearBackendTimer();
+  // Pass session data so the backend writes a time_logs row. Without this,
+  // time worked right before clock-out is lost from contribution totals.
+  clearBackendTimer(taskId, storedStart || undefined, elapsed);
   window.dispatchEvent(new CustomEvent('task-timer-stop'));
 }
