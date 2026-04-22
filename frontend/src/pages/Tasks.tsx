@@ -276,7 +276,9 @@ export function Tasks() {
       return raw ? Number(raw) : null;
     } catch { return null; }
   });
-  const [timerAccum, setTimerAccum] = useState<Record<string, number>>(() => {
+  // `timerAccum` is no longer read (getTimerSeconds uses server actualHours),
+  // but we still write to it from pause/stop handlers for localStorage sync.
+  const [, setTimerAccum] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
   });
   const [, setTick] = useState(0); // drives live display
@@ -505,12 +507,18 @@ export function Tasks() {
   }, []);
 
   // ── timer helpers ──────────────────────────────────────────────────────────
+  // Displays "actualHours so far" — base = server-known actualHours (which is
+  // the authoritative value, respects manual edits), plus live elapsed while
+  // the timer is running. Must NOT use localStorage.task_timers as the base,
+  // because that accumulator is browser-local and can diverge wildly from a
+  // user's manual edit to actualHours.
   const getTimerSeconds = (taskId: string) => {
-    const accum = timerAccum[taskId] || 0;
+    const task = tasks.find(t => t.id === taskId);
+    const baseSeconds = Math.round((Number(task?.actualHours) || 0) * 3600);
     if (timerTaskId === taskId && timerStart !== null) {
-      return accum + Math.floor((Date.now() - timerStart) / 1000);
+      return baseSeconds + Math.floor((Date.now() - timerStart) / 1000);
     }
-    return accum;
+    return baseSeconds;
   };
 
   const formatTimer = (secs: number) => {
