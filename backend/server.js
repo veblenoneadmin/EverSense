@@ -3552,13 +3552,16 @@ async function startServer() {
       tickCount++;
       if (tickCount % 10 === 1) {
         const open = await prisma.$queryRawUnsafe(
-          `SELECT al.id, al.userId, al.date, al.timeIn, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS ageSecs, u.email,
+          `SELECT al.id, al.userId, al.date, al.timeIn,
+                  GREATEST(0, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) - IFNULL(al.breakDuration, 0)) AS ageSecs,
+                  u.email,
                   COALESCE((
-                    SELECT SUM(al2.duration) FROM attendance_logs al2
+                    SELECT SUM(GREATEST(0, al2.duration - IFNULL(al2.breakDuration, 0))) FROM attendance_logs al2
                     WHERE al2.userId = al.userId AND al2.orgId = al.orgId
-                      AND al2.date = al.date
                       AND al2.timeOut IS NOT NULL
                       AND al2.id <> al.id
+                      AND al2.timeOut >= DATE_SUB(al.timeIn, INTERVAL 8 HOUR)
+                      AND al2.timeOut <= al.timeIn
                   ), 0) AS closedSecs
              FROM attendance_logs al LEFT JOIN \`User\` u ON u.id = al.userId
             WHERE al.timeOut IS NULL ORDER BY al.timeIn ASC LIMIT 20`
@@ -3566,23 +3569,25 @@ async function startServer() {
         console.log(`[InlineClockout] heartbeat: ${open.length} open session(s). Cumulative cap=${AUTO_CLOCKOUT_SEC}s (9h30m).`);
         open.forEach(o => {
           const total = Number(o.closedSecs || 0) + Number(o.ageSecs || 0);
-          console.log(`  · ${o.email} userId=${o.userId} date=${o.date} ageSecs=${o.ageSecs} closedTodaySecs=${o.closedSecs} totalSecs=${total} overdue=${total >= AUTO_CLOCKOUT_SEC}`);
+          console.log(`  · ${o.email} userId=${o.userId} ageSecs=${o.ageSecs} closedTodaySecs=${o.closedSecs} totalSecs=${total} overdue=${total >= AUTO_CLOCKOUT_SEC}`);
         });
       }
 
-      // Cumulative cap scoped to the OPEN session's own `date` column (YYYY-MM-DD
-      // set on clock-in). Yesterday's overnight-auto-closed sessions don't bleed
-      // into today's quota, which was the Gwen bug: her previous 24h42m session
-      // dragged closedSecs above the threshold and auto-closed every new clock-in.
+      // Cumulative cap, timezone-safe. Scope closedSecs to sessions whose
+      // timeOut ended within 8h before this open session's timeIn — those are
+      // plausibly the "same workday." Also subtracts breakDuration from both
+      // openSecs and closedSecs so accumulated resume-gaps don't fake-trigger
+      // the cap.
       const overdue = await prisma.$queryRawUnsafe(
         `SELECT al.id, al.userId, al.orgId,
-                TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS openSecs,
+                GREATEST(0, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) - IFNULL(al.breakDuration, 0)) AS openSecs,
                 COALESCE((
-                  SELECT SUM(al2.duration) FROM attendance_logs al2
+                  SELECT SUM(GREATEST(0, al2.duration - IFNULL(al2.breakDuration, 0))) FROM attendance_logs al2
                   WHERE al2.userId = al.userId AND al2.orgId = al.orgId
-                    AND al2.date = al.date
                     AND al2.timeOut IS NOT NULL
                     AND al2.id <> al.id
+                    AND al2.timeOut >= DATE_SUB(al.timeIn, INTERVAL 8 HOUR)
+                    AND al2.timeOut <= al.timeIn
                 ), 0) AS closedSecs
            FROM attendance_logs al
           WHERE al.timeOut IS NULL
