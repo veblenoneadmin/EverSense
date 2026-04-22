@@ -2,7 +2,7 @@
 // Completely DB-free super admin — credentials live in env vars only.
 // Uses an HMAC-signed cookie (sa_token) for session. No user record in the DB.
 import express from 'express';
-import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/rbac.js';
 import { sendInviteEmail, formatDuration } from '../lib/mailer.js';
@@ -544,60 +544,6 @@ router.get('/attendance-logs', requireAuth, requireSuperAdminUser, async (req, r
   }
 });
 
-// ── POST /api/super-admin/attendance-logs ─────────────────────────────────────
-// Manually clock in a user. Body: { userId, timeIn?, timeOut?, notes? }.
-// - timeIn defaults to now. timeOut optional (null = still clocked in).
-// - Fails if the user already has an open session in this org.
-// - Looks up the user's org via memberships; errors if the user has none.
-router.post('/attendance-logs', requireAuth, requireSuperAdminUser, async (req, res) => {
-  try {
-    const { userId, timeIn, timeOut, notes, breakMinutes } = req.body || {};
-    if (!userId) return res.status(400).json({ error: 'userId required' });
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId },
-      select: { orgId: true },
-    });
-    if (!membership) return res.status(404).json({ error: 'User has no org membership' });
-    const orgId = membership.orgId;
-
-    const inAt  = timeIn ? new Date(timeIn) : new Date();
-    const outAt = timeOut ? new Date(timeOut) : null;
-
-    if (isNaN(inAt.getTime())) return res.status(400).json({ error: 'Invalid timeIn' });
-    if (outAt && (isNaN(outAt.getTime()) || outAt < inAt)) {
-      return res.status(400).json({ error: 'timeOut must be after timeIn' });
-    }
-
-    // Prevent duplicate open session
-    if (!outAt) {
-      const existing = await prisma.attendanceLog.findFirst({
-        where: { userId, orgId, timeOut: null },
-      });
-      if (existing) {
-        return res.status(409).json({ error: 'User already has an open session', activeLog: existing });
-      }
-    }
-
-    const breakSecs = Math.max(0, Math.floor(Number(breakMinutes || 0) * 60));
-    const duration = outAt ? Math.max(0, Math.floor((outAt.getTime() - inAt.getTime()) / 1000) - breakSecs) : 0;
-    const id = randomUUID();
-    const dateStr = inAt.toISOString().slice(0, 10);
-
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO attendance_logs (id, userId, orgId, timeIn, timeOut, duration, breakDuration, notes, date, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))`,
-      id, userId, orgId, inAt, outAt, duration, breakSecs, notes || null, dateStr
-    );
-
-    console.log(`[SuperAdmin] 🕓 clocked in userId=${userId} orgId=${orgId} inAt=${inAt.toISOString()} outAt=${outAt?.toISOString() || 'null'}`);
-    res.status(201).json({ success: true, id, orgId });
-  } catch (err) {
-    console.error('[SuperAdmin] attendance-logs POST error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── PATCH /api/super-admin/attendance-logs/:id ────────────────────────────────
 // Edit timeIn / timeOut / breakDuration / notes. Recomputes duration from
 // (timeOut - timeIn - breakDuration). breakDuration takes seconds, or the
@@ -655,22 +601,6 @@ router.patch('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async (
     res.json({ success: true, duration, breakDuration: newBreak });
   } catch (err) {
     console.error('[SuperAdmin] attendance-logs patch error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── DELETE /api/super-admin/attendance-logs/:id ───────────────────────────────
-router.delete('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await prisma.$executeRawUnsafe(
-      'DELETE FROM attendance_logs WHERE id = ?', id
-    );
-    if (Number(result) === 0) return res.status(404).json({ error: 'Log not found' });
-    console.log(`[SuperAdmin] 🗑 deleted attendance log ${id}`);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[SuperAdmin] attendance-logs DELETE error:', err);
     res.status(500).json({ error: err.message });
   }
 });

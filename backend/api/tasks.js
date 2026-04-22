@@ -208,25 +208,6 @@ router.get('/active-timers', requireAuth, withOrgScope, async (req, res) => {
   }
 });
 
-// ── GET /api/tasks/timer/active — current user's active timer (cross-device) ─
-router.get('/timer/active', requireAuth, withOrgScope, async (req, res) => {
-  await ensureActiveTimersTable();
-  try {
-    const rows = await prisma.$queryRawUnsafe(
-      'SELECT at.taskId, UNIX_TIMESTAMP(at.startedAt)*1000 AS startedAt, mt.title ' +
-      'FROM active_timers at LEFT JOIN macro_tasks mt ON mt.id = at.taskId ' +
-      'WHERE at.userId = ? AND at.orgId = ? LIMIT 1',
-      req.user.id, req.orgId
-    );
-    if (!rows.length) return res.json({ timer: null });
-    const r = rows[0];
-    res.json({ timer: { taskId: r.taskId, startedAt: Number(r.startedAt), title: r.title || null } });
-  } catch (e) {
-    console.error('[Tasks] /timer/active error:', e);
-    res.status(500).json({ error: 'Failed to fetch active timer' });
-  }
-});
-
 // ── POST /api/tasks/timer/start — record that current user started a timer ───
 router.post('/timer/start', requireAuth, withOrgScope, async (req, res) => {
   const { taskId, startedAt } = req.body;
@@ -238,7 +219,6 @@ router.post('/timer/start', requireAuth, withOrgScope, async (req, res) => {
       'ON DUPLICATE KEY UPDATE taskId = VALUES(taskId), startedAt = VALUES(startedAt)',
       randomUUID(), req.user.id, taskId, req.orgId, new Date(startedAt || Date.now())
     );
-    broadcast(req.orgId, 'task', { action: 'timer-start', taskId, userId: req.user.id });
     res.json({ ok: true });
   } catch (e) {
     console.error('[Tasks] timer/start error:', e);
@@ -254,7 +234,6 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
       'DELETE FROM active_timers WHERE userId = ? AND orgId = ?',
       req.user.id, req.orgId
     );
-    broadcast(req.orgId, 'task', { action: 'timer-stop', userId: req.user.id });
     res.json({ ok: true });
   } catch (e) {
     console.error('[Tasks] timer/stop error:', e);

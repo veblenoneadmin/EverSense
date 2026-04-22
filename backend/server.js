@@ -2453,20 +2453,8 @@ function generateSimpleId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Serve static files from frontend dist directory. Hashed bundle assets
-// (index-abc123.js / index-abc123.css) are immutable — cache them hard.
-// index.html must revalidate every load so clients pick up new deploys.
-app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist'), {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('index.html')) {
-      res.setHeader('Cache-Control', 'no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-    } else if (/\.(js|css|woff2?|png|jpg|jpeg|svg|webp|ico)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    }
-  },
-}));
+// Serve static files from frontend dist directory
+app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
 
 // Auth configuration endpoint
 app.get('/api/auth-config', (req, res) => {
@@ -3156,9 +3144,6 @@ app.get('*', (req, res) => {
     return res.json({ status: 'ok', service: 'vebtask', timestamp: new Date() });
   }
   
-  res.setHeader('Cache-Control', 'no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
 });
 
@@ -3552,16 +3537,12 @@ async function startServer() {
       tickCount++;
       if (tickCount % 10 === 1) {
         const open = await prisma.$queryRawUnsafe(
-          `SELECT al.id, al.userId, al.date, al.timeIn,
-                  GREATEST(0, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) - IFNULL(al.breakDuration, 0)) AS ageSecs,
-                  u.email,
+          `SELECT al.id, al.userId, al.timeIn, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS ageSecs, u.email,
                   COALESCE((
-                    SELECT SUM(GREATEST(0, al2.duration - IFNULL(al2.breakDuration, 0))) FROM attendance_logs al2
+                    SELECT SUM(al2.duration) FROM attendance_logs al2
                     WHERE al2.userId = al.userId AND al2.orgId = al.orgId
+                      AND al2.timeIn >= DATE_SUB(NOW(), INTERVAL 16 HOUR)
                       AND al2.timeOut IS NOT NULL
-                      AND al2.id <> al.id
-                      AND al2.timeOut >= DATE_SUB(al.timeIn, INTERVAL 8 HOUR)
-                      AND al2.timeOut <= al.timeIn
                   ), 0) AS closedSecs
              FROM attendance_logs al LEFT JOIN \`User\` u ON u.id = al.userId
             WHERE al.timeOut IS NULL ORDER BY al.timeIn ASC LIMIT 20`
@@ -3573,21 +3554,15 @@ async function startServer() {
         });
       }
 
-      // Cumulative cap, timezone-safe. Scope closedSecs to sessions whose
-      // timeOut ended within 8h before this open session's timeIn — those are
-      // plausibly the "same workday." Also subtracts breakDuration from both
-      // openSecs and closedSecs so accumulated resume-gaps don't fake-trigger
-      // the cap.
+      // Cumulative: (current open session age) + (sum of closed sessions in last 16h) >= threshold.
       const overdue = await prisma.$queryRawUnsafe(
         `SELECT al.id, al.userId, al.orgId,
-                GREATEST(0, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) - IFNULL(al.breakDuration, 0)) AS openSecs,
+                TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS openSecs,
                 COALESCE((
-                  SELECT SUM(GREATEST(0, al2.duration - IFNULL(al2.breakDuration, 0))) FROM attendance_logs al2
+                  SELECT SUM(al2.duration) FROM attendance_logs al2
                   WHERE al2.userId = al.userId AND al2.orgId = al.orgId
+                    AND al2.timeIn >= DATE_SUB(NOW(), INTERVAL 16 HOUR)
                     AND al2.timeOut IS NOT NULL
-                    AND al2.id <> al.id
-                    AND al2.timeOut >= DATE_SUB(al.timeIn, INTERVAL 8 HOUR)
-                    AND al2.timeOut <= al.timeIn
                 ), 0) AS closedSecs
            FROM attendance_logs al
           WHERE al.timeOut IS NULL
@@ -3597,15 +3572,9 @@ async function startServer() {
       console.log(`[InlineClockout] Found ${overdue.length} session(s) over daily cap`);
       for (const row of overdue) {
         try {
-          // Clock out at timeIn + AUTO_CLOCKOUT_SEC (or actual age if less).
-          // Capping ensures no stored session shows > 9h30m duration, even if
-          // the cron was late or was off when the threshold was crossed.
+          // Clock out with duration = this session's gross age (matches existing behaviour).
           const affected = await prisma.$executeRawUnsafe(
-            `UPDATE attendance_logs
-                SET timeOut = DATE_ADD(timeIn, INTERVAL LEAST(TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), ${AUTO_CLOCKOUT_SEC}) SECOND),
-                    duration = LEAST(TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), ${AUTO_CLOCKOUT_SEC}),
-                    updatedAt = NOW(3)
-              WHERE id = ? AND timeOut IS NULL`,
+            `UPDATE attendance_logs SET timeOut = NOW(3), duration = TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
             row.id
           );
           console.log(`[InlineClockout] Closed ${row.id} userId=${row.userId} openSecs=${row.openSecs} closedTodaySecs=${row.closedSecs} rowsAffected=${Number(affected)}`);

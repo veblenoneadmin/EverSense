@@ -428,8 +428,8 @@ function AttendanceLogs() {
   const openEdit = (l: AttLog) => {
     setEditing(l);
     setForm({
-      timeIn:  toLocalInput(new Date(l.timeIn)),
-      timeOut: l.timeOut ? toLocalInput(new Date(l.timeOut)) : '',
+      timeIn:  new Date(l.timeIn).toISOString().slice(0, 16),
+      timeOut: l.timeOut ? new Date(l.timeOut).toISOString().slice(0, 16) : '',
       breakMinutes: Math.round((l.breakDuration || 0) / 60),
       notes: l.notes || '',
     });
@@ -461,77 +461,10 @@ function AttendanceLogs() {
   const fmtDt = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-AU', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
   }) : '—';
-
-  // datetime-local inputs expect LOCAL time (not UTC). toISOString() returns UTC
-  // and makes the displayed value shift by the timezone offset.
-  const toLocalInput = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
   const fmtDur = (s: number) => {
     if (!s) return '—';
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
     return `${h}h ${m}m`;
-  };
-
-  // ── Clock In modal state (super-admin manual clock in for any user) ────────
-  const [showClockIn, setShowClockIn] = useState(false);
-  const [usersList, setUsersList] = useState<{ id: string; email: string; name: string | null }[]>([]);
-  const [clockInForm, setClockInForm] = useState({
-    userId: '', timeIn: '', timeOut: '', breakMinutes: 0, notes: '',
-  });
-  const [clockInSaving, setClockInSaving] = useState(false);
-
-  const openClockIn = async () => {
-    // Default timeIn = now (rounded to minute, local)
-    const d = new Date(); d.setSeconds(0, 0);
-    setClockInForm({ userId: '', timeIn: toLocalInput(d), timeOut: '', breakMinutes: 0, notes: '' });
-    setShowClockIn(true);
-    // Lazy-load users
-    if (usersList.length === 0) {
-      try {
-        const data = await saFetch('/api/super-admin/users');
-        setUsersList((data.users || []).map((u: any) => ({ id: u.id, email: u.email, name: u.name })));
-      } catch { /* ignore */ }
-    }
-  };
-
-  const handleDeleteLog = async (id: string, who: string) => {
-    if (!window.confirm(`Delete attendance log for ${who}? This cannot be undone.`)) return;
-    try {
-      const res = await saFetch(`/api/super-admin/attendance-logs/${id}`, { method: 'DELETE' });
-      if (res.error) { showToast(res.error, false); return; }
-      setLogs(prev => prev.filter(l => l.id !== id));
-      showToast('Log deleted', true);
-    } catch {
-      showToast('Failed to delete', false);
-    }
-  };
-
-  const handleClockIn = async () => {
-    if (!clockInForm.userId || !clockInForm.timeIn) {
-      showToast('User and clock-in time required', false);
-      return;
-    }
-    setClockInSaving(true);
-    try {
-      const res = await saFetch('/api/super-admin/attendance-logs', {
-        method: 'POST',
-        body: JSON.stringify({
-          userId: clockInForm.userId,
-          timeIn:  new Date(clockInForm.timeIn).toISOString(),
-          timeOut: clockInForm.timeOut ? new Date(clockInForm.timeOut).toISOString() : null,
-          breakMinutes: clockInForm.breakMinutes,
-          notes: clockInForm.notes,
-        }),
-      });
-      if (res.error) { showToast(res.error, false); return; }
-      showToast('Clocked in', true);
-      setShowClockIn(false);
-      fetchLogs();
-    } catch {
-      showToast('Failed to clock in', false);
-    } finally { setClockInSaving(false); }
   };
 
   return (
@@ -548,11 +481,6 @@ function AttendanceLogs() {
           className="px-3 py-2 rounded-lg text-[12px] font-semibold"
           style={{ background: VS.accent, color: '#fff' }}>
           Search
-        </button>
-        <button onClick={openClockIn}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold ml-auto"
-          style={{ background: `${VS.teal}22`, border: `1px solid ${VS.teal}55`, color: VS.teal }}>
-          <Clock className="h-3.5 w-3.5" /> Clock In User
         </button>
         {loading && <span className="text-[11px]" style={{ color: VS.text2 }}>Loading…</span>}
       </div>
@@ -586,20 +514,12 @@ function AttendanceLogs() {
                   <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.teal }}>{fmtDur(l.duration)}</td>
                   <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.text2 }}>{fmtDur(l.breakDuration)}</td>
                   <td className="px-4 py-2.5 text-right">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(l)}
-                        className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
-                        style={{ color: VS.accent }}
-                        title="Edit">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => handleDeleteLog(l.id, l.userName || l.userEmail || l.userId)}
-                        className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
-                        style={{ color: VS.red }}
-                        title="Delete">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    <button onClick={() => openEdit(l)}
+                      className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                      style={{ color: VS.accent }}
+                      title="Edit">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -661,86 +581,6 @@ function AttendanceLogs() {
                 className="flex-1 flex items-center justify-center gap-1 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
                 style={{ background: VS.accent, color: '#fff' }}>
                 <Save className="h-3.5 w-3.5" /> {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showClockIn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.75)' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowClockIn(false); }}>
-          <div className="w-full max-w-md rounded-2xl p-6 space-y-4"
-            style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
-            <div>
-              <h3 className="text-sm font-bold" style={{ color: VS.text0 }}>Clock In User</h3>
-              <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
-                Manually clock in any user. Leave Clock Out blank to mark as still active.
-              </p>
-            </div>
-
-            <div>
-              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>User</label>
-              <select value={clockInForm.userId}
-                onChange={e => setClockInForm(p => ({ ...p, userId: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-xs"
-                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}>
-                <option value="">— Select user —</option>
-                {usersList
-                  .slice()
-                  .sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email))
-                  .map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name ? `${u.name} (${u.email})` : u.email}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Clock In</label>
-              <input type="datetime-local" value={clockInForm.timeIn}
-                onChange={e => setClockInForm(p => ({ ...p, timeIn: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-xs"
-                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
-            </div>
-
-            <div>
-              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Clock Out (optional)</label>
-              <input type="datetime-local" value={clockInForm.timeOut}
-                onChange={e => setClockInForm(p => ({ ...p, timeOut: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-xs"
-                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
-              <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>Blank = user stays clocked in (shows as active).</p>
-            </div>
-
-            <div>
-              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Break (minutes)</label>
-              <input type="number" min="0" value={clockInForm.breakMinutes}
-                onChange={e => setClockInForm(p => ({ ...p, breakMinutes: parseInt(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 rounded-lg text-xs"
-                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
-            </div>
-
-            <div>
-              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Notes</label>
-              <textarea value={clockInForm.notes} rows={2}
-                onChange={e => setClockInForm(p => ({ ...p, notes: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-xs resize-none"
-                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setShowClockIn(false)}
-                className="flex-1 px-4 py-2 rounded-lg text-xs font-semibold"
-                style={{ background: VS.bg2, color: VS.text1, border: `1px solid ${VS.border}` }}>
-                Cancel
-              </button>
-              <button onClick={handleClockIn} disabled={clockInSaving || !clockInForm.userId || !clockInForm.timeIn}
-                className="flex-1 flex items-center justify-center gap-1 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
-                style={{ background: VS.teal, color: '#fff' }}>
-                <Clock className="h-3.5 w-3.5" /> {clockInSaving ? 'Clocking in…' : 'Clock In'}
               </button>
             </div>
           </div>

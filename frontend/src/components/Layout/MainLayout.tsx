@@ -62,17 +62,6 @@ const MainLayout: React.FC = () => {
   const [attendanceActive, setAttendanceActive] = useState<{ timeIn: string } | null>(null);
   const [navOnBreak, setNavOnBreak] = useState(false);
   const [navElapsed, setNavElapsed] = useState(0);
-
-  // Active task timer (shown as a pill in the navbar while any task timer is running)
-  const [taskTimer, setTaskTimer] = useState<{ taskId: string; startTime: number; title: string | null } | null>(() => {
-    try {
-      const raw = localStorage.getItem('task_timer_active');
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      return obj?.taskId ? { taskId: obj.taskId, startTime: obj.startTime, title: obj.title || null } : null;
-    } catch { return null; }
-  });
-  const [taskTimerElapsed, setTaskTimerElapsed] = useState(0);
   const navTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -197,90 +186,6 @@ const MainLayout: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Active task timer — read localStorage first for instant render, then
-  // authoritatively sync from the backend every 30s + on SSE ticks so the
-  // pill stays in sync across devices (phone + desktop).
-  useEffect(() => {
-    const readFromStorage = () => {
-      try {
-        const raw = localStorage.getItem('task_timer_active');
-        if (!raw) return setTaskTimer(null);
-        const obj = JSON.parse(raw);
-        if (obj?.taskId && obj?.startTime) {
-          setTaskTimer({ taskId: obj.taskId, startTime: obj.startTime, title: obj.title || null });
-        }
-      } catch { /* ignore */ }
-    };
-    const onChange = () => readFromStorage();
-    window.addEventListener('task-timer-changed', onChange);
-    window.addEventListener('storage', onChange); // cross-tab sync on same device
-    readFromStorage();
-    return () => {
-      window.removeEventListener('task-timer-changed', onChange);
-      window.removeEventListener('storage', onChange);
-    };
-  }, []);
-
-  // Cross-device sync: poll the backend for the user's active timer.
-  const syncActiveTimerFromServer = useCallback(async () => {
-    if (!session?.user?.id || !orgId) return;
-    try {
-      const res = await fetch('/api/tasks/timer/active', { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.timer?.taskId) {
-        const next = { taskId: data.timer.taskId, startTime: data.timer.startedAt, title: data.timer.title || null };
-        setTaskTimer(prev => {
-          // Only update if different to avoid re-renders
-          if (prev && prev.taskId === next.taskId && prev.startTime === next.startTime) return prev;
-          localStorage.setItem('task_timer_active', JSON.stringify(next));
-          return next;
-        });
-      } else {
-        setTaskTimer(prev => {
-          if (prev === null) return prev;
-          localStorage.removeItem('task_timer_active');
-          return null;
-        });
-      }
-    } catch { /* ignore */ }
-  }, [session?.user?.id, orgId]);
-
-  useEffect(() => {
-    syncActiveTimerFromServer();
-    const id = setInterval(syncActiveTimerFromServer, 30_000);
-    // Also re-sync when the tab regains focus — mobile browsers freeze setInterval
-    // when backgrounded, so this catches the "unlock phone, reopen app" case.
-    const onVis = () => { if (document.visibilityState === 'visible') syncActiveTimerFromServer(); };
-    document.addEventListener('visibilitychange', onVis);
-    window.addEventListener('focus', onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVis);
-      window.removeEventListener('focus', onVis);
-    };
-  }, [syncActiveTimerFromServer]);
-
-  useEffect(() => {
-    if (!taskTimer) { setTaskTimerElapsed(0); return; }
-    const tick = () => setTaskTimerElapsed(Math.max(0, Math.floor((Date.now() - taskTimer.startTime) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [taskTimer]);
-
-  // Fetch the running task title if we only have the id (so the pill shows a name)
-  useEffect(() => {
-    if (!taskTimer || taskTimer.title) return;
-    let cancelled = false;
-    fetch(`/api/tasks/${taskTimer.taskId}`).then(r => r.ok ? r.json() : null).then(d => {
-      if (!cancelled && d?.task?.title) {
-        setTaskTimer(prev => prev ? { ...prev, title: d.task.title } : prev);
-      }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [taskTimer?.taskId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Fetch attendance status
   const fetchStatus = useCallback(async () => {
     if (!session?.user?.id || !orgId) return;
@@ -342,7 +247,6 @@ const MainLayout: React.FC = () => {
   useSSE(orgId || undefined, (event) => {
     if (event === 'attendance')   fetchStatus();
     if (event === 'notification') fetchNotifs();
-    if (event === 'task')         syncActiveTimerFromServer();
   });
 
   const handleMarkAllRead = async () => {
@@ -455,25 +359,7 @@ const MainLayout: React.FC = () => {
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          {pageTitle && <h1 className="text-sm font-semibold hidden sm:block" style={{ color: VS.text2 }}>{pageTitle}</h1>}
-          {taskTimer && (
-            <button
-              onClick={() => navigate('/tasks')}
-              title={taskTimer.title ? `Running task: ${taskTimer.title}` : 'Task timer running'}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-opacity hover:opacity-90"
-              style={{ background: `${VS.teal}22`, border: `1px solid ${VS.teal}55` }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0" style={{ background: VS.teal }} />
-              <span className="text-[12px] font-mono font-bold tabular-nums" style={{ color: VS.teal }}>
-                {fmtElapsed(taskTimerElapsed)}
-              </span>
-              {taskTimer.title && (
-                <span className="text-[11px] truncate max-w-[120px] sm:max-w-[180px]" style={{ color: VS.text1 }}>
-                  {taskTimer.title}
-                </span>
-              )}
-            </button>
-          )}
+          {pageTitle && <h1 className="text-sm font-semibold" style={{ color: VS.text2 }}>{pageTitle}</h1>}
         </div>
 
         {/* Center — wall clock + attendance elapsed (absolutely centered, hidden on small screens) */}

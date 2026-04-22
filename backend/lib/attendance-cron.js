@@ -18,22 +18,18 @@ function fmtDuration(seconds) {
 async function runAutoClockout() {
   if (!process.env.DATABASE_URL) return;
   try {
-    // Cumulative cap, timezone-safe. Instead of relying on the `date` VARCHAR
-    // (which is UTC and bleeds across midnight for non-UTC users), we sum only
-    // closed sessions whose timeOut is within 8h BEFORE this open session's
-    // timeIn — i.e. "the same work block". Also subtract the open session's
-    // own breakDuration from openSecs so multiple accidental-clockout-resume
-    // cycles don't inflate it.
+    // Cumulative daily cap — close an open session when (its age) + (sum of the user's
+    // closed sessions in the last 16h) reaches the threshold. Catches the case where
+    // someone clocks out and starts a new session — the second one still counts toward
+    // the daily 9h30m cap. Applies to every user (no filter).
     const overdueRows = await prisma.$queryRawUnsafe(
       `SELECT al.id, al.userId, al.orgId, al.timeIn,
-              GREATEST(0, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) - IFNULL(al.breakDuration, 0)) AS openSecs,
+              TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS openSecs,
               COALESCE((
-                SELECT SUM(GREATEST(0, al2.duration - IFNULL(al2.breakDuration, 0))) FROM attendance_logs al2
+                SELECT SUM(al2.duration) FROM attendance_logs al2
                 WHERE al2.userId = al.userId AND al2.orgId = al.orgId
+                  AND al2.timeIn >= DATE_SUB(NOW(), INTERVAL 16 HOUR)
                   AND al2.timeOut IS NOT NULL
-                  AND al2.id <> al.id
-                  AND al2.timeOut >= DATE_SUB(al.timeIn, INTERVAL 8 HOUR)
-                  AND al2.timeOut <= al.timeIn
               ), 0) AS closedSecs
          FROM attendance_logs al
         WHERE al.timeOut IS NULL
@@ -46,20 +42,16 @@ async function runAutoClockout() {
 
     for (const row of overdueRows) {
       try {
+        const now = new Date();
         const timeIn = new Date(row.timeIn);
-        const grossSeconds = Math.floor((Date.now() - timeIn.getTime()) / 1000);
-        // Cap duration + timeOut at AUTO_CLOCKOUT_SECONDS so the stored row
-        // never shows a > 9h30m session (e.g. if the cron was delayed or was
-        // off when the session was actually past the cap).
-        const cappedSeconds = Math.min(grossSeconds, AUTO_CLOCKOUT_SECONDS);
-        const cappedTimeOut = new Date(timeIn.getTime() + cappedSeconds * 1000);
+        const grossSeconds = Math.floor((now.getTime() - timeIn.getTime()) / 1000);
 
         // Clock out
         await prisma.$executeRawUnsafe(
           `UPDATE attendance_logs
            SET timeOut = ?, duration = ?, updatedAt = NOW(3)
            WHERE id = ? AND timeOut IS NULL`,
-          cappedTimeOut, cappedSeconds, row.id
+          now, grossSeconds, row.id
         );
 
         // Broadcast SSE so all connected clients (admin view) refresh immediately
@@ -79,7 +71,7 @@ async function runAutoClockout() {
           }
         } catch { /* non-fatal */ }
 
-        const durationStr = fmtDuration(cappedSeconds);
+        const durationStr = fmtDuration(grossSeconds);
         const clockInTime = timeIn.toLocaleTimeString('en-AU', {
           hour: '2-digit', minute: '2-digit', hour12: true,
         });

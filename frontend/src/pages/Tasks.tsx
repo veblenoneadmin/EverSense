@@ -164,18 +164,6 @@ export function Tasks() {
   // New task form
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [newTaskColumnStatus, setNewTaskColumnStatus] = useState<Task['status']>('not_started');
-
-  // Blank template for resetting the New Task form — kept here so every close
-  // path can reset identically (modal X, backdrop click, successful submit).
-  const BLANK_NEW_TASK = {
-    title: '', description: '', priority: 'Medium' as Task['priority'],
-    projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
-    isTeamTask: false, subTasks: [] as { assigneeId: string; title: string }[],
-    checklistItems: [] as string[],
-    recurringPattern: '' as '' | 'daily' | 'weekly' | 'biweekly' | 'monthly',
-    recurringEndDate: '',
-  };
-  const closeNewTaskForm = () => { setShowNewTaskForm(false); setNewTaskForm(BLANK_NEW_TASK); };
   const [newTaskForm, setNewTaskForm] = useState({
     title: '', description: '', priority: 'Medium' as Task['priority'],
     projectId: '', estimatedHours: 0, dueDate: '', tags: '', assigneeIds: [] as string[],
@@ -310,68 +298,13 @@ export function Tasks() {
 
   useEffect(() => { fetchTasks(); }, [session?.user?.id, currentOrg?.id, showAllTasks]);
 
-  // ── Sync our own task timer state from the backend (cross-device) ─────────
-  // When the user starts/stops a timer on another device, that device POSTs
-  // /api/tasks/timer/start|stop which updates active_timers and broadcasts SSE.
-  // Here we re-fetch the canonical active timer and mirror it into our local
-  // timerTaskId/timerStart state so the Kanban card highlight + Recording
-  // strip + play/stop button all reflect the other device's action.
-  const syncLocalTimerFromServer = useCallback(async () => {
-    if (!session?.user?.id || !currentOrg?.id) return;
-    try {
-      const data = await apiClient.fetch('/api/tasks/timer/active');
-      const t = data?.timer;
-      if (t?.taskId) {
-        // Another device is running this timer. Mirror it locally if different.
-        if (timerTaskId !== t.taskId || timerStart !== t.startedAt) {
-          if (timerInterval.current) { clearInterval(timerInterval.current); timerInterval.current = null; }
-          setTimerTaskId(t.taskId);
-          setTimerStart(t.startedAt);
-          localStorage.setItem('task_timer_active', JSON.stringify({ taskId: t.taskId, startTime: t.startedAt, title: t.title || null }));
-          localStorage.setItem('task_timer_start', String(t.startedAt));
-          window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: { taskId: t.taskId, startTime: t.startedAt, title: t.title || null } }));
-          timerInterval.current = setInterval(() => setTick(x => x + 1), 1000);
-        }
-      } else if (timerTaskId) {
-        // Backend says no timer, but local state thinks one is running — clear it.
-        if (timerInterval.current) { clearInterval(timerInterval.current); timerInterval.current = null; }
-        setTimerTaskId(null);
-        setTimerStart(null);
-        localStorage.removeItem('task_timer_active');
-        localStorage.removeItem('task_timer_start');
-        window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: null }));
-      }
-    } catch { /* non-fatal */ }
-  }, [session?.user?.id, currentOrg?.id, timerTaskId, timerStart]);
-
-  // Initial sync + refocus sync + 30s poll fallback (SSE handles near-real-time).
-  useEffect(() => {
-    syncLocalTimerFromServer();
-    const id = setInterval(syncLocalTimerFromServer, 30_000);
-    const onVis = () => { if (document.visibilityState === 'visible') syncLocalTimerFromServer(); };
-    document.addEventListener('visibilitychange', onVis);
-    window.addEventListener('focus', onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVis);
-      window.removeEventListener('focus', onVis);
-    };
-  }, [syncLocalTimerFromServer]);
-
   // ── Real-time task updates via SSE ────────────────────────────────────────
   useSSE(currentOrg?.id || undefined, useCallback((event: string, data: any) => {
-    if (event === 'task') {
-      // Timer-start/stop: always re-sync our own state (user could have the
-      // same account logged in on another device).
-      if (data?.action === 'timer-start' || data?.action === 'timer-stop') {
-        syncLocalTimerFromServer();
-      }
-      // Other task actions by other users — silently refetch the list.
-      if (data?.userId !== session?.user?.id && data?.action !== 'timer-start' && data?.action !== 'timer-stop') {
-        fetchTasks(false);
-      }
+    if (event === 'task' && data?.userId !== session?.user?.id) {
+      // Another user changed a task — silently refetch
+      fetchTasks(false);
     }
-  }, [session?.user?.id, syncLocalTimerFromServer])); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]));
 
   // ── fetch projects ─────────────────────────────────────────────────────────
   const fetchProjects = async () => {
@@ -590,10 +523,8 @@ export function Tasks() {
     const startTime = Date.now();
     setTimerTaskId(taskId);
     setTimerStart(startTime);
-    const title = tasks.find(t => t.id === taskId)?.title || null;
-    localStorage.setItem('task_timer_active', JSON.stringify({ taskId, startTime, title }));
+    localStorage.setItem('task_timer_active', JSON.stringify({ taskId, startTime }));
     localStorage.setItem('task_timer_start', String(startTime));
-    window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: { taskId, startTime, title } }));
     timerInterval.current = setInterval(() => setTick(t => t + 1), 1000);
     // Notify backend so admins can see this timer
     apiClient.fetch('/api/tasks/timer/start', {
@@ -625,15 +556,11 @@ export function Tasks() {
     })();
     localStorage.removeItem('task_timer_active');
     localStorage.removeItem('task_timer_start');
-    window.dispatchEvent(new CustomEvent('task-timer-changed', { detail: null }));
 
     const effectiveStart = storedStart ?? timerStart;
     const elapsed = effectiveStart !== null ? Math.floor((Date.now() - effectiveStart) / 1000) : 0;
 
-    // Keep localStorage accum in sync for the in-page live display, but the
-    // authoritative actualHours value on the server is computed by ADDING this
-    // session's elapsed to whatever the server already has. Using a local-only
-    // accumulator clobbers time logged from other devices/sessions.
+    // Always read accumulated time from localStorage (source of truth) — avoids stale React closure
     const stored: Record<string, number> = (() => {
       try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
     })();
@@ -642,16 +569,11 @@ export function Tasks() {
     setTimerAccum(newAccum);
     setTimerTaskId(null);
     setTimerStart(null);
-
-    // Server-known actualHours → increment by this session's elapsed.
-    const serverActualHours = tasks.find(t => t.id === taskId)?.actualHours || 0;
-    const newActualHours = parseFloat((serverActualHours + elapsed / 3600).toFixed(2));
-
     try {
       await Promise.all([
         apiClient.fetch(`/api/tasks/${taskId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ actualHours: newActualHours }),
+          body: JSON.stringify({ actualHours: parseFloat((newAccum[taskId] / 3600).toFixed(2)) }),
         }),
         apiClient.fetch('/api/tasks/timer/stop', { method: 'POST', body: JSON.stringify({}) }).catch(() => {}),
       ]);
@@ -719,16 +641,29 @@ export function Tasks() {
     }
   };
 
+  // Trivial/lazy values we reject so people actually describe what they did.
+  const TRIVIAL_VALUES = new Set(['n/a', 'na', 'none', 'done', 'no', 'nothing', '-', '.', '/']);
+  const isTrivial = (s: string) => {
+    const v = s.trim().toLowerCase().replace(/[\s.,!]+$/, '');
+    return !v || TRIVIAL_VALUES.has(v) || v.length < 4;
+  };
+
   const handleReportSubmit = async () => {
     if (!reportModal) return;
     const isComplete = reportModal.status === 'completed';
 
-    // For completed: need at least one non-empty accomplishment.
+    // For completed: need at least one MEANINGFUL accomplishment.
     if (isComplete) {
-      const filled = accomplishments.filter(a => a.trim());
-      if (filled.length === 0) return;
+      const meaningful = accomplishments.filter(a => !isTrivial(a));
+      if (meaningful.length === 0) {
+        alert('Please describe what you actually accomplished — values like "n/a", "done", or single words are not accepted. Be specific.');
+        return;
+      }
     } else {
-      if (!reportText.trim()) return;
+      if (!reportText.trim() || isTrivial(reportText)) {
+        alert('Please provide a meaningful reason (not "n/a" or similar).');
+        return;
+      }
     }
 
     setReportSubmitting(true);
@@ -738,7 +673,7 @@ export function Tasks() {
       // Build the report text
       let fullReport = '';
       if (isComplete) {
-        const filled = accomplishments.filter(a => a.trim());
+        const filled = accomplishments.filter(a => !isTrivial(a));
         fullReport = 'Accomplishments:\n' + filled.map((a, i) => `${i + 1}. ${a.trim()}`).join('\n');
         const filledLinks = reportLinks.filter(l => l.trim());
         if (filledLinks.length) fullReport += '\n\nLinks:\n' + filledLinks.map(l => `- ${l.trim()}`).join('\n');
@@ -1828,22 +1763,12 @@ export function Tasks() {
                           </div>
                         </div>
 
-                        {/* ── Centered timer button (hover on desktop, always visible on mobile or when running) ── */}
+                        {/* ── Centered hover timer button ── */}
                         {userRole !== 'CLIENT' && (
                           <div
-                            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 z-10 pointer-events-none ${
-                              timerTaskId === task.id
-                                ? 'opacity-100'
-                                : 'sm:opacity-0 sm:group-hover:opacity-100 opacity-100'
-                            }`}
+                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none"
                           >
                             <span
-                              // The outer card is draggable; without these the browser
-                              // starts a drag on mousedown before click can fire.
-                              draggable={false}
-                              onMouseDown={e => e.stopPropagation()}
-                              onTouchStart={e => e.stopPropagation()}
-                              onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
                               onClick={e => { e.stopPropagation(); if (timerTaskId === task.id) { handleStopTimer(task.id); } else { handleMoveToInProgress(task.id); handleStartTimer(task.id); } }}
                               onDoubleClick={e => e.stopPropagation()}
                               className="flex items-center justify-center h-10 w-10 rounded-full backdrop-blur-sm transition-transform duration-150 hover:scale-110 pointer-events-auto cursor-pointer"
@@ -2203,7 +2128,7 @@ export function Tasks() {
                 </button>
                 <button
                   onClick={handleReportSubmit}
-                  disabled={isComplete ? accomplishments.every(a => !a.trim()) || reportSubmitting : !reportText.trim() || reportSubmitting}
+                  disabled={isComplete ? accomplishments.every(a => isTrivial(a)) || reportSubmitting : !reportText.trim() || isTrivial(reportText) || reportSubmitting}
                   className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
                   style={{ background: accentColor, color: '#fff' }}
                 >
@@ -2309,7 +2234,7 @@ export function Tasks() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.75)' }}
-          onClick={e => { if (e.target === e.currentTarget) closeNewTaskForm(); }}
+          onClick={e => { if (e.target === e.currentTarget) setShowNewTaskForm(false); }}
         >
           <div
             className="w-full max-w-md rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
@@ -2347,7 +2272,7 @@ export function Tasks() {
                 </p>
               </div>
               <button
-                onClick={closeNewTaskForm}
+                onClick={() => setShowNewTaskForm(false)}
                 className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
                 style={{ color: VS.text1 }}
               >
@@ -2785,7 +2710,7 @@ export function Tasks() {
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={closeNewTaskForm}
+                  onClick={() => setShowNewTaskForm(false)}
                   className="flex-1 py-2.5 rounded-xl text-sm transition-colors"
                   style={{ background: VS.bg3, border: `1px solid ${VS.border}`, color: VS.text1 }}
                 >
