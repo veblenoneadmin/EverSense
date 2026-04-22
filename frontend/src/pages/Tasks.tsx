@@ -1838,6 +1838,12 @@ export function Tasks() {
                             }`}
                           >
                             <span
+                              // The outer card is draggable; without these the browser
+                              // starts a drag on mousedown before click can fire.
+                              draggable={false}
+                              onMouseDown={e => e.stopPropagation()}
+                              onTouchStart={e => e.stopPropagation()}
+                              onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
                               onClick={e => { e.stopPropagation(); if (timerTaskId === task.id) { handleStopTimer(task.id); } else { handleMoveToInProgress(task.id); handleStartTimer(task.id); } }}
                               onDoubleClick={e => e.stopPropagation()}
                               className="flex items-center justify-center h-10 w-10 rounded-full backdrop-blur-sm transition-transform duration-150 hover:scale-110 pointer-events-auto cursor-pointer"
