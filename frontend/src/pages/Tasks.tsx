@@ -641,29 +641,16 @@ export function Tasks() {
     }
   };
 
-  // Trivial/lazy values we reject so people actually describe what they did.
-  const TRIVIAL_VALUES = new Set(['n/a', 'na', 'none', 'done', 'no', 'nothing', '-', '.', '/']);
-  const isTrivial = (s: string) => {
-    const v = s.trim().toLowerCase().replace(/[\s.,!]+$/, '');
-    return !v || TRIVIAL_VALUES.has(v) || v.length < 4;
-  };
-
   const handleReportSubmit = async () => {
     if (!reportModal) return;
     const isComplete = reportModal.status === 'completed';
 
-    // For completed: need at least one MEANINGFUL accomplishment.
+    // For completed: need at least one non-empty accomplishment.
     if (isComplete) {
-      const meaningful = accomplishments.filter(a => !isTrivial(a));
-      if (meaningful.length === 0) {
-        alert('Please describe what you actually accomplished — values like "n/a", "done", or single words are not accepted. Be specific.');
-        return;
-      }
+      const filled = accomplishments.filter(a => a.trim());
+      if (filled.length === 0) return;
     } else {
-      if (!reportText.trim() || isTrivial(reportText)) {
-        alert('Please provide a meaningful reason (not "n/a" or similar).');
-        return;
-      }
+      if (!reportText.trim()) return;
     }
 
     setReportSubmitting(true);
@@ -673,7 +660,7 @@ export function Tasks() {
       // Build the report text
       let fullReport = '';
       if (isComplete) {
-        const filled = accomplishments.filter(a => !isTrivial(a));
+        const filled = accomplishments.filter(a => a.trim());
         fullReport = 'Accomplishments:\n' + filled.map((a, i) => `${i + 1}. ${a.trim()}`).join('\n');
         const filledLinks = reportLinks.filter(l => l.trim());
         if (filledLinks.length) fullReport += '\n\nLinks:\n' + filledLinks.map(l => `- ${l.trim()}`).join('\n');
@@ -2128,7 +2115,7 @@ export function Tasks() {
                 </button>
                 <button
                   onClick={handleReportSubmit}
-                  disabled={isComplete ? accomplishments.every(a => isTrivial(a)) || reportSubmitting : !reportText.trim() || isTrivial(reportText) || reportSubmitting}
+                  disabled={isComplete ? accomplishments.every(a => !a.trim()) || reportSubmitting : !reportText.trim() || reportSubmitting}
                   className="px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
                   style={{ background: accentColor, color: '#fff' }}
                 >
