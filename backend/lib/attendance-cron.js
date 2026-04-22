@@ -18,18 +18,19 @@ function fmtDuration(seconds) {
 async function runAutoClockout() {
   if (!process.env.DATABASE_URL) return;
   try {
-    // Cumulative daily cap — close an open session when (its age) + (sum of the user's
-    // closed sessions in the last 16h) reaches the threshold. Catches the case where
-    // someone clocks out and starts a new session — the second one still counts toward
-    // the daily 9h30m cap. Applies to every user (no filter).
+    // Cumulative daily cap — close an open session when (its age) + (sum of the
+    // user's closed sessions on THE SAME date) reaches the threshold. Using the
+    // stored `date` column (YYYY-MM-DD) prevents yesterday's overnight sessions
+    // from polluting today's quota.
     const overdueRows = await prisma.$queryRawUnsafe(
       `SELECT al.id, al.userId, al.orgId, al.timeIn,
               TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS openSecs,
               COALESCE((
                 SELECT SUM(al2.duration) FROM attendance_logs al2
                 WHERE al2.userId = al.userId AND al2.orgId = al.orgId
-                  AND al2.timeIn >= DATE_SUB(NOW(), INTERVAL 16 HOUR)
+                  AND al2.date = al.date
                   AND al2.timeOut IS NOT NULL
+                  AND al2.id <> al.id
               ), 0) AS closedSecs
          FROM attendance_logs al
         WHERE al.timeOut IS NULL
