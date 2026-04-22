@@ -227,6 +227,9 @@ router.post('/timer/start', requireAuth, withOrgScope, async (req, res) => {
 });
 
 // ── POST /api/tasks/timer/stop — clear current user's active timer ────────────
+// Optional body { taskId, beganAt, endedAt, duration } — when present, also
+// insert a per-user time_logs row so we can build contribution breakdowns.
+// All fields are optional so existing clients that just POST `{}` keep working.
 router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
   await ensureActiveTimersTable();
   try {
@@ -234,10 +237,50 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
       'DELETE FROM active_timers WHERE userId = ? AND orgId = ?',
       req.user.id, req.orgId
     );
+
+    const { taskId, beganAt, endedAt, duration } = req.body || {};
+    if (taskId && beganAt && duration != null && Number(duration) > 0) {
+      try {
+        await prisma.$executeRawUnsafe(
+          'INSERT INTO time_logs (id, taskId, userId, orgId, `begin`, `end`, duration, category, createdAt, updatedAt) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))',
+          randomUUID(), taskId, req.user.id, req.orgId,
+          new Date(beganAt), new Date(endedAt || Date.now()),
+          Math.floor(Number(duration)), 'work'
+        );
+      } catch (e) { console.warn('[Tasks] timer/stop time_log insert failed:', e.message); }
+    }
+
     res.json({ ok: true });
   } catch (e) {
     console.error('[Tasks] timer/stop error:', e);
     res.status(500).json({ error: 'Failed to clear timer' });
+  }
+});
+
+// ── GET /api/tasks/:taskId/contributions — per-user time spent on a task ────
+router.get('/:taskId/contributions', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT tl.userId, SUM(tl.duration) AS secs, u.name, u.email ' +
+      'FROM time_logs tl LEFT JOIN `User` u ON u.id = tl.userId ' +
+      'WHERE tl.taskId = ? AND tl.orgId = ? AND tl.duration > 0 ' +
+      'GROUP BY tl.userId, u.name, u.email ' +
+      'ORDER BY secs DESC',
+      taskId, req.orgId
+    );
+    res.json({
+      contributions: rows.map(r => ({
+        userId: r.userId,
+        name:   r.name || r.email || 'Unknown',
+        email:  r.email || '',
+        seconds: Number(r.secs || 0),
+      })),
+    });
+  } catch (e) {
+    console.error('[Tasks] contributions error:', e);
+    res.status(500).json({ error: 'Failed to load contributions' });
   }
 });
 

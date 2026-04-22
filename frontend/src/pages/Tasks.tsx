@@ -633,7 +633,15 @@ export function Tasks() {
           method: 'PATCH',
           body: JSON.stringify({ actualHours: newActualHours }),
         }),
-        apiClient.fetch('/api/tasks/timer/stop', { method: 'POST', body: JSON.stringify({}) }).catch(() => {}),
+        apiClient.fetch('/api/tasks/timer/stop', {
+          method: 'POST',
+          body: JSON.stringify({
+            taskId,
+            beganAt: effectiveStart,
+            endedAt: Date.now(),
+            duration: elapsed,
+          }),
+        }).catch(() => {}),
       ]);
       await fetchTasks(false);
     } catch { /* silent */ }

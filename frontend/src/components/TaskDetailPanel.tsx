@@ -287,11 +287,21 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated, o
     finally { if (!silent) setCLLoading(false); }
   };
 
+  // Per-user time contributions for this task
+  const [contributions, setContributions] = useState<{ userId: string; name: string; email: string; seconds: number }[]>([]);
+  const fetchContributions = async () => {
+    try {
+      const data = await api.fetch(`/api/tasks/${task.id}/contributions`);
+      setContributions(data.contributions || []);
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     Promise.all([fetchComments(), fetchAttachments()]).then(([cc, ac]) => {
       onCountsLoaded?.(task.id, cc, ac);
     });
     fetchChecklist();
+    fetchContributions();
 
     // Poll checklist every 15s so completed sub-tasks auto-check
     if (task.isTeamTask) {
@@ -722,6 +732,54 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated, o
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Per-user time contributions */}
+              {contributions.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: VS.text2 }}>
+                      <Clock className="h-3.5 w-3.5" />
+                      Time by Person
+                    </h3>
+                    <span className="text-[11px] font-bold" style={{ color: VS.accent }}>
+                      {(() => {
+                        const total = contributions.reduce((s, c) => s + c.seconds, 0);
+                        const h = Math.floor(total / 3600);
+                        const m = Math.round((total % 3600) / 60);
+                        return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                      })()} total
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {contributions.map(c => {
+                      const h = Math.floor(c.seconds / 3600);
+                      const m = Math.round((c.seconds % 3600) / 60);
+                      const label = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                      const totalAll = contributions.reduce((s, x) => s + x.seconds, 0) || 1;
+                      const pct = Math.round((c.seconds / totalAll) * 100);
+                      return (
+                        <div key={c.userId} className="flex items-center gap-2 p-2 rounded"
+                          style={{ background: VS.bg2, border: `1px solid ${VS.border}` }}>
+                          <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                            style={{ background: `linear-gradient(135deg, ${VS.accent}, ${VS.teal})` }}>
+                            {(c.name || c.email || '?').split(' ').map(s => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-medium truncate" style={{ color: VS.text0 }}>{c.name}</div>
+                            <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: VS.bg3 }}>
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: VS.accent }} />
+                            </div>
+                          </div>
+                          <span className="text-[12px] font-mono tabular-nums shrink-0" style={{ color: VS.text1 }}>{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] italic mt-2" style={{ color: VS.text2 }}>
+                    Contributions are recorded when a user stops their timer. Older sessions (before this feature) aren't included.
+                  </p>
                 </div>
               )}
 
