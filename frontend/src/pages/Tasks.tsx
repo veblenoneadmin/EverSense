@@ -547,13 +547,15 @@ export function Tasks() {
 
     // Pull the task's freshest actualHours from the server before starting so
     // the display shows the correct base even if another user/device edited
-    // actualHours a moment ago and our SSE sync hasn't landed yet. If the
-    // fetch fails we fall back to local state.
+    // a moment ago and SSE sync hasn't landed yet. IMPORTANT: only update
+    // actualHours on the local row — spreading the whole server object
+    // would trample the optimistic status=in_progress set a moment earlier
+    // by handleMoveToInProgress and bounce the card back to To Do.
     try {
       const res = await apiClient.fetch(`/api/tasks/${taskId}`);
       const t = res?.task || res;
-      if (t && t.id === taskId) {
-        setTasks(prev => prev.map(x => x.id === taskId ? { ...x, ...t } : x));
+      if (t && t.id === taskId && t.actualHours !== undefined) {
+        setTasks(prev => prev.map(x => x.id === taskId ? { ...x, actualHours: Number(t.actualHours) || 0 } : x));
       }
     } catch { /* non-fatal */ }
 
