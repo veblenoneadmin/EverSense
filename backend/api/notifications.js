@@ -139,6 +139,12 @@ export default router;
 // Types that warrant an email notification
 const EMAIL_TYPES = new Set(['task', 'comment', 'overdue', 'due_soon', 'reminder']);
 
+// Roles that should NOT receive per-event email notifications. They still get
+// in-app notifications; only the email dispatch is skipped. The daily digest
+// (services/dailyPersonReportScheduler.js) is on a separate code path and is
+// unaffected — owners still receive it.
+const EMAIL_OPT_OUT_ROLES = new Set(['OWNER', 'ADMIN', 'HALL_OF_JUSTICE', 'ACCOUNTANT']);
+
 // ── Helper exported for other routes to create notifications ─────────────────
 export async function createNotification({ userId, orgId, title, body = null, link = null, type = 'info' }) {
   try {
@@ -149,8 +155,19 @@ export async function createNotification({ userId, orgId, title, body = null, li
       id, userId, orgId, title, body, link, type
     );
 
-    // Send email for important notification types (non-blocking)
+    // Send email for important notification types (non-blocking), but skip for
+    // admin roles — they're getting too many emails. Daily digest still fires.
     if (EMAIL_TYPES.has(type) && process.env.SMTP_HOST) {
+      try {
+        const membership = await prisma.membership.findUnique({
+          where: { userId_orgId: { userId, orgId } },
+          select: { role: true },
+        });
+        if (membership && EMAIL_OPT_OUT_ROLES.has(membership.role)) {
+          // Admin role — in-app notification only, no email.
+          return;
+        }
+      } catch { /* if role lookup fails, default to sending (previous behavior) */ }
       sendNotificationEmail(userId, title, body, link, type).catch(() => {});
     }
   } catch (e) {
