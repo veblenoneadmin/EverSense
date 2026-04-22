@@ -3523,7 +3523,13 @@ async function startServer() {
   startInvoiceScheduler();
 
   // Inline attendance auto-clockout (runs directly in server process every minute)
-  const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m production threshold
+  //
+  // ⚠  DO NOT swap this for a "cumulative daily cap" rule. See the same warning
+  // in lib/attendance-cron.js for the full history. Single-session age check is
+  // intentionally simple — it survives timezones, overnight sessions, and
+  // resume-on-clock-in, none of which the cumulative variants handled without
+  // bugs that rapidly-closed legitimate sessions.
+  const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m — do not change without discussion
   let tickCount = 0;
   async function runInlineClockout() {
     if (!process.env.DATABASE_URL) return;

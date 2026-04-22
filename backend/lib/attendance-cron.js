@@ -1,12 +1,31 @@
 // backend/lib/attendance-cron.js
 // Checks every 1 minute — auto-clocks out sessions open longer than 9h 30m
-// and sends notifications to the user + all ADMIN/OWNER/HALL_OF_JUSTICE members
+// and sends notifications to the user + all ADMIN/OWNER/HALL_OF_JUSTICE members.
+//
+// ──────────────────────────────────────────────────────────────────────────────
+// ⚠  DO NOT REPLACE THE SIMPLE "single-session age >= 9h30m" RULE.
+// ──────────────────────────────────────────────────────────────────────────────
+// We previously tried a "cumulative daily cap" that summed closed-session
+// durations and auto-closed open sessions when the daily total hit 9h30m.
+// Every variant caused user-visible outages:
+//
+//   · 16h rolling window → Gwen's overnight-auto-closed session (24h42m duration)
+//     leaked into the next day and closed every new clock-in in seconds.
+//   · date-column scoping → admin@eversense.ai's AWST-morning clock-in was
+//     stored with UTC yesterday's date, so it matched the previous day's 8h+
+//     closed session and her session was closed seconds after every resume.
+//   · timeOut-recency scoping → got closer but still introduced edge cases.
+//
+// The simple single-session rule is the one thing that reliably works across
+// timezones, overnight sessions, and resume-on-clock-in. If someone needs a
+// daily cap back, gate it behind an opt-in env var so the default stays simple.
+// ──────────────────────────────────────────────────────────────────────────────
 
 import { prisma } from './prisma.js';
 import { createNotification } from '../api/notifications.js';
 import { broadcast } from './sse.js';
 
-const AUTO_CLOCKOUT_SECONDS = 9.5 * 3600; // 9h 30m
+const AUTO_CLOCKOUT_SECONDS = 9.5 * 3600; // 9h 30m — do not change without discussion
 const INTERVAL_MS = 60 * 1000;             // every 1 minute
 
 function fmtDuration(seconds) {
