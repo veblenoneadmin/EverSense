@@ -253,12 +253,28 @@ export function Tasks() {
     'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'due_asc' | 'due_desc' | 'title_asc' | 'title_desc'
   >('priority_desc');
 
-  // Timer — state is hydrated from localStorage so it survives refresh/restart
+  // Timer — state is hydrated from localStorage so it survives refresh/restart.
+  // NOTE on pause: pauseTaskTimer() removes `task_timer_start` but keeps
+  // `task_timer_active` intact (with its ORIGINAL startTime). So during a break
+  // we must NOT read startTime from task_timer_active — that would re-use the
+  // pre-break start and double-count elapsed time. Read from task_timer_start
+  // (which is removed on pause, re-written on resume) and return null when
+  // task_timer_paused is set.
   const [timerTaskId, setTimerTaskId] = useState<string | null>(() => {
-    try { return JSON.parse(localStorage.getItem('task_timer_active') || 'null')?.taskId ?? null; } catch { return null; }
+    try {
+      // During a break, prefer the paused task id; task_timer_active still points to the same task.
+      const pausedId = localStorage.getItem('task_timer_paused');
+      if (pausedId) return pausedId;
+      return JSON.parse(localStorage.getItem('task_timer_active') || 'null')?.taskId ?? null;
+    } catch { return null; }
   });
   const [timerStart, setTimerStart] = useState<number | null>(() => {
-    try { return JSON.parse(localStorage.getItem('task_timer_active') || 'null')?.startTime ?? null; } catch { return null; }
+    try {
+      // Paused → no live start.
+      if (localStorage.getItem('task_timer_paused')) return null;
+      const raw = localStorage.getItem('task_timer_start');
+      return raw ? Number(raw) : null;
+    } catch { return null; }
   });
   const [timerAccum, setTimerAccum] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
