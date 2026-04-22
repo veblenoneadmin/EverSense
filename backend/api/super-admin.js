@@ -605,6 +605,22 @@ router.patch('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async (
   }
 });
 
+// ── DELETE /api/super-admin/attendance-logs/:id ───────────────────────────────
+router.delete('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await prisma.$executeRawUnsafe(
+      'DELETE FROM attendance_logs WHERE id = ?', id
+    );
+    if (Number(result) === 0) return res.status(404).json({ error: 'Log not found' });
+    console.log(`[SuperAdmin] 🗑 deleted attendance log ${id}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[SuperAdmin] attendance-logs DELETE error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/super-admin/invoices/reset ──────────────────────────────────────
 // Wipe invoice records. Scopes:
 //   body: { orgId?, userId?, year?, month? }
