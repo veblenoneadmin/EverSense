@@ -259,25 +259,60 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
 });
 
 // ── GET /api/tasks/:taskId/contributions — per-user time spent on a task ────
+// Lists every assignee (primary + co-assignees) with their time_logs total.
+// Assignees who haven't stopped a timer yet or never timed appear with
+// seconds = 0. Stopped sessions stay in time_logs forever so totals persist.
 router.get('/:taskId/contributions', requireAuth, withOrgScope, async (req, res) => {
   try {
     const { taskId } = req.params;
-    const rows = await prisma.$queryRawUnsafe(
-      'SELECT tl.userId, SUM(tl.duration) AS secs, u.name, u.email ' +
-      'FROM time_logs tl LEFT JOIN `User` u ON u.id = tl.userId ' +
-      'WHERE tl.taskId = ? AND tl.orgId = ? AND tl.duration > 0 ' +
-      'GROUP BY tl.userId, u.name, u.email ' +
-      'ORDER BY secs DESC',
-      taskId, req.orgId
-    );
-    res.json({
-      contributions: rows.map(r => ({
-        userId: r.userId,
-        name:   r.name || r.email || 'Unknown',
-        email:  r.email || '',
-        seconds: Number(r.secs || 0),
-      })),
+    await ensureAssigneesTable();
+
+    // 1) All assignees: primary userId + co-assignees from task_assignees.
+    const taskRow = await prisma.macroTask.findUnique({
+      where: { id: taskId },
+      select: { userId: true, orgId: true },
     });
+    if (!taskRow || taskRow.orgId !== req.orgId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    const coRows = await prisma.$queryRawUnsafe(
+      'SELECT userId FROM task_assignees WHERE taskId = ? AND orgId = ?',
+      taskId, req.orgId
+    ).catch(() => []);
+    const assigneeIds = [...new Set([taskRow.userId, ...coRows.map(r => r.userId)].filter(Boolean))];
+    if (assigneeIds.length === 0) {
+      return res.json({ contributions: [] });
+    }
+
+    // 2) Total seconds per user from time_logs.
+    const logRows = await prisma.$queryRawUnsafe(
+      'SELECT userId, SUM(duration) AS secs FROM time_logs ' +
+      'WHERE taskId = ? AND orgId = ? AND duration > 0 GROUP BY userId',
+      taskId, req.orgId
+    ).catch(() => []);
+    const secondsByUser = new Map(logRows.map(r => [r.userId, Number(r.secs || 0)]));
+
+    // 3) User details for each assignee.
+    const users = await prisma.user.findMany({
+      where: { id: { in: assigneeIds } },
+      select: { id: true, name: true, email: true },
+    });
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    // 4) Compose + sort by seconds desc (zero-time assignees last).
+    const contributions = assigneeIds
+      .map(uid => {
+        const u = userMap.get(uid);
+        return {
+          userId: uid,
+          name:   u?.name || u?.email || 'Unknown',
+          email:  u?.email || '',
+          seconds: secondsByUser.get(uid) || 0,
+        };
+      })
+      .sort((a, b) => b.seconds - a.seconds);
+
+    res.json({ contributions });
   } catch (e) {
     console.error('[Tasks] contributions error:', e);
     res.status(500).json({ error: 'Failed to load contributions' });
