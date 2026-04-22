@@ -576,7 +576,10 @@ export function Tasks() {
     const effectiveStart = storedStart ?? timerStart;
     const elapsed = effectiveStart !== null ? Math.floor((Date.now() - effectiveStart) / 1000) : 0;
 
-    // Always read accumulated time from localStorage (source of truth) — avoids stale React closure
+    // Keep localStorage accum in sync for the in-page live display only.
+    // It must NOT be the source of truth for the server PATCH — that would
+    // clobber any manual edits the user made to actualHours (e.g. setting
+    // 2h 50m and then finding it jumped back to 15h+).
     const stored: Record<string, number> = (() => {
       try { return JSON.parse(localStorage.getItem('task_timers') || '{}'); } catch { return {}; }
     })();
@@ -585,11 +588,17 @@ export function Tasks() {
     setTimerAccum(newAccum);
     setTimerTaskId(null);
     setTimerStart(null);
+
+    // Source of truth for the PATCH: server-known actualHours + this session's elapsed.
+    // This preserves any manual edits the user made since the timer last stopped.
+    const serverActualHours = tasks.find(t => t.id === taskId)?.actualHours || 0;
+    const newActualHours = parseFloat((Number(serverActualHours) + elapsed / 3600).toFixed(2));
+
     try {
       await Promise.all([
         apiClient.fetch(`/api/tasks/${taskId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ actualHours: parseFloat((newAccum[taskId] / 3600).toFixed(2)) }),
+          body: JSON.stringify({ actualHours: newActualHours }),
         }),
         apiClient.fetch('/api/tasks/timer/stop', { method: 'POST', body: JSON.stringify({}) }).catch(() => {}),
       ]);
