@@ -228,9 +228,12 @@ router.get('/', requireAuth, async (req, res) => {
       } else if (compositeScore >= 80 && u.utilizationRate >= 90 && u.taskCompletionRate >= 75) {
         classification = 'star';
         classificationReason = `Exceptional performance — ${u.utilizationRate}% utilization, ${u.taskCompletionRate}% task completion`;
-      } else if (u.utilizationRate >= 130 || u.currentHours > avgHours * 1.5) {
+      } else if (u.utilizationRate >= 130) {
+        // Only the absolute 130%-of-expected-workday rule. The older relative
+        // "avgHours * 1.5" rule was brittle — when some teammates logged 0h
+        // the team average cratered and anyone doing a normal day was flagged.
         classification = 'overworked';
-        classificationReason = `Logged ${u.currentHours}h vs expected — risk of burnout`;
+        classificationReason = `Logged ${u.currentHours}h (${u.utilizationRate}% of expected) — risk of burnout`;
       } else if (compositeScore < 40 || (u.utilizationRate < 50 && u.taskCompletionRate < 40)) {
         classification = 'underperformer';
         classificationReason = `Below average on hours (${u.utilizationRate}% util.) and task completion (${u.taskCompletionRate}%)`;
