@@ -597,7 +597,15 @@ export function Tasks() {
     localStorage.removeItem('task_timer_start');
 
     const effectiveStart = storedStart ?? timerStart;
-    const elapsed = effectiveStart !== null ? Math.floor((Date.now() - effectiveStart) / 1000) : 0;
+    const rawElapsed = effectiveStart !== null ? Math.floor((Date.now() - effectiveStart) / 1000) : 0;
+    // Cap at 9h30m — anything more is almost always stale localStorage from a
+    // previous session that never got cleaned up (e.g. closed tab, browser
+    // sleep). Legitimate single sessions shouldn't exceed the attendance cap.
+    const MAX_SESSION_SEC = 9.5 * 3600;
+    const elapsed = Math.min(rawElapsed, MAX_SESSION_SEC);
+    if (rawElapsed > MAX_SESSION_SEC) {
+      console.warn(`[TaskTimer] Clamped stale session elapsed ${rawElapsed}s → ${elapsed}s`);
+    }
 
     // Keep localStorage accum in sync for the in-page live display only.
     // It must NOT be the source of truth for the server PATCH — that would

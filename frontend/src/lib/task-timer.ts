@@ -2,6 +2,19 @@
 // even when the Tasks component is not mounted. After updating localStorage,
 // a window event is dispatched so Tasks can sync its React state if it IS open.
 
+// Cap any single session at 9h30m. Anything longer is almost always stale
+// localStorage from a session that never got cleaned up (closed tab, browser
+// sleep across days). Prevents phantom 15h/19h entries from polluting
+// actualHours + time_logs on the next stop/pause.
+const MAX_SESSION_SEC = 9.5 * 3600;
+function clampElapsed(raw: number): number {
+  if (raw > MAX_SESSION_SEC) {
+    console.warn(`[TaskTimer] Clamped stale session elapsed ${raw}s → ${MAX_SESSION_SEC}s`);
+    return MAX_SESSION_SEC;
+  }
+  return raw;
+}
+
 function safeParse<T>(key: string): T | null {
   try { return JSON.parse(localStorage.getItem(key) || 'null') as T; } catch { return null; }
 }
@@ -30,7 +43,8 @@ export function pauseTaskTimer() {
   if (!active?.taskId || localStorage.getItem('task_timer_paused')) return;
 
   const storedStart = Number(localStorage.getItem('task_timer_start') || 0);
-  const elapsed = storedStart ? Math.floor((Date.now() - storedStart) / 1000) : 0;
+  const rawElapsed = storedStart ? Math.floor((Date.now() - storedStart) / 1000) : 0;
+  const elapsed = clampElapsed(rawElapsed);
   const accum = safeParse<Record<string, number>>('task_timers') || {};
   accum[active.taskId] = (accum[active.taskId] || 0) + elapsed;
   localStorage.setItem('task_timers', JSON.stringify(accum));
@@ -62,7 +76,8 @@ export function stopTaskTimer() {
   if (!taskId) return;
 
   const storedStart = Number(localStorage.getItem('task_timer_start') || 0);
-  const elapsed = storedStart ? Math.floor((Date.now() - storedStart) / 1000) : 0;
+  const rawElapsed = storedStart ? Math.floor((Date.now() - storedStart) / 1000) : 0;
+  const elapsed = clampElapsed(rawElapsed);
   if (elapsed > 0) {
     const accum = safeParse<Record<string, number>>('task_timers') || {};
     accum[taskId] = (accum[taskId] || 0) + elapsed;
