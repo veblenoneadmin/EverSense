@@ -735,8 +735,9 @@ export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated, o
                 </div>
               )}
 
-              {/* Per-user time contributions */}
-              {contributions.length > 0 && (
+              {/* Per-user time contributions — TEMPORARILY HIDDEN (user request).
+                  To restore, just change `false &&` back to the `contributions.length > 0 &&` check. */}
+              {false && contributions.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: VS.text2 }}>
