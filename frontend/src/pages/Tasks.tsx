@@ -445,6 +445,17 @@ export function Tasks() {
     return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
   }, []);
 
+  // ── render-pulse tick for co-assignees' live timer strips ─────────────────
+  // When another user is running a timer on a task we're viewing, the strip
+  // shows Date.now() - startedAt and needs a per-second re-render. The main
+  // timerInterval only runs while OUR OWN timer is active, so without this,
+  // stopping our own timer would freeze co-assignees' strips visually.
+  useEffect(() => {
+    if (activeTimers.length === 0) return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [activeTimers.length]);
+
   // ── poll org-wide active timers (all roles, every 5s) ─────────────────────
   useEffect(() => {
     if (!session?.user?.id || !currentOrg?.id) return;
