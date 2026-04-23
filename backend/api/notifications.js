@@ -136,16 +136,16 @@ router.delete('/:id', requireAuth, withOrgScope, async (req, res) => {
 
 export default router;
 
-// Types that warrant an email notification
-const EMAIL_TYPES = new Set(['task', 'comment', 'overdue', 'due_soon', 'reminder']);
-
-// Roles that should NOT receive per-event email notifications. They still get
-// in-app notifications; only the email dispatch is skipped. The daily digest
-// (services/dailyPersonReportScheduler.js) is on a separate code path and is
-// unaffected — owners still receive it.
-const EMAIL_OPT_OUT_ROLES = new Set(['OWNER', 'ADMIN', 'HALL_OF_JUSTICE', 'ACCOUNTANT']);
-
 // ── Helper exported for other routes to create notifications ─────────────────
+// EMAIL SENDING IS DISABLED for per-event notifications (task / comment /
+// overdue / due_soon / reminder). Users still see everything in the in-app
+// bell. The only emails that still go out are the 5pm daily digest
+// (services/dailyPersonReportScheduler.js), which runs on a separate code
+// path — nothing here gates it.
+//
+// To re-enable per-event emails: restore the sendNotificationEmail() call
+// below and optionally re-introduce the EMAIL_TYPES / EMAIL_OPT_OUT_ROLES
+// gates that previously filtered which events and which roles got emails.
 export async function createNotification({ userId, orgId, title, body = null, link = null, type = 'info' }) {
   try {
     await ensureTables();
@@ -154,22 +154,7 @@ export async function createNotification({ userId, orgId, title, body = null, li
       'INSERT INTO notifications (id, userId, orgId, title, body, link, type, isRead, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW(3))',
       id, userId, orgId, title, body, link, type
     );
-
-    // Send email for important notification types (non-blocking), but skip for
-    // admin roles — they're getting too many emails. Daily digest still fires.
-    if (EMAIL_TYPES.has(type) && process.env.SMTP_HOST) {
-      try {
-        const membership = await prisma.membership.findUnique({
-          where: { userId_orgId: { userId, orgId } },
-          select: { role: true },
-        });
-        if (membership && EMAIL_OPT_OUT_ROLES.has(membership.role)) {
-          // Admin role — in-app notification only, no email.
-          return;
-        }
-      } catch { /* if role lookup fails, default to sending (previous behavior) */ }
-      sendNotificationEmail(userId, title, body, link, type).catch(() => {});
-    }
+    // Email dispatch intentionally disabled — see comment above.
   } catch (e) {
     // Non-critical — don't throw
     console.error('[Notifications] createNotification error:', e.message);
