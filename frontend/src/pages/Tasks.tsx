@@ -289,11 +289,10 @@ export function Tasks() {
   // Per-user time on each task (seconds). Drives card + timer display so each
   // user sees only their own time, not the team-cumulative actualHours.
   const [myTimeByTask, setMyTimeByTask] = useState<Record<string, number>>({});
-  // Daily 8h task-timer cap. `todayBaseSecs` is the server-side total for today
-  // at the time the timer started (or now if no timer is running). Effective
-  // today-secs = base + live elapsed while a timer is running.
-  const DAILY_CAP_SECS = 8 * 3600;
+  // Daily task-timer cap. Server returns `cap: null` for exempt accounts
+  // (e.g. admin@eversense.ai) — in that case the UI doesn't enforce the rule.
   const [todayBaseSecs, setTodayBaseSecs] = useState(0);
+  const [dailyCapSecs, setDailyCapSecs] = useState<number | null>(8 * 3600);
 
 
   // ── fetch tasks ────────────────────────────────────────────────────────────
@@ -341,6 +340,8 @@ export function Tasks() {
     try {
       const data = await apiClient.fetch('/api/tasks/my-today-seconds', { method: 'GET' });
       if (typeof data?.seconds === 'number') setTodayBaseSecs(data.seconds);
+      // `cap: null` from the server = cap-exempt account (e.g. super admin).
+      if ('cap' in (data || {})) setDailyCapSecs(data.cap === null ? null : Number(data.cap));
     } catch { /* silent */ }
   };
   useEffect(() => { fetchTodaySecs(); }, [session?.user?.id, currentOrg?.id]);
@@ -566,7 +567,7 @@ export function Tasks() {
     ? Math.floor((Date.now() - timerStart) / 1000)
     : 0;
   const effectiveTodaySecs = todayBaseSecs + liveSessionSecs;
-  const dailyCapReached = effectiveTodaySecs >= DAILY_CAP_SECS;
+  const dailyCapReached = dailyCapSecs !== null && effectiveTodaySecs >= dailyCapSecs;
 
   // Format seconds as "Xh Ym" / "Xh" / "Ym" for the per-user card total.
   const formatSecondsShort = (secs: number) => {

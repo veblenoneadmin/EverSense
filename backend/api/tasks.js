@@ -212,6 +212,10 @@ router.get('/active-timers', requireAuth, withOrgScope, async (req, res) => {
 // Historical backfill rows are excluded — they represent past work, not today's.
 const DAILY_TASK_CAP_SECS = 8 * 3600;
 
+// Super admin is exempt from the cap — used for debugging + late-night ops.
+const CAP_EXEMPT_EMAILS = new Set(['admin@eversense.ai']);
+const isCapExempt = (user) => !!user?.email && CAP_EXEMPT_EMAILS.has(user.email.toLowerCase());
+
 async function getUserTodaySecs(userId, orgId) {
   const rows = await prisma.$queryRawUnsafe(
     'SELECT COALESCE(SUM(duration), 0) AS secs FROM time_logs ' +
@@ -225,9 +229,13 @@ async function getUserTodaySecs(userId, orgId) {
 
 // ── GET /api/tasks/my-today-seconds — current user's task-timer seconds today ─
 // Drives the 8h-cap UI. Frontend polls this to disable Play buttons at the cap.
+// Returns cap=null for exempt accounts so the UI doesn't enforce the rule.
 router.get('/my-today-seconds', requireAuth, withOrgScope, async (req, res) => {
   try {
-    res.json({ seconds: await getUserTodaySecs(req.user.id, req.orgId), cap: DAILY_TASK_CAP_SECS });
+    res.json({
+      seconds: await getUserTodaySecs(req.user.id, req.orgId),
+      cap: isCapExempt(req.user) ? null : DAILY_TASK_CAP_SECS,
+    });
   } catch (e) {
     console.error('[Tasks] my-today-seconds error:', e);
     res.status(500).json({ error: 'Failed to load today seconds' });
@@ -241,14 +249,17 @@ router.post('/timer/start', requireAuth, withOrgScope, async (req, res) => {
   await ensureActiveTimersTable();
   try {
     // Enforce daily 8h cap — reject start if the user is already at or over.
-    const todaySecs = await getUserTodaySecs(req.user.id, req.orgId);
-    if (todaySecs >= DAILY_TASK_CAP_SECS) {
-      return res.status(403).json({
-        error: 'Daily 8h task-timer cap reached',
-        code: 'DAILY_CAP_REACHED',
-        secondsToday: todaySecs,
-        cap: DAILY_TASK_CAP_SECS,
-      });
+    // Cap-exempt accounts bypass this check entirely.
+    if (!isCapExempt(req.user)) {
+      const todaySecs = await getUserTodaySecs(req.user.id, req.orgId);
+      if (todaySecs >= DAILY_TASK_CAP_SECS) {
+        return res.status(403).json({
+          error: 'Daily 8h task-timer cap reached',
+          code: 'DAILY_CAP_REACHED',
+          secondsToday: todaySecs,
+          cap: DAILY_TASK_CAP_SECS,
+        });
+      }
     }
     await prisma.$executeRawUnsafe(
       'INSERT INTO active_timers (id, userId, taskId, orgId, startedAt) VALUES (?, ?, ?, ?, ?) ' +
