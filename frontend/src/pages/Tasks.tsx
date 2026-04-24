@@ -631,14 +631,20 @@ export function Tasks() {
     if (!task) return;
 
     // Enforce "only one in-progress task per user at a time". Any OTHER task
-    // where this user is the primary assignee and whose status is in_progress
-    // gets demoted back to not_started before we promote the new one.
+    // where this user is the primary assignee (or mainAssignee on a team task)
+    // and whose status is in_progress gets demoted back to not_started before
+    // we promote the new one. Team tasks are skipped when the user is just a
+    // co-assignee — their global status might be in_progress because someone
+    // else is actively working it.
     const myId = session?.user?.id;
+    const isMine = (t: Task) =>
+      (t.userId && t.userId === myId) ||
+      (t.mainAssigneeId && t.mainAssigneeId === myId);
     const othersToDemote = myId
       ? tasks.filter(t =>
           t.id !== taskId &&
           t.status === 'in_progress' &&
-          t.userId === myId
+          isMine(t)
         )
       : [];
 
