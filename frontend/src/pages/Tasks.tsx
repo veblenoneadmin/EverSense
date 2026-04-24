@@ -285,6 +285,14 @@ export function Tasks() {
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   // Active timers from other users (admin view)
   const [activeTimers, setActiveTimers] = useState<{ userId: string; taskId: string; startedAt: number; name: string }[]>([]);
+  // Per-user time on each task (seconds). Drives card + timer display so each
+  // user sees only their own time, not the team-cumulative actualHours.
+  const [myTimeByTask, setMyTimeByTask] = useState<Record<string, number>>({});
+  // Daily 8h task-timer cap. `todayBaseSecs` is the server-side total for today
+  // at the time the timer started (or now if no timer is running). Effective
+  // today-secs = base + live elapsed while a timer is running.
+  const DAILY_CAP_SECS = 8 * 3600;
+  const [todayBaseSecs, setTodayBaseSecs] = useState(0);
 
 
   // ── fetch tasks ────────────────────────────────────────────────────────────
@@ -316,11 +324,32 @@ export function Tasks() {
 
   useEffect(() => { fetchTasks(); }, [session?.user?.id, currentOrg?.id, showAllTasks]);
 
+  // ── fetch per-user task time (seconds by taskId) ──────────────────────────
+  const fetchMyTime = async () => {
+    if (!session?.user?.id || !currentOrg?.id) return;
+    try {
+      const data = await apiClient.fetch('/api/tasks/my-time', { method: 'GET' });
+      if (data?.byTaskId) setMyTimeByTask(data.byTaskId);
+    } catch { /* silent */ }
+  };
+  useEffect(() => { fetchMyTime(); }, [session?.user?.id, currentOrg?.id]);
+
+  // ── fetch today's cumulative task-timer seconds (for the 8h cap) ──────────
+  const fetchTodaySecs = async () => {
+    if (!session?.user?.id || !currentOrg?.id) return;
+    try {
+      const data = await apiClient.fetch('/api/tasks/my-today-seconds', { method: 'GET' });
+      if (typeof data?.seconds === 'number') setTodayBaseSecs(data.seconds);
+    } catch { /* silent */ }
+  };
+  useEffect(() => { fetchTodaySecs(); }, [session?.user?.id, currentOrg?.id]);
+
   // ── Real-time task updates via SSE ────────────────────────────────────────
   useSSE(currentOrg?.id || undefined, useCallback((event: string, data: any) => {
     if (event === 'task' && data?.userId !== session?.user?.id) {
       // Another user changed a task — silently refetch
       fetchTasks(false);
+      fetchMyTime();
     }
   }, [session?.user?.id]));
 
@@ -518,18 +547,35 @@ export function Tasks() {
   }, []);
 
   // ── timer helpers ──────────────────────────────────────────────────────────
-  // Displays "actualHours so far" — base = server-known actualHours (which is
-  // the authoritative value, respects manual edits), plus live elapsed while
-  // the timer is running. Must NOT use localStorage.task_timers as the base,
-  // because that accumulator is browser-local and can diverge wildly from a
-  // user's manual edit to actualHours.
+  // Shows the CURRENT user's time on this task (not team-cumulative). Base =
+  // user's own time_logs total from the server, plus live elapsed while their
+  // timer is running. Co-assignees see their own numbers on their own devices.
   const getTimerSeconds = (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    const baseSeconds = Math.round((Number(task?.actualHours) || 0) * 3600);
+    const baseSeconds = myTimeByTask[taskId] || 0;
     if (timerTaskId === taskId && timerStart !== null) {
       return baseSeconds + Math.floor((Date.now() - timerStart) / 1000);
     }
     return baseSeconds;
+  };
+
+  // Effective cumulative task-timer seconds for today. Includes the currently
+  // running session's live elapsed so the UI locks at the 8h mark the moment
+  // it's crossed, not on the next server refresh.
+  const liveSessionSecs = (timerTaskId && timerStart !== null)
+    ? Math.floor((Date.now() - timerStart) / 1000)
+    : 0;
+  const effectiveTodaySecs = todayBaseSecs + liveSessionSecs;
+  const dailyCapReached = effectiveTodaySecs >= DAILY_CAP_SECS;
+
+  // Format seconds as "Xh Ym" / "Xh" / "Ym" for the per-user card total.
+  const formatSecondsShort = (secs: number) => {
+    if (!secs) return '0m';
+    const totalMins = Math.round(secs / 60);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
   };
 
   const formatTimer = (secs: number) => {
@@ -539,17 +585,13 @@ export function Tasks() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const formatActualHours = (hours: number) => {
-    if (!hours) return '0m';
-    const totalMins = Math.round(hours * 60);
-    const h = Math.floor(totalMins / 60);
-    const m = totalMins % 60;
-    if (h === 0) return `${m}m`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
-  };
-
   const handleStartTimer = async (taskId: string) => {
+    // Enforce daily 8h cap on the client side — the backend also blocks this,
+    // but checking here avoids the optimistic UI flicker.
+    if (dailyCapReached) {
+      alert('Daily 8h task-timer cap reached. Task timers will reset tomorrow.');
+      return;
+    }
     // Stop any currently running timer first, saving its elapsed time
     if (timerTaskId && timerTaskId !== taskId) {
       await handleStopTimer(timerTaskId);
@@ -646,6 +688,12 @@ export function Tasks() {
     }
     const newActualHours = parseFloat((serverActualHours + elapsed / 3600).toFixed(2));
 
+    // Optimistically bump this user's per-task seconds — the backend writes
+    // the time_logs row on /timer/stop, but the UI shouldn't wait for refetch.
+    setMyTimeByTask(prev => ({ ...prev, [taskId]: (prev[taskId] || 0) + elapsed }));
+    // Same for today's total so the 8h cap flips the moment it's hit.
+    setTodayBaseSecs(prev => prev + elapsed);
+
     try {
       await Promise.all([
         apiClient.fetch(`/api/tasks/${taskId}`, {
@@ -662,9 +710,17 @@ export function Tasks() {
           }),
         }).catch(() => {}),
       ]);
-      await fetchTasks(false);
+      await Promise.all([fetchTasks(false), fetchMyTime(), fetchTodaySecs()]);
     } catch { /* silent */ }
   };
+
+  // Auto-stop the running timer the moment today's total crosses the 8h cap.
+  useEffect(() => {
+    if (timerTaskId && dailyCapReached) {
+      handleStopTimer(timerTaskId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dailyCapReached, timerTaskId]);
 
   // ── drag & drop ────────────────────────────────────────────────────────────
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -1841,15 +1897,34 @@ export function Tasks() {
                             className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none"
                           >
                             <span
-                              onClick={e => { e.stopPropagation(); if (timerTaskId === task.id) { handleStopTimer(task.id); } else { handleMoveToInProgress(task.id); handleStartTimer(task.id); } }}
+                              onClick={e => {
+                                e.stopPropagation();
+                                if (timerTaskId === task.id) {
+                                  handleStopTimer(task.id);
+                                } else if (dailyCapReached) {
+                                  alert('Daily 8h task-timer cap reached. Task timers will reset tomorrow.');
+                                } else {
+                                  handleMoveToInProgress(task.id);
+                                  handleStartTimer(task.id);
+                                }
+                              }}
                               onDoubleClick={e => e.stopPropagation()}
-                              className="flex items-center justify-center h-10 w-10 rounded-full backdrop-blur-sm transition-transform duration-150 hover:scale-110 pointer-events-auto cursor-pointer"
+                              className="flex items-center justify-center h-10 w-10 rounded-full backdrop-blur-sm transition-transform duration-150 pointer-events-auto"
                               style={{
-                                background: timerTaskId === task.id ? `${VS.teal}cc` : 'rgba(0,0,0,0.55)',
-                                border: `2px solid ${timerTaskId === task.id ? VS.teal : 'rgba(255,255,255,0.2)'}`,
+                                background: timerTaskId === task.id
+                                  ? `${VS.teal}cc`
+                                  : (dailyCapReached ? 'rgba(100,100,100,0.45)' : 'rgba(0,0,0,0.55)'),
+                                border: `2px solid ${timerTaskId === task.id ? VS.teal : (dailyCapReached ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)')}`,
                                 color: '#fff',
                                 boxShadow: timerTaskId === task.id ? `0 0 16px ${VS.teal}66` : '0 4px 12px rgba(0,0,0,0.5)',
+                                cursor: dailyCapReached && timerTaskId !== task.id ? 'not-allowed' : 'pointer',
+                                opacity: dailyCapReached && timerTaskId !== task.id ? 0.5 : 1,
                               }}
+                              title={
+                                dailyCapReached && timerTaskId !== task.id
+                                  ? 'Daily 8h task-timer cap reached — resets tomorrow'
+                                  : undefined
+                              }
                             >
                               {timerTaskId === task.id
                                 ? <Square className="h-4 w-4 fill-current" />
@@ -1921,7 +1996,7 @@ export function Tasks() {
                               <Clock className="h-3.5 w-3.5" />
                               {timerTaskId === task.id
                                 ? formatTimer(getTimerSeconds(task.id))
-                                : formatActualHours(task.actualHours || 0)}
+                                : formatSecondsShort(myTimeByTask[task.id] || 0)}
                             </span>
                           </div>
                           <span

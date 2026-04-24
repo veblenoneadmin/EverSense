@@ -208,12 +208,48 @@ router.get('/active-timers', requireAuth, withOrgScope, async (req, res) => {
   }
 });
 
+// Daily cap on cumulative task-timer seconds per user (8h).
+// Historical backfill rows are excluded — they represent past work, not today's.
+const DAILY_TASK_CAP_SECS = 8 * 3600;
+
+async function getUserTodaySecs(userId, orgId) {
+  const rows = await prisma.$queryRawUnsafe(
+    'SELECT COALESCE(SUM(duration), 0) AS secs FROM time_logs ' +
+    'WHERE userId = ? AND orgId = ? AND duration > 0 ' +
+    "AND (category IS NULL OR category NOT IN ('backfill', 'backfill-split')) " +
+    'AND DATE(`begin`) = CURDATE()',
+    userId, orgId
+  ).catch(() => [{ secs: 0 }]);
+  return Number(rows[0]?.secs || 0);
+}
+
+// ── GET /api/tasks/my-today-seconds — current user's task-timer seconds today ─
+// Drives the 8h-cap UI. Frontend polls this to disable Play buttons at the cap.
+router.get('/my-today-seconds', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    res.json({ seconds: await getUserTodaySecs(req.user.id, req.orgId), cap: DAILY_TASK_CAP_SECS });
+  } catch (e) {
+    console.error('[Tasks] my-today-seconds error:', e);
+    res.status(500).json({ error: 'Failed to load today seconds' });
+  }
+});
+
 // ── POST /api/tasks/timer/start — record that current user started a timer ───
 router.post('/timer/start', requireAuth, withOrgScope, async (req, res) => {
   const { taskId, startedAt } = req.body;
   if (!taskId) return res.status(400).json({ error: 'taskId required' });
   await ensureActiveTimersTable();
   try {
+    // Enforce daily 8h cap — reject start if the user is already at or over.
+    const todaySecs = await getUserTodaySecs(req.user.id, req.orgId);
+    if (todaySecs >= DAILY_TASK_CAP_SECS) {
+      return res.status(403).json({
+        error: 'Daily 8h task-timer cap reached',
+        code: 'DAILY_CAP_REACHED',
+        secondsToday: todaySecs,
+        cap: DAILY_TASK_CAP_SECS,
+      });
+    }
     await prisma.$executeRawUnsafe(
       'INSERT INTO active_timers (id, userId, taskId, orgId, startedAt) VALUES (?, ?, ?, ?, ?) ' +
       'ON DUPLICATE KEY UPDATE taskId = VALUES(taskId), startedAt = VALUES(startedAt)',
@@ -255,6 +291,25 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
   } catch (e) {
     console.error('[Tasks] timer/stop error:', e);
     res.status(500).json({ error: 'Failed to clear timer' });
+  }
+});
+
+// ── GET /api/tasks/my-time — current user's seconds on every task ───────────
+// Returns { byTaskId: { [taskId]: seconds } }. Drives per-user card display
+// so each user sees only their own time on a task instead of the team total.
+router.get('/my-time', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT taskId, SUM(duration) AS secs FROM time_logs ' +
+      'WHERE userId = ? AND orgId = ? AND duration > 0 GROUP BY taskId',
+      req.user.id, req.orgId
+    ).catch(() => []);
+    const byTaskId = {};
+    for (const r of rows) byTaskId[r.taskId] = Number(r.secs || 0);
+    res.json({ byTaskId });
+  } catch (e) {
+    console.error('[Tasks] my-time error:', e);
+    res.status(500).json({ error: 'Failed to load my time' });
   }
 });
 

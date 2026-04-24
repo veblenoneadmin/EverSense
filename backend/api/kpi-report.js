@@ -82,6 +82,25 @@ router.get('/', requireAuth, async (req, res) => {
       })
     ]);
 
+    // ─── All-time per-user seconds on each task (for estimation accuracy) ─
+    // Lets us compare each user's OWN time against a task's estimate, instead
+    // of the team-cumulative actualHours. Keyed as `${userId}|${taskId}`.
+    const userTaskSecsMap = new Map();
+    try {
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT userId, taskId, SUM(duration) AS secs FROM time_logs
+         WHERE orgId = ? AND userId IN (${memberIds.map(() => '?').join(',') || 'NULL'})
+           AND duration > 0
+         GROUP BY userId, taskId`,
+        orgId, ...memberIds
+      );
+      for (const r of rows) {
+        userTaskSecsMap.set(`${r.userId}|${r.taskId}`, Number(r.secs || 0));
+      }
+    } catch (e) {
+      console.warn('[KPI] per-user task secs fetch failed:', e.message);
+    }
+
     // ─── Fetch per-assignee statuses for multi-assignee tasks ─────────────
     // Maps userId → Set of taskIds they've personally completed
     const perAssigneeCompletedMap = {};
@@ -136,16 +155,23 @@ router.get('/', requireAuth, async (req, res) => {
       const totalTasks = userTasks.length + teamOnlyCompletedIds.length;
       const inProgressTasks = userTasks.filter(t => t.status === 'in_progress' && !userPersonalCompleted.has(t.id)).length;
 
-      // Estimation accuracy: compare actual vs estimated on completed tasks
+      // Estimation accuracy: compare THIS user's actual (from time_logs) vs
+      // the task's estimate on completed tasks where they logged time.
+      // Skips tasks where the user logged nothing so solo-assignees on team
+      // tasks don't drag the average down to 0.
       const completedWithEstimate = userTasks.filter(
         t => t.status === 'completed' && Number(t.estimatedHours) > 0
       );
-      const estimationAccuracy = completedWithEstimate.length > 0
-        ? completedWithEstimate.reduce((sum, t) => {
-            const ratio = Math.min(Number(t.estimatedHours), Number(t.actualHours)) /
-                          Math.max(Number(t.estimatedHours), Number(t.actualHours));
+      const myCompletedWithTime = completedWithEstimate.filter(
+        t => (userTaskSecsMap.get(`${user.id}|${t.id}`) || 0) > 0
+      );
+      const estimationAccuracy = myCompletedWithTime.length > 0
+        ? myCompletedWithTime.reduce((sum, t) => {
+            const myHours = (userTaskSecsMap.get(`${user.id}|${t.id}`) || 0) / 3600;
+            const est = Number(t.estimatedHours);
+            const ratio = Math.min(est, myHours) / Math.max(est, myHours);
             return sum + ratio;
-          }, 0) / completedWithEstimate.length * 100
+          }, 0) / myCompletedWithTime.length * 100
         : null;
 
       // Billable ratio
