@@ -153,7 +153,7 @@ function ActualHoursGrid({ task, isOverdue, mySeconds }: {
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated, onCountsLoaded }: Props) {
+export function TaskDetailPanel({ task, orgId: _orgId, onClose, onTaskUpdated: _onTaskUpdated, onCountsLoaded }: Props) {
   const { data: session } = useSession();
   const api = useApiClient();
   const { currentOrg } = useOrganization();
