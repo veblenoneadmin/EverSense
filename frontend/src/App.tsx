@@ -25,11 +25,7 @@ import { TaskHistory } from './pages/TaskHistory';
 import { OwnerAdmin } from './pages/OwnerAdmin';
 import { EstimatesReport } from './pages/EstimatesReport';
 import { Milestones } from './pages/Milestones';
-import { EmployeeProfile } from './pages/EmployeeProfile';
-import { EmployeeDirectory } from './pages/EmployeeDirectory';
-import { Contracts } from './pages/Contracts';
 import { Leaves } from './pages/Leaves';
-import { Invoices } from './pages/Invoices';
 import { Landing } from './pages/Landing';
 import MainLayout from './components/Layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -91,11 +87,7 @@ function AppContent() {
                 <Route path="task-history" element={<TaskHistory />} />
                 <Route path="estimates-report" element={<EstimatesReport />} />
                 <Route path="owner-admin" element={<OwnerAdmin />} />
-                <Route path="my-profile" element={<EmployeeProfile />} />
-                <Route path="employee-directory" element={<EmployeeDirectory />} />
-                <Route path="contracts" element={<Contracts />} />
                 <Route path="leaves" element={<Leaves />} />
-                <Route path="invoices" element={<Invoices />} />
               </Route>
 
               <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Landing />} />
