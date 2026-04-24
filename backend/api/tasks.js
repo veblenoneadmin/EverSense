@@ -261,11 +261,19 @@ router.post('/timer/start', requireAuth, withOrgScope, async (req, res) => {
         });
       }
     }
+    const startedAtDate = new Date(startedAt || Date.now());
     await prisma.$executeRawUnsafe(
       'INSERT INTO active_timers (id, userId, taskId, orgId, startedAt) VALUES (?, ?, ?, ?, ?) ' +
       'ON DUPLICATE KEY UPDATE taskId = VALUES(taskId), startedAt = VALUES(startedAt)',
-      randomUUID(), req.user.id, taskId, req.orgId, new Date(startedAt || Date.now())
+      randomUUID(), req.user.id, taskId, req.orgId, startedAtDate
     );
+    // Real-time push so co-assignees see the strip immediately (no 30s wait).
+    broadcast(req.orgId, 'timer', {
+      action: 'start',
+      userId: req.user.id,
+      taskId,
+      startedAt: startedAtDate.getTime(),
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error('[Tasks] timer/start error:', e);
@@ -297,6 +305,9 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
         );
       } catch (e) { console.warn('[Tasks] timer/stop time_log insert failed:', e.message); }
     }
+
+    // Real-time push so co-assignees see the strip disappear immediately.
+    broadcast(req.orgId, 'timer', { action: 'stop', userId: req.user.id, taskId });
 
     res.json({ ok: true });
   } catch (e) {

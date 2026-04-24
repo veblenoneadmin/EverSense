@@ -346,13 +346,21 @@ export function Tasks() {
   };
   useEffect(() => { fetchTodaySecs(); }, [session?.user?.id, currentOrg?.id]);
 
-  // ── Real-time task updates via SSE ────────────────────────────────────────
+  // ── Real-time task + timer updates via SSE ────────────────────────────────
   useSSE(currentOrg?.id || undefined, useCallback((event: string, data: any) => {
     if (event === 'task' && data?.userId !== session?.user?.id) {
       // Another user changed a task — silently refetch
       fetchTasks(false);
       fetchMyTime();
+    } else if (event === 'timer' && data?.userId !== session?.user?.id) {
+      // Co-assignee started or stopped a timer — refresh active-timers right
+      // now so their live strip appears/disappears instantly instead of
+      // waiting for the 30s poll.
+      apiClient.fetch('/api/tasks/active-timers')
+        .then(d => { if (d.timers) setActiveTimers(d.timers); })
+        .catch(() => {});
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]));
 
   // ── fetch projects ─────────────────────────────────────────────────────────
