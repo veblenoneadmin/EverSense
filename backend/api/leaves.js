@@ -5,8 +5,26 @@ import express from 'express';
 import { prisma } from '../lib/prisma.js';
 import { randomUUID } from 'crypto';
 import { requireAuth, withOrgScope, requireRole } from '../lib/rbac.js';
+import { notifyHRSense } from '../lib/hrsense-notify.js';
 
 const router = express.Router();
+
+// Build the canonical leave payload HR-Sense expects. Centralised so each
+// fire-and-forget notify call below can't drift.
+function buildLeavePayload(row, extras = {}) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    email: row.email || null,
+    type: row.type,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    days: row.days,
+    reason: row.reason || null,
+    status: row.status,
+    ...extras,
+  };
+}
 
 export const LEAVE_ALLOWANCES = { annual: 10, sick: 5 };
 
@@ -190,11 +208,19 @@ router.post('/my', requireAuth, withOrgScope, async (req, res) => {
     // Inclusive day count
     const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
     const id = randomUUID();
+    const normalizedType = normalizeType(type);
     await prisma.$executeRawUnsafe(
       'INSERT INTO leaves (id, userId, orgId, type, status, startDate, endDate, days, reason, createdAt) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
-      id, req.user.id, req.orgId, normalizeType(type), 'PENDING', start, end, days, reason || null
+      id, req.user.id, req.orgId, normalizedType, 'PENDING', start, end, days, reason || null
     );
+
+    notifyHRSense('leave.requested', buildLeavePayload({
+      id, userId: req.user.id, email: req.user.email,
+      type: normalizedType, startDate: start, endDate: end, days,
+      reason: reason || null, status: 'PENDING',
+    }, { orgId: req.orgId }));
+
     res.status(201).json({ success: true, id, days, status: 'PENDING' });
   } catch (err) {
     console.error('[Leaves] POST /my error:', err.message);
@@ -236,9 +262,62 @@ router.patch('/:id/status', requireAuth, withOrgScope, requireRole('ADMIN'), asy
       'UPDATE leaves SET status = ?, approvedAt = ? WHERE id = ? AND orgId = ?',
       status, approvedAt, id, req.orgId
     );
+
+    // Fetch the updated row + user email so HR-Sense gets a complete payload.
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT l.id, l.userId, l.type, l.status, l.startDate, l.endDate, l.days, l.reason,
+              l.approvedAt, u.email
+         FROM leaves l LEFT JOIN User u ON u.id = l.userId
+        WHERE l.id = ? AND l.orgId = ?`,
+      id, req.orgId
+    );
+    if (rows[0]) {
+      const eventName = status === 'APPROVED' ? 'leave.approved' : 'leave.rejected';
+      notifyHRSense(eventName, buildLeavePayload(rows[0], {
+        orgId: req.orgId,
+        approvedBy: req.user.id,
+        approvedAt: approvedAt?.toISOString() || null,
+      }));
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('[Leaves] PATCH status error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/leaves/:id — user cancels their own PENDING leave request.
+// Admin-approved leaves cannot be cancelled via this endpoint; ask an admin
+// to reject, or call the HR-Sense cancel flow instead.
+router.delete('/:id', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    await ensureTable();
+    const { id } = req.params;
+
+    // Only allow if the row is the user's own AND still PENDING.
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT l.id, l.userId, l.type, l.status, l.startDate, l.endDate, l.days, l.reason,
+              u.email
+         FROM leaves l LEFT JOIN User u ON u.id = l.userId
+        WHERE l.id = ? AND l.userId = ? AND l.orgId = ?`,
+      id, req.user.id, req.orgId
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Leave not found' });
+    if (rows[0].status !== 'PENDING') {
+      return res.status(409).json({ error: 'Only PENDING leaves can be cancelled' });
+    }
+
+    await prisma.$executeRawUnsafe(
+      'DELETE FROM leaves WHERE id = ? AND userId = ? AND orgId = ?',
+      id, req.user.id, req.orgId
+    );
+
+    notifyHRSense('leave.cancelled', buildLeavePayload(rows[0], { orgId: req.orgId }));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Leaves] DELETE error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

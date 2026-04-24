@@ -2,8 +2,18 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth, withOrgScope } from '../lib/rbac.js';
+import { broadcast } from '../lib/sse.js';
 
 const router = express.Router();
+
+// Gate cross-service endpoints with the shared HR-Sense secret.
+function requireInternalSecret(req, res, next) {
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!secret) return res.status(503).json({ error: 'Internal API not configured' });
+  const provided = req.headers['x-internal-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+  if (provided !== secret) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+}
 
 // Only OWNER, ADMIN, HALL_OF_JUSTICE, ACCOUNTANT can manage contracts
 async function requireContractAccess(req, res, next) {
@@ -35,6 +45,68 @@ router.get('/', requireAuth, withOrgScope, requireContractAccess, async (req, re
   } catch (err) {
     console.error('[Contracts] list error:', err);
     res.status(500).json({ error: 'Failed to fetch contracts' });
+  }
+});
+
+// ── POST /api/contracts/sync — HR-Sense pushes a new/updated contract here ───
+// Cross-service write path: HR-Sense owns the contract but EverSense mirrors
+// it so the clock-in modal flow (GET /my) keeps working. Also broadcasts an
+// SSE event so the matched user's frontend can pop the modal immediately
+// without waiting for their next /my poll.
+router.post('/sync', requireInternalSecret, async (req, res) => {
+  try {
+    const {
+      id,
+      orgId,
+      title,
+      content = '',
+      status = 'draft',
+      employeeEmail = null,
+      salary = null,
+      signedContent = null,
+      signedAt = null,
+      createdBy = null,
+      updatedBy = null,
+      createdAt = null,
+      updatedAt = null,
+    } = req.body || {};
+
+    if (!id || !orgId || !title) {
+      return res.status(400).json({ error: 'id, orgId, title are required' });
+    }
+
+    const salaryNum = salary != null && salary !== '' && !isNaN(Number(salary)) ? Number(salary) : null;
+
+    // Upsert — insert if new, overwrite if the same id comes back on update.
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO contract_templates
+         (id, orgId, title, content, status, employeeEmail, salary,
+          signedContent, signedAt, createdBy, updatedBy, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW(3)), COALESCE(?, NOW(3)))
+       ON DUPLICATE KEY UPDATE
+         title = VALUES(title),
+         content = VALUES(content),
+         status = VALUES(status),
+         employeeEmail = VALUES(employeeEmail),
+         salary = VALUES(salary),
+         signedContent = VALUES(signedContent),
+         signedAt = VALUES(signedAt),
+         updatedBy = VALUES(updatedBy),
+         updatedAt = VALUES(updatedAt)`,
+      id, orgId, title, content, status, employeeEmail, salaryNum,
+      signedContent, signedAt ? new Date(signedAt) : null,
+      createdBy, updatedBy,
+      createdAt ? new Date(createdAt) : null,
+      updatedAt ? new Date(updatedAt) : null
+    );
+
+    // Tell the user's frontend to refresh — modal will pop up on next /my check.
+    broadcast(orgId, 'contract', { action: 'created', id, employeeEmail, status });
+
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error('[Contracts] sync error:', err);
+    res.status(500).json({ error: 'Failed to sync contract' });
   }
 });
 
