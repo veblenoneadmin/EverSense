@@ -630,38 +630,22 @@ export function Tasks() {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    // Enforce "only one in-progress task per user at a time". Any OTHER task
-    // where this user is the primary assignee (or mainAssignee on a team task)
-    // and whose status is in_progress gets demoted back to not_started before
-    // we promote the new one. Team tasks are skipped when the user is just a
-    // co-assignee — their global status might be in_progress because someone
-    // else is actively working it.
-    const myId = session?.user?.id;
-    const isMine = (t: Task) =>
-      (t.userId && t.userId === myId) ||
-      (t.mainAssigneeId && t.mainAssigneeId === myId);
-    const othersToDemote = myId
-      ? tasks.filter(t =>
-          t.id !== taskId &&
-          t.status === 'in_progress' &&
-          isMine(t)
-        )
-      : [];
-
-    if (othersToDemote.length > 0) {
-      const demoteIds = new Set(othersToDemote.map(t => t.id));
+    // One-in-progress-at-a-time: demote this user's PREVIOUS in-progress task
+    // (tracked in localStorage) back to not_started before promoting the new
+    // one. Using localStorage instead of filtering the task list means the
+    // rule works regardless of assignee type, team-task flags, or which view
+    // the user is on.
+    const prevId = localStorage.getItem('my_in_progress_task');
+    if (prevId && prevId !== taskId) {
       setTasks(prev => prev.map(t =>
-        demoteIds.has(t.id) ? { ...t, status: 'not_started' } : t
+        t.id === prevId ? { ...t, status: 'not_started' } : t
       ));
-      await Promise.all(
-        othersToDemote.map(t =>
-          apiClient.fetch(`/api/tasks/${t.id}/status`, {
-            method: 'PATCH',
-            body: JSON.stringify({ status: 'not_started' }),
-          }).catch(() => {})
-        )
-      );
+      apiClient.fetch(`/api/tasks/${prevId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'not_started' }),
+      }).catch(() => {});
     }
+    localStorage.setItem('my_in_progress_task', taskId);
 
     if (task.status === 'in_progress') return;
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t));
