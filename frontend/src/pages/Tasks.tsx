@@ -38,6 +38,7 @@ interface Task {
   description: string;
   priority: 'Urgent' | 'High' | 'Medium' | 'Low';
   status: 'not_started' | 'in_progress' | 'completed' | 'on_hold' | 'cancelled';
+  userId?: string;
   estimatedHours: number;
   actualHours: number;
   dueDate?: string;
@@ -627,7 +628,36 @@ export function Tasks() {
 
   const handleMoveToInProgress = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
-    if (!task || task.status === 'in_progress') return;
+    if (!task) return;
+
+    // Enforce "only one in-progress task per user at a time". Any OTHER task
+    // where this user is the primary assignee and whose status is in_progress
+    // gets demoted back to not_started before we promote the new one.
+    const myId = session?.user?.id;
+    const othersToDemote = myId
+      ? tasks.filter(t =>
+          t.id !== taskId &&
+          t.status === 'in_progress' &&
+          t.userId === myId
+        )
+      : [];
+
+    if (othersToDemote.length > 0) {
+      const demoteIds = new Set(othersToDemote.map(t => t.id));
+      setTasks(prev => prev.map(t =>
+        demoteIds.has(t.id) ? { ...t, status: 'not_started' } : t
+      ));
+      await Promise.all(
+        othersToDemote.map(t =>
+          apiClient.fetch(`/api/tasks/${t.id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'not_started' }),
+          }).catch(() => {})
+        )
+      );
+    }
+
+    if (task.status === 'in_progress') return;
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t));
     try {
       await apiClient.fetch(`/api/tasks/${taskId}/status`, {
