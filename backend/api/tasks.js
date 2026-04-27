@@ -212,9 +212,14 @@ router.get('/active-timers', requireAuth, withOrgScope, async (req, res) => {
 // Historical backfill rows are excluded — they represent past work, not today's.
 const DAILY_TASK_CAP_SECS = 8 * 3600;
 
+// Global kill-switch: set TASK_TIMER_CAP_DISABLED=true (or 1) on Railway to
+// disable the 8h cap for everyone. Lets us turn the rule off without a code
+// deploy. Remove the env var (or set to false) to re-enable.
+const isCapGloballyDisabled = () => /^(1|true|yes)$/i.test(process.env.TASK_TIMER_CAP_DISABLED || '');
+
 // Super admin is exempt from the cap — used for debugging + late-night ops.
 const CAP_EXEMPT_EMAILS = new Set(['admin@eversense.ai']);
-const isCapExempt = (user) => !!user?.email && CAP_EXEMPT_EMAILS.has(user.email.toLowerCase());
+const isCapExempt = (user) => isCapGloballyDisabled() || (!!user?.email && CAP_EXEMPT_EMAILS.has(user.email.toLowerCase()));
 
 async function getUserTodaySecs(userId, orgId) {
   const rows = await prisma.$queryRawUnsafe(
