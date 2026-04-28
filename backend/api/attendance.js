@@ -141,8 +141,14 @@ async function handleClockIn(req, res) {
     console.log(`[Attendance] clock-in check for ${req.user.email}: recent=${recentLogs.length}, net=${Math.round(netSecondsWindow/60)}min, lastOut=${mostRecent?.timeOut || 'none'}`);
 
     if (mostRecent && mostRecent.timeOut && netSecondsWindow < WORK_DAY) {
-      const gapSeconds = Math.max(0, Math.floor((now.getTime() - new Date(mostRecent.timeOut).getTime()) / 1000));
-      const newBreak   = (mostRecent.breakDuration || 0) + gapSeconds;
+      const rawGap = Math.max(0, Math.floor((now.getTime() - new Date(mostRecent.timeOut).getTime()) / 1000));
+      // Cap each resume gap at the row's wallclock span (now - original timeIn) so
+      // breakDuration can never exceed the row's actual elapsed time. Without this
+      // cap, repeated resumes compounded gaps and produced impossible values like
+      // 146h break on an 8h shift.
+      const wallclockSpan = Math.max(0, Math.floor((now.getTime() - new Date(mostRecent.timeIn).getTime()) / 1000));
+      const gapSeconds = Math.min(rawGap, wallclockSpan);
+      const newBreak = Math.min((mostRecent.breakDuration || 0) + gapSeconds, wallclockSpan);
       await prisma.$executeRawUnsafe(
         `UPDATE attendance_logs SET timeOut = NULL, duration = 0, breakDuration = ?, updatedAt = NOW(3) WHERE id = ?`,
         newBreak, mostRecent.id

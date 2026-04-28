@@ -300,15 +300,52 @@ router.post('/timer/stop', requireAuth, withOrgScope, async (req, res) => {
 
     const { taskId, beganAt, endedAt, duration } = req.body || {};
     if (taskId && beganAt && duration != null && Number(duration) > 0) {
+      // Dedup: ignore the same {user, task, beganAt, duration} arriving twice within
+      // 30s — happens when multiple browser tabs both fire stop on the same session.
+      // Without this, we'd write duplicate rows and double-count the user's time.
       try {
-        await prisma.$executeRawUnsafe(
-          'INSERT INTO time_logs (id, taskId, userId, orgId, `begin`, `end`, duration, category, createdAt, updatedAt) ' +
-          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))',
-          randomUUID(), taskId, req.user.id, req.orgId,
-          new Date(beganAt), new Date(endedAt || Date.now()),
-          Math.floor(Number(duration)), 'work'
+        const dup = await prisma.$queryRawUnsafe(
+          'SELECT id FROM time_logs WHERE userId = ? AND taskId = ? AND `begin` = ? AND duration = ? LIMIT 1',
+          req.user.id, taskId, new Date(beganAt), Math.floor(Number(duration))
         );
-      } catch (e) { console.warn('[Tasks] timer/stop time_log insert failed:', e.message); }
+        if (Array.isArray(dup) && dup.length > 0) {
+          console.log(`[Tasks] timer/stop duplicate session ignored — user=${req.user.id} task=${taskId}`);
+        } else {
+          await prisma.$executeRawUnsafe(
+            'INSERT INTO time_logs (id, taskId, userId, orgId, `begin`, `end`, duration, category, createdAt, updatedAt) ' +
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))',
+            randomUUID(), taskId, req.user.id, req.orgId,
+            new Date(beganAt), new Date(endedAt || Date.now()),
+            Math.floor(Number(duration)), 'work'
+          );
+        }
+      } catch (e) {
+        console.warn('[Tasks] timer/stop time_log insert failed:', e.message);
+        // Fire an in-app notification to admin@eversense.ai so we know data
+        // was lost and can investigate (instead of users seeing an error toast).
+        try {
+          const admin = await prisma.user.findFirst({
+            where: { email: 'admin@eversense.ai' },
+            select: { id: true },
+          });
+          const failingUser = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: { name: true, email: true },
+          }).catch(() => null);
+          if (admin?.id) {
+            await createNotification({
+              userId: admin.id,
+              orgId: req.orgId,
+              title: 'Task timer save failed',
+              body: `${failingUser?.name || failingUser?.email || req.user.id}'s ${Math.round(Number(duration) / 60)}min session on task ${taskId} did not save (${e.message}). Investigate.`,
+              link: `/tasks`,
+              type: 'warning',
+            });
+          }
+        } catch (notifyErr) {
+          console.warn('[Tasks] timer/stop admin-notify failed:', notifyErr.message);
+        }
+      }
     }
 
     // Real-time push so co-assignees see the strip disappear immediately.
