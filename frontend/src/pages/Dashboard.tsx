@@ -124,7 +124,9 @@ export function Dashboard() {
     const valid = localStorage.getItem('att_break_used') === new Date().toISOString().slice(0, 10);
     return valid ? parseInt(localStorage.getItem('att_break_count') || '0') : 0;
   });
-  const [breakCountPerDay, setBreakCountPerDay] = useState(1);
+  // breakCountPerDay no longer used (replaced by 60-min cumulative budget).
+  // Setter kept so the policy-fetch effect still compiles.
+  const [, setBreakCountPerDay] = useState(1);
 
   // ── Fetch everything in parallel ──────────────────────────────────────────
   const fetchDashboard = useCallback(async () => {
@@ -339,7 +341,10 @@ export function Dashboard() {
 
   const handleBreak = () => {
     if (!attendanceActive) return;
-    if (!onBreak && breaksTakenToday >= breakCountPerDay) return;
+    // Multi-break: gate on CUMULATIVE break time (60-min daily budget),
+    // not on count. Take as many short breaks as you want.
+    const BREAK_BUDGET_SECS = 60 * 60;
+    if (!onBreak && breakAccum >= BREAK_BUDGET_SECS) return;
     if (!onBreak) {
       localStorage.setItem('att_break_start', String(Date.now()));
       localStorage.setItem('att_break_used', todayStr());
