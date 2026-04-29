@@ -356,31 +356,48 @@ export function Leaves() {
               </select>
             </div>
 
-            {form.type === 'offset' && (
-              <div>
-                <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>
-                  Offset Date — Saturday or Sunday you worked
-                </label>
-                <select
-                  value={form.offsetDate}
-                  onChange={e => setForm(p => ({ ...p, offsetDate: e.target.value }))}
-                  required
-                  className="w-full px-3 py-2 rounded-lg text-xs"
-                  style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}
-                >
-                  <option value="">— pick a weekend in this payroll period —</option>
-                  {validOffsetDates.map(iso => {
-                    const d = new Date(iso + 'T00:00:00');
-                    const dayLabel = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-                    return <option key={iso} value={iso}>{dayLabel}</option>;
-                  })}
-                </select>
-                <p className="text-[10px] mt-1" style={{ color: VS.text2 }}>
-                  Only Sat/Sun within the current payroll period (1–15 or 16–end of month) are selectable.
-                </p>
-              </div>
-            )}
-
+            {form.type === 'offset' ? (
+              <>
+                <div>
+                  <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>
+                    Date to be offset (Sat/Sun you worked)
+                  </label>
+                  <select
+                    value={form.offsetDate}
+                    onChange={e => setForm(p => ({ ...p, offsetDate: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2 rounded-lg text-xs"
+                    style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}
+                  >
+                    <option value="">— pick a weekend in this payroll period —</option>
+                    {validOffsetDates.map(iso => {
+                      const d = new Date(iso + 'T00:00:00');
+                      const dayLabel = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+                      return <option key={iso} value={iso}>{dayLabel}</option>;
+                    })}
+                  </select>
+                  <p className="text-[10px] mt-1" style={{ color: VS.text2 }}>
+                    Only Sat/Sun within the current payroll period (1–15 or 16–end of month) appear here.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>
+                    Date of offset (the day off you're taking)
+                  </label>
+                  <input
+                    type="date"
+                    value={form.startDate}
+                    onChange={e => setForm(p => ({ ...p, startDate: e.target.value, endDate: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2 rounded-lg text-xs"
+                    style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}
+                  />
+                  <p className="text-[10px] mt-1" style={{ color: VS.text2 }}>
+                    The weekday you want OFF in exchange.
+                  </p>
+                </div>
+              </>
+            ) : (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Start Date</label>
@@ -405,8 +422,9 @@ export function Leaves() {
                 />
               </div>
             </div>
+            )}
 
-            {estimatedDays > 0 && (
+            {estimatedDays > 0 && form.type !== 'offset' && (
               <div className="text-xs" style={{ color: VS.text1 }}>
                 {estimatedDays} day{estimatedDays > 1 ? 's' : ''} ·{' '}
                 <span style={{ color: VS.text2 }}>
