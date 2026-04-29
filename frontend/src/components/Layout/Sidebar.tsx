@@ -124,16 +124,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               const baseStyle: React.CSSProperties = isBoxed
                 ? {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: '10px', padding: '12px 14px', borderRadius: '10px',
-                    fontSize: '14px', fontWeight: 700, letterSpacing: '0.3px', width: '100%',
-                    color: '#ffffff',
-                    background: `linear-gradient(135deg, ${VS.accent} 0%, ${VS.accent}d9 100%)`,
-                    border: `1px solid ${VS.accent}`,
-                    boxShadow: `0 4px 14px ${VS.accent}55, 0 1px 3px rgba(0,0,0,0.2)`,
+                    gap: '8px', padding: '8px 10px', borderRadius: '6px',
+                    fontSize: '13px', fontWeight: 600, width: '100%',
+                    color: '#0f1f1c',
+                    background: VS.teal,
+                    border: `1px solid ${VS.teal}`,
+                    boxShadow: `0 2px 8px ${VS.teal}44`,
                     textDecoration: 'none', textAlign: 'left',
                     cursor: 'pointer',
-                    transition: 'transform 0.15s, box-shadow 0.15s, filter 0.15s',
-                    margin: '6px 0 8px',
+                    transition: 'filter 0.15s, box-shadow 0.15s',
+                    margin: '2px 0 4px',
                   }
                 : {
                     display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px',
@@ -149,9 +149,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   style={baseStyle}
                   onMouseEnter={e => {
                     if (isBoxed) {
-                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
                       (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)';
-                      (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 20px ${VS.accent}77, 0 2px 4px rgba(0,0,0,0.25)`;
+                      (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 12px ${VS.teal}66`;
                     } else {
                       (e.currentTarget as HTMLElement).style.background = VS.bg2;
                       (e.currentTarget as HTMLElement).style.color = VS.text1;
@@ -159,9 +158,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   }}
                   onMouseLeave={e => {
                     if (isBoxed) {
-                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
                       (e.currentTarget as HTMLElement).style.filter = 'brightness(1)';
-                      (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 14px ${VS.accent}55, 0 1px 3px rgba(0,0,0,0.2)`;
+                      (e.currentTarget as HTMLElement).style.boxShadow = `0 2px 8px ${VS.teal}44`;
                     } else {
                       (e.currentTarget as HTMLElement).style.background = 'transparent';
                       (e.currentTarget as HTMLElement).style.color = VS.text2;
@@ -169,12 +167,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   }}
                   title={`Open ${item.name} — automatically signed in`}
                 >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Icon size={isBoxed ? 18 : 16} style={{ flexShrink: 0 }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Icon size={14} style={{ flexShrink: 0 }} />
                     <span>{item.name}</span>
                   </span>
                   {isBoxed && (
-                    <span style={{ fontSize: '14px', fontWeight: 700, opacity: 0.95 }}>↗</span>
+                    <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.85 }}>↗</span>
                   )}
                 </button>
               );
