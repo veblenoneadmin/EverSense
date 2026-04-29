@@ -643,16 +643,26 @@ export function Tasks() {
     // (tracked in localStorage) back to not_started before promoting the new
     // one. Using localStorage instead of filtering the task list means the
     // rule works regardless of assignee type, team-task flags, or which view
-    // the user is on.
+    // the user is on. Skip the demote if the prev task is already in a
+    // terminal state (completed/cancelled/on_hold) so we don't accidentally
+    // resurrect a finished task back into To Do.
     const prevId = localStorage.getItem('my_in_progress_task');
     if (prevId && prevId !== taskId) {
-      setTasks(prev => prev.map(t =>
-        t.id === prevId ? { ...t, status: 'not_started' } : t
-      ));
-      apiClient.fetch(`/api/tasks/${prevId}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'not_started' }),
-      }).catch(() => {});
+      const prevTask = tasks.find(t => t.id === prevId);
+      const prevIsTerminal = prevTask && (
+        prevTask.status === 'completed' ||
+        prevTask.status === 'cancelled' ||
+        prevTask.status === 'on_hold'
+      );
+      if (!prevIsTerminal) {
+        setTasks(prev => prev.map(t =>
+          t.id === prevId ? { ...t, status: 'not_started' } : t
+        ));
+        apiClient.fetch(`/api/tasks/${prevId}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'not_started' }),
+        }).catch(() => {});
+      }
     }
     localStorage.setItem('my_in_progress_task', taskId);
 
@@ -865,6 +875,14 @@ export function Tasks() {
         method: 'PATCH',
         body: JSON.stringify({ status, report: fullReport }),
       });
+      // If this task was the user's "current in-progress" (per the
+      // single-in-progress rule), clear the localStorage pointer so the
+      // demote-on-next-start doesn't kick this task back to not_started.
+      if (status === 'completed' || status === 'cancelled' || status === 'on_hold') {
+        if (localStorage.getItem('my_in_progress_task') === taskId) {
+          localStorage.removeItem('my_in_progress_task');
+        }
+      }
       setReportModal(null);
       setReportText('');
       setAccomplishments(['']);
