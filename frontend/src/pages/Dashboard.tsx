@@ -500,22 +500,32 @@ export function Dashboard() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {attendanceActive && (
-            <div className="text-right hidden sm:block">
-              <p className="text-[11px]" style={{ color: VS.text2 }}>Clocked in at</p>
-              <p className="text-[13px] font-medium tabular-nums" style={{ color: VS.text1 }}>
-                {fmtTime(attendanceActive.timeIn)}
-              </p>
-            </div>
-          )}
+          {attendanceActive && (() => {
+            const BREAK_BUDGET_SECS = 60 * 60;
+            const totalBreakSecs = breakAccum + (onBreak ? breakElapsed : 0);
+            const overBudget = totalBreakSecs >= BREAK_BUDGET_SECS;
+            const remaining = Math.max(0, BREAK_BUDGET_SECS - totalBreakSecs);
+            const remainingMins = Math.round(remaining / 60);
+            return (
+              <div className="text-right hidden sm:block">
+                <p className="text-[11px]" style={{ color: VS.text2 }}>Clocked in at</p>
+                <p className="text-[13px] font-medium tabular-nums" style={{ color: VS.text1 }}>
+                  {fmtTime(attendanceActive.timeIn)}
+                </p>
+                {overBudget ? (
+                  <p className="text-[10px] mt-0.5" style={{ color: VS.red }}>Break time used up (60 min/day)</p>
+                ) : (
+                  <p className="text-[10px] mt-0.5" style={{ color: VS.text2 }}>{remainingMins} min break left</p>
+                )}
+              </div>
+            );
+          })()}
           {attendanceActive && (() => {
             // Multi-break model: take as many breaks as you want, but the
             // total cumulative break time can't exceed 60 min per day.
             const BREAK_BUDGET_SECS = 60 * 60;
             const totalBreakSecs = breakAccum + (onBreak ? breakElapsed : 0);
             const overBudget = totalBreakSecs >= BREAK_BUDGET_SECS;
-            const remaining = Math.max(0, BREAK_BUDGET_SECS - totalBreakSecs);
-            const remainingMins = Math.round(remaining / 60);
             return (
               <div className="flex flex-col items-end gap-1">
                 <button
@@ -530,12 +540,6 @@ export function Dashboard() {
                 >
                   {onBreak ? '▶ Resume' : '⏸ Break'}
                 </button>
-                {!onBreak && overBudget && (
-                  <span className="text-[10px]" style={{ color: VS.red }}>Break time used up (60 min/day)</span>
-                )}
-                {!onBreak && !overBudget && breakAccum > 0 && (
-                  <span className="text-[10px]" style={{ color: VS.text2 }}>{remainingMins} min break left</span>
-                )}
               </div>
             );
           })()}
