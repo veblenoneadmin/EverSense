@@ -434,6 +434,16 @@ export function Dashboard() {
               ★ Super Admin
             </button>
           )}
+          {currentOrg.role === 'ACCOUNTANT' && (
+            <button
+              onClick={() => { window.location.href = '/api/sso/hrsense'; }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold shrink-0 transition-all hover:opacity-80"
+              style={{ background: `${VS.accent}1f`, border: `1px solid ${VS.accent}55`, color: VS.accent }}
+              title="Open HRSense — automatically signed in"
+            >
+              ↗ Open HRSense
+            </button>
+          )}
         </div>
       </div>
 
