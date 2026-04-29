@@ -1723,11 +1723,26 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
       );
       console.log(`📝 Updated assignee status for ${req.user.id} on task ${taskId} to: ${status}`);
 
-      // Check if ALL assignees are now completed → update global task status
+      // Check if ALL assignees (primary + co-assignees) are now completed →
+      // update global task status. The primary assignee MUST have a row in
+      // task_assignees with status='completed' for the auto-complete to fire.
+      // Previously this fired when all task_assignees rows were completed,
+      // which meant a single co-assignee marking done could auto-complete a
+      // task globally if the primary had no row — surfacing as "task moved
+      // to Done by itself" for the primary.
       const refreshed = await prisma.$queryRawUnsafe(
         'SELECT userId, status FROM task_assignees WHERE taskId = ?', taskId
       );
-      const allCompleted = refreshed.length > 0 && refreshed.every(a => a.status === 'completed');
+      const taskRow = await prisma.macroTask.findUnique({
+        where: { id: taskId },
+        select: { userId: true },
+      });
+      const primaryUserId = taskRow?.userId;
+      const primaryRow = refreshed.find(a => a.userId === primaryUserId);
+      const allCompleted =
+        primaryRow?.status === 'completed' &&
+        refreshed.length > 0 &&
+        refreshed.every(a => a.status === 'completed');
 
       if (allCompleted) {
         await prisma.macroTask.update({

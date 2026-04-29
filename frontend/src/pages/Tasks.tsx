@@ -790,8 +790,16 @@ export function Tasks() {
     const task = tasks.find(t => t.id === taskId);
     if (!task || task.status === colId) return;
 
-    // Require a report when moving to on_hold, cancelled, or completed
-    if (colId === 'on_hold' || colId === 'cancelled' || colId === 'completed') {
+    // Confirmation dialog for terminal status changes — catches accidental
+    // drags into Done/On Hold/Cancelled before the report modal opens.
+    // Multiple team tasks have been auto-completed by mis-drags; this asks
+    // for explicit intent first.
+    if (colId === 'completed' || colId === 'on_hold' || colId === 'cancelled') {
+      const labelMap = { completed: 'completed', on_hold: 'on hold', cancelled: 'cancelled' };
+      const verb = labelMap[colId] || colId;
+      if (!window.confirm(`Mark "${task.title}" as ${verb}? This affects all assignees.`)) {
+        return;
+      }
       setReportModal({ taskId, status: colId, prevStatus: task.status });
       setReportText('');
       setAccomplishments(['']);
