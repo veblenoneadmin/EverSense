@@ -197,7 +197,12 @@ async function handleClockOut(req, res) {
     const now           = new Date();
     const grossDuration = Math.floor((now.getTime() - new Date(active.timeIn).getTime()) / 1000);
     const breakDuration = Math.max(0, parseInt(rawBreak) || 0);
-    const duration      = Math.max(0, grossDuration - breakDuration);
+    // Break-within-the-allowance is paid through: only the OVER portion of
+    // the break is subtracted from work time. e.g. with a 60-min limit, a
+    // 60-min lunch deducts 0; a 70-min lunch deducts only 10.
+    const breakLimitSecs = await getOrgBreakLimitSecs(orgId);
+    const overBreak      = Math.max(0, breakDuration - breakLimitSecs);
+    const duration       = Math.max(0, grossDuration - overBreak);
 
     await prisma.$executeRawUnsafe(
       `UPDATE attendance_logs SET timeOut=?, duration=?, breakDuration=?, notes=?, updatedAt=NOW(3) WHERE id=?`,
