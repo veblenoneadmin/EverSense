@@ -6,7 +6,7 @@ import {
   Crown, Shield, UserCog, X, AlertTriangle, LayoutDashboard,
   RefreshCw, ChevronDown, ChevronUp, Search, ArrowLeft,
   Terminal, Settings, Activity, Trash, KeyRound, Eye, EyeOff,
-  Clock, Save, Pencil, ClipboardList,
+  Clock, Save, Pencil, ClipboardList, Coffee,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -685,6 +685,18 @@ function AttendanceLogs() {
     }
   };
 
+  const handleResetBreak = async (l: AttLog) => {
+    const who = l.userName || l.userEmail || l.userId;
+    if (!window.confirm(`Reset ${who}'s break to a fresh 60 min?\n\nThis broadcasts to their browser tabs and clears their local break state.`)) return;
+    try {
+      const res = await saFetch(`/api/super-admin/users/${l.userId}/reset-break`, { method: 'POST' });
+      if (res.error) { showToast(res.error, false); return; }
+      showToast(`Break reset for ${who}`, true);
+    } catch {
+      showToast('Failed to reset break', false);
+    }
+  };
+
   const handleSave = async () => {
     if (!editing) return;
     setSaving(true);
@@ -765,6 +777,12 @@ function AttendanceLogs() {
                   <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.text2 }}>{fmtDur(l.breakDuration)}</td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => handleResetBreak(l)}
+                        className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                        style={{ color: VS.yellow }}
+                        title="Reset user's break to fresh 60 min">
+                        <Coffee className="h-3.5 w-3.5" />
+                      </button>
                       <button onClick={() => openEdit(l)}
                         className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
                         style={{ color: VS.accent }}

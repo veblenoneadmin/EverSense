@@ -371,6 +371,16 @@ const MainLayout: React.FC = () => {
       if (d.action === 'clock-out' && d.userId === session?.user?.id) {
         try { stopTaskTimer(); } catch { /* non-fatal */ }
       }
+      // Super admin reset-break: clear local break state immediately. The
+      // user gets a fresh 60-min budget without having to refresh.
+      if (d.action === 'reset-break' && d.userId === session?.user?.id) {
+        try {
+          localStorage.removeItem('att_break_start');
+          localStorage.removeItem('att_break_accum');
+          localStorage.removeItem('att_break_count');
+          window.dispatchEvent(new CustomEvent('attendance-change'));
+        } catch { /* non-fatal */ }
+      }
     }
     if (event === 'notification') fetchNotifs();
     // Auto-clockout cron also broadcasts a 'timer' stop with reason='auto-clockout'

@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/rbac.js';
 import { sendInviteEmail, formatDuration } from '../lib/mailer.js';
 import { runDailyPersonReportNow } from '../services/dailyPersonReportScheduler.js';
+import { broadcast } from '../lib/sse.js';
 
 const router = express.Router();
 
@@ -606,6 +607,36 @@ router.patch('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async (
 });
 
 // ── DELETE /api/super-admin/attendance-logs/:id ───────────────────────────────
+// ── POST /api/super-admin/users/:userId/reset-break ───────────────────────────
+// Resets the user's break state for today. Break state lives in their browser
+// localStorage (att_break_start, att_break_accum, att_break_count) so we can't
+// modify it directly from the server — instead we broadcast an SSE event that
+// their connected browser tabs listen for and clear the keys themselves.
+router.post('/users/:userId/reset-break', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    // Look up the user's org so we know which org channel to broadcast on.
+    const memberships = await prisma.$queryRawUnsafe(
+      'SELECT orgId FROM memberships WHERE userId = ?', userId
+    );
+    if (!memberships.length) return res.status(404).json({ error: 'User has no org membership' });
+
+    // Broadcast to every org the user is in (covers multi-org users).
+    for (const m of memberships) {
+      try {
+        broadcast(m.orgId, 'attendance', { action: 'reset-break', userId });
+      } catch (e) {
+        console.warn(`[SuperAdmin] reset-break broadcast failed for org ${m.orgId}:`, e.message);
+      }
+    }
+    console.log(`[SuperAdmin] 🔄 reset-break broadcast for user ${userId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[SuperAdmin] reset-break error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async (req, res) => {
   try {
     const { id } = req.params;
