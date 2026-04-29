@@ -239,6 +239,19 @@ export function Dashboard() {
     return () => window.removeEventListener('attendance-change', fetchAttendance);
   }, [fetchAttendance]);
 
+  // Sync break state from localStorage when other code paths flip the break
+  // (the 70-min hard-cap auto-resume in MainLayout, another tab, etc.).
+  // Without this, our local onBreak/breakAccum stay stale and the work-
+  // elapsed timer remains frozen even after the break ends elsewhere.
+  useEffect(() => {
+    const syncBreakFromStorage = () => {
+      setOnBreak(!!localStorage.getItem('att_break_start'));
+      setBreakAccum(Number(localStorage.getItem('att_break_accum') || 0));
+    };
+    window.addEventListener('attendance-change', syncBreakFromStorage);
+    return () => window.removeEventListener('attendance-change', syncBreakFromStorage);
+  }, []);
+
   useSSE(currentOrg?.id || undefined, (event) => {
     if (event === 'attendance') fetchAttendance();
   });
@@ -490,25 +503,37 @@ export function Dashboard() {
               </p>
             </div>
           )}
-          {attendanceActive && (
-            <div className="flex flex-col items-end gap-1">
-              <button
-                onClick={handleBreak}
-                disabled={attendanceLoading || (!onBreak && breaksTakenToday >= breakCountPerDay)}
-                title={!onBreak && breaksTakenToday >= breakCountPerDay ? `Break limit reached (${breakCountPerDay}/day)` : undefined}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={onBreak
-                  ? { background: 'rgba(78,201,176,0.12)', color: VS.teal, border: `1px solid rgba(78,201,176,0.25)` }
-                  : { background: 'rgba(255,180,0,0.10)', color: '#f0b429', border: '1px solid rgba(255,180,0,0.25)' }
-                }
-              >
-                {onBreak ? '▶ Resume' : '⏸ Break'}
-              </button>
-              {!onBreak && breaksTakenToday >= breakCountPerDay && (
-                <span className="text-[10px]" style={{ color: VS.red }}>Break limit reached ({breakCountPerDay}/day)</span>
-              )}
-            </div>
-          )}
+          {attendanceActive && (() => {
+            // Multi-break model: take as many breaks as you want, but the
+            // total cumulative break time can't exceed 60 min per day.
+            const BREAK_BUDGET_SECS = 60 * 60;
+            const totalBreakSecs = breakAccum + (onBreak ? breakElapsed : 0);
+            const overBudget = totalBreakSecs >= BREAK_BUDGET_SECS;
+            const remaining = Math.max(0, BREAK_BUDGET_SECS - totalBreakSecs);
+            const remainingMins = Math.round(remaining / 60);
+            return (
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={handleBreak}
+                  disabled={attendanceLoading || (!onBreak && overBudget)}
+                  title={!onBreak && overBudget ? 'Daily break time used up (60 min total)' : undefined}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={onBreak
+                    ? { background: 'rgba(78,201,176,0.12)', color: VS.teal, border: `1px solid rgba(78,201,176,0.25)` }
+                    : { background: 'rgba(255,180,0,0.10)', color: '#f0b429', border: '1px solid rgba(255,180,0,0.25)' }
+                  }
+                >
+                  {onBreak ? '▶ Resume' : '⏸ Break'}
+                </button>
+                {!onBreak && overBudget && (
+                  <span className="text-[10px]" style={{ color: VS.red }}>Break time used up (60 min/day)</span>
+                )}
+                {!onBreak && !overBudget && breakAccum > 0 && (
+                  <span className="text-[10px]" style={{ color: VS.text2 }}>{remainingMins} min break left</span>
+                )}
+              </div>
+            );
+          })()}
           <button
             onClick={attendanceActive ? handleTimeOut : handleTimeIn}
             disabled={attendanceLoading}

@@ -223,15 +223,18 @@ const MainLayout: React.FC = () => {
   // Driven by the wall-clock tick (currentTime updates every second). Cheap
   // since checks are pure localStorage + arithmetic.
   useEffect(() => {
-    // Break check
+    // Break check — uses CUMULATIVE break time (accum + current break elapsed)
+    // so multiple short breaks count toward the 60-min daily total.
     const breakStartRaw = localStorage.getItem('att_break_start');
     if (breakStartRaw) {
-      const elapsed = Math.floor((Date.now() - Number(breakStartRaw)) / 1000);
-      if (elapsed >= BREAK_HARD_CAP_SECS) {
-        // Hard cap reached — auto-end the break even without user input.
+      const breakAccum = Number(localStorage.getItem('att_break_accum') || 0);
+      const currentElapsed = Math.floor((Date.now() - Number(breakStartRaw)) / 1000);
+      const totalBreakSecs = breakAccum + currentElapsed;
+      if (totalBreakSecs >= BREAK_HARD_CAP_SECS) {
+        // Hard cap on cumulative total — auto-end the break.
         if (showBreakOverModal) setShowBreakOverModal(false);
         endBreakNow();
-      } else if (elapsed >= BREAK_LIMIT_SECS && !showBreakOverModal) {
+      } else if (totalBreakSecs >= BREAK_LIMIT_SECS && !showBreakOverModal) {
         setShowBreakOverModal(true);
       }
     } else if (showBreakOverModal) {

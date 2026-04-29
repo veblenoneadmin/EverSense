@@ -135,7 +135,9 @@ export function TimeLogs() {
   const [isClient, setIsClient]     = useState(false);
   const [leaves, setLeaves]         = useState<LeaveRecord[]>([]);
   const [breakLimitSecs, setBreakLimitSecs] = useState(DEFAULT_breakLimitSecs);
-  const [breakCountPerDay, setBreakCountPerDay] = useState(1);
+  // breakCountPerDay is no longer used for gating — replaced by 60-min
+  // cumulative budget. Keeping the setter so the policy fetch still compiles.
+  const [, setBreakCountPerDay] = useState(1);
 
   // Edit break modal
   const [editBreakLog, setEditBreakLog] = useState<AttendanceLog | null>(null);
@@ -159,6 +161,20 @@ export function TimeLogs() {
     return stored;
   });
   const [breakElapsed, setBreakElapsed] = useState(0); // live seconds since break started
+
+  // Sync break state from localStorage when other code paths flip the break
+  // (the 70-min hard-cap auto-resume in MainLayout, another tab, etc.).
+  // Without this, our local onBreak/breakAccum/breaksTakenToday stay stale.
+  useEffect(() => {
+    const syncBreakFromStorage = () => {
+      setOnBreak(!!localStorage.getItem('att_break_start'));
+      setBreakAccum(Number(localStorage.getItem('att_break_accum') || 0));
+      const todayMatch = localStorage.getItem('att_break_used') === new Date().toISOString().slice(0, 10);
+      setBreaksTakenToday(todayMatch ? parseInt(localStorage.getItem('att_break_count') || '0') : 0);
+    };
+    window.addEventListener('attendance-change', syncBreakFromStorage);
+    return () => window.removeEventListener('attendance-change', syncBreakFromStorage);
+  }, []);
 
   // Export
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -331,7 +347,10 @@ export function TimeLogs() {
 
   const handleBreak = () => {
     if (!clockedIn) return;
-    if (!onBreak && breaksTakenToday >= breakCountPerDay) return;
+    // Multi-break model: gate on CUMULATIVE break time (60-min total per
+    // day), not on count. Take as many short breaks as you want.
+    const BREAK_BUDGET_SECS = 60 * 60;
+    if (!onBreak && breakAccum >= BREAK_BUDGET_SECS) return;
     if (!onBreak) {
       localStorage.setItem('att_break_start', String(Date.now()));
       localStorage.setItem('att_break_used', todayStr());
@@ -471,7 +490,6 @@ export function TimeLogs() {
   // Live break display inside the clock card
   const liveBreakTotal = breakAccum + (onBreak ? breakElapsed : 0);
   const isOverBreak    = liveBreakTotal > breakLimitSecs;
-  const breakRemaining = Math.max(0, breakLimitSecs - liveBreakTotal);
 
   if (loading) {
     return (
@@ -612,48 +630,54 @@ export function TimeLogs() {
             </div>
           )}
 
-          {/* Break button */}
-          {clockedIn && (
-            <div className="flex flex-col items-end gap-1">
-              <button
-                onClick={handleBreak}
-                disabled={clockLoading || (!onBreak && breaksTakenToday >= breakCountPerDay)}
-                title={
-                  !onBreak && breaksTakenToday >= breakCountPerDay
-                    ? `Break limit reached (${breakCountPerDay}/day)`
-                    : onBreak
-                      ? `Resume work${isOverBreak ? ' · You are over the 30-min limit' : ''}`
-                      : 'Take a 30-min break'
-                }
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={onBreak
-                  ? { background: 'rgba(78,201,176,0.12)', color: VS.teal,   border: `1px solid rgba(78,201,176,0.25)` }
-                  : { background: 'rgba(220,220,170,0.10)', color: VS.yellow, border: '1px solid rgba(220,220,170,0.25)' }
-                }
-              >
-                <Coffee className="h-4 w-4" />
-                {onBreak ? 'Resume' : 'Break'}
-              </button>
-              {!onBreak && breaksTakenToday < breakCountPerDay && (
-                <span className="text-[10px]" style={{ color: VS.text2 }}>
-                  {Math.floor(breakLimitSecs / 60)} min limit · {breaksTakenToday}/{breakCountPerDay} used
-                </span>
-              )}
-              {!onBreak && breaksTakenToday >= breakCountPerDay && (
-                <span className="text-[10px]" style={{ color: VS.red }}>Break limit reached today</span>
-              )}
-              {onBreak && !isOverBreak && (
-                <span className="text-[10px]" style={{ color: VS.text2 }}>
-                  {fmtDuration(breakRemaining)} remaining
-                </span>
-              )}
-              {onBreak && isOverBreak && (
-                <span className="text-[10px]" style={{ color: VS.red }}>
-                  Over break limit!
-                </span>
-              )}
-            </div>
-          )}
+          {/* Break button — multi-break with 60-min cumulative budget */}
+          {clockedIn && (() => {
+            const BREAK_BUDGET_SECS = 60 * 60;
+            const totalBreakSecs = breakAccum + (onBreak ? breakElapsed : 0);
+            const overBudget = totalBreakSecs >= BREAK_BUDGET_SECS;
+            const remaining = Math.max(0, BREAK_BUDGET_SECS - totalBreakSecs);
+            return (
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={handleBreak}
+                  disabled={clockLoading || (!onBreak && overBudget)}
+                  title={
+                    !onBreak && overBudget
+                      ? 'Daily break time used up (60 min total)'
+                      : onBreak
+                        ? `Resume work${overBudget ? ' · You are over the 60-min daily total' : ''}`
+                        : 'Take a break — 60 min total per day'
+                  }
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={onBreak
+                    ? { background: 'rgba(78,201,176,0.12)', color: VS.teal,   border: `1px solid rgba(78,201,176,0.25)` }
+                    : { background: 'rgba(220,220,170,0.10)', color: VS.yellow, border: '1px solid rgba(220,220,170,0.25)' }
+                  }
+                >
+                  <Coffee className="h-4 w-4" />
+                  {onBreak ? 'Resume' : 'Break'}
+                </button>
+                {!onBreak && !overBudget && (
+                  <span className="text-[10px]" style={{ color: VS.text2 }}>
+                    {fmtDuration(remaining)} break remaining today
+                  </span>
+                )}
+                {!onBreak && overBudget && (
+                  <span className="text-[10px]" style={{ color: VS.red }}>Break time used up (60 min/day)</span>
+                )}
+                {onBreak && !overBudget && (
+                  <span className="text-[10px]" style={{ color: VS.text2 }}>
+                    {fmtDuration(remaining)} remaining
+                  </span>
+                )}
+                {onBreak && overBudget && (
+                  <span className="text-[10px]" style={{ color: VS.red }}>
+                    Over daily break total
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Clock In / Out button */}
           <button
