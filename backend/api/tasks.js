@@ -1707,38 +1707,21 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
       }
     }
 
-    // Per-user status logic only applies to TEAM TASKS (isTeamTask=1). Regular
-    // tasks with co-assignees just have helpers tagged on — whoever closes
-    // them closes the whole task globally for everyone.
-    const taskMeta = await prisma.macroTask.findUnique({
-      where: { id: taskId },
-      select: { userId: true, isTeamTask: true },
-    });
-    const isTeamTask = !!taskMeta?.isTeamTask;
-    const assignees = isTeamTask
-      ? await prisma.$queryRawUnsafe(
-          'SELECT userId, status FROM task_assignees WHERE taskId = ?', taskId
-        ).catch(() => [])
-      : [];
+    // Check if multi-assignee task (more than 1 assignee)
+    const assignees = await prisma.$queryRawUnsafe(
+      'SELECT userId, status FROM task_assignees WHERE taskId = ?', taskId
+    ).catch(() => []);
+
+    const isMultiAssignee = assignees.length > 1;
     const callerAssignee = assignees.find(a => a.userId === req.user.id);
 
-    if (isTeamTask) {
+    if (isMultiAssignee && callerAssignee) {
       // ── Per-assignee status: only update THIS user's status ──
-      // If caller doesn't have a row yet (typical for the primary on a team
-      // task they just promoted), insert one so their completion is tracked
-      // individually instead of closing the task globally.
-      if (callerAssignee) {
-        await prisma.$executeRawUnsafe(
-          'UPDATE task_assignees SET status = ? WHERE taskId = ? AND userId = ?',
-          status, taskId, req.user.id
-        );
-      } else {
-        await prisma.$executeRawUnsafe(
-          'INSERT INTO task_assignees (id, taskId, userId, orgId, status) VALUES (?, ?, ?, ?, ?)',
-          randomUUID(), taskId, req.user.id, req.orgId, status
-        );
-      }
-      console.log(`📝 Updated per-assignee status for ${req.user.id} on team task ${taskId} to: ${status}`);
+      await prisma.$executeRawUnsafe(
+        'UPDATE task_assignees SET status = ? WHERE taskId = ? AND userId = ?',
+        status, taskId, req.user.id
+      );
+      console.log(`📝 Updated assignee status for ${req.user.id} on task ${taskId} to: ${status}`);
 
       // Check if ALL assignees (primary + co-assignees) are now completed →
       // update global task status. The primary assignee MUST have a row in
