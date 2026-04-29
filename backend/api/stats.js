@@ -5,6 +5,29 @@ import { requireAuth } from '../lib/rbac.js';
 import { checkDatabaseConnection, handleDatabaseError } from '../lib/api-error-handler.js';
 const router = express.Router();
 
+// "Today" boundary helper — returns startOfDay / endOfDay as UTC Dates that
+// correspond to midnight-to-midnight in Brisbane (AEST, UTC+10, no DST).
+// Server runs in UTC; if we used local Date math, "today" would shift at
+// UTC midnight (= 10am Brisbane / 8am PH), which doesn't match the workday.
+const BUSINESS_TZ = 'Australia/Brisbane';
+function getBusinessDayBoundaries(reference = new Date()) {
+  // Brisbane is UTC+10 year-round (no DST). Compute the Brisbane wall-clock
+  // date for the reference instant.
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(reference);
+  const y = Number(parts.find(p => p.type === 'year').value);
+  const m = Number(parts.find(p => p.type === 'month').value);
+  const d = Number(parts.find(p => p.type === 'day').value);
+  // Brisbane midnight in UTC = 14:00 UTC of the previous calendar day. Easier
+  // to express: y-m-d 00:00 Brisbane = y-m-d 00:00 - 10h offset in UTC.
+  // Use Date.UTC to construct, then subtract 10h.
+  const startUTC = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - 10 * 3600 * 1000);
+  const endUTC   = new Date(startUTC.getTime() + 24 * 3600 * 1000);
+  return { startOfDay: startUTC, endOfDay: endUTC };
+}
+
 // Tasks completed today endpoint
 // Optional ?userId= filters to that user's tasks only (where they're the
 // primary assignee). Without it, returns org-wide count.
@@ -21,9 +44,7 @@ router.get('/tasks-completed-today', requireAuth, async (req, res) => {
       return; // Response already sent by checkDatabaseConnection
     }
 
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+    const { startOfDay, endOfDay } = getBusinessDayBoundaries();
     const userFilter = userId ? { userId } : {};
 
     const todayCount = await prisma.macroTask.count({
@@ -86,10 +107,8 @@ router.get('/time-today', requireAuth, async (req, res) => {
       return; // Response already sent by checkDatabaseConnection
     }
     
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-    
+    const { startOfDay, endOfDay } = getBusinessDayBoundaries();
+
     const result = await prisma.timeLog.aggregate({
       where: {
         userId,
@@ -235,11 +254,10 @@ router.get('/team-members', requireAuth, async (req, res) => {
       }
     });
     
-    // Count members who have been active today (created time logs)
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-    
+    // Count members who have been active today (created time logs) —
+    // "today" is Brisbane business day (UTC+10).
+    const { startOfDay, endOfDay } = getBusinessDayBoundaries();
+
     const activeToday = await prisma.timeLog.findMany({
       where: {
         orgId,
