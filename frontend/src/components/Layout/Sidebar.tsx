@@ -20,6 +20,7 @@ import {
   Timer,
   Crown,
   Flag,
+  ExternalLink,
 } from 'lucide-react';
 
 import { VS } from '../../lib/theme';
@@ -27,8 +28,10 @@ const accentBg = 'rgba(0,122,204,0.15)';
 
 // ACCOUNTANT role: sees everything EXCEPT Milestones, Estimates, and Administration.
 // ACCOUNTANT only sees their own KPI data (gated inside KPI page itself).
+// `external: true` items are full-page redirects (e.g. SSO into another service).
 const navItems = [
   { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'], email: 'admin@veblengroup.com.au' },
+  { name: 'HRSense',        href: '/api/sso/hrsense', icon: ExternalLink, roles: ['ACCOUNTANT'], external: true, boxed: true },
   { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
   { name: 'Tasks',          href: '/tasks',        icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
   { name: 'Milestones',     href: '/milestones',   icon: Flag,            roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },
@@ -112,8 +115,65 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           {visible.map(item => {
             const Icon = item.icon;
             const isAction = !!(item as any).action;
-            const isActive = !isAction && (location.pathname === item.href ||
+            const isExternal = !!(item as any).external;
+            const isBoxed = !!(item as any).boxed;
+            const isActive = !isAction && !isExternal && (location.pathname === item.href ||
               (item.href !== '/dashboard' && location.pathname.startsWith(item.href)));
+
+            if (isExternal) {
+              const baseStyle: React.CSSProperties = isBoxed
+                ? {
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: '10px', padding: '10px 12px', borderRadius: '8px',
+                    fontSize: '13px', fontWeight: 600, width: '100%',
+                    color: VS.accent,
+                    background: `${VS.accent}1a`,
+                    border: `1px solid ${VS.accent}55`,
+                    textDecoration: 'none', textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+                    margin: '4px 0',
+                  }
+                : {
+                    display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px',
+                    borderRadius: '6px', fontSize: '13px', fontWeight: 400, width: '100%',
+                    color: VS.text2, background: 'transparent', border: 'none',
+                    borderLeft: '2px solid transparent', textDecoration: 'none', textAlign: 'left',
+                    cursor: 'pointer', transition: 'background 0.15s, color 0.15s',
+                  };
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => { window.location.href = item.href; }}
+                  style={baseStyle}
+                  onMouseEnter={e => {
+                    if (isBoxed) {
+                      (e.currentTarget as HTMLElement).style.background = `${VS.accent}33`;
+                    } else {
+                      (e.currentTarget as HTMLElement).style.background = VS.bg2;
+                      (e.currentTarget as HTMLElement).style.color = VS.text1;
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (isBoxed) {
+                      (e.currentTarget as HTMLElement).style.background = `${VS.accent}1a`;
+                    } else {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                      (e.currentTarget as HTMLElement).style.color = VS.text2;
+                    }
+                  }}
+                  title={`Open ${item.name} — automatically signed in`}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Icon size={isBoxed ? 18 : 16} style={{ flexShrink: 0 }} />
+                    <span>{item.name}</span>
+                  </span>
+                  {isBoxed && (
+                    <span style={{ fontSize: '10px', opacity: 0.7, letterSpacing: '0.5px' }}>↗</span>
+                  )}
+                </button>
+              );
+            }
 
             if (isAction) {
               return (
