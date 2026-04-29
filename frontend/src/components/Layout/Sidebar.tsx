@@ -123,16 +123,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             if (isExternal) {
               const baseStyle: React.CSSProperties = isBoxed
                 ? {
+                    // Matches the Clock In button style: tinted teal bg, teal text, subtle border
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: '8px', padding: '8px 10px', borderRadius: '6px',
+                    gap: '8px', padding: '8px 14px', borderRadius: '8px',
                     fontSize: '13px', fontWeight: 600, width: '100%',
-                    color: '#0f1f1c',
-                    background: VS.teal,
-                    border: `1px solid ${VS.teal}`,
-                    boxShadow: `0 2px 8px ${VS.teal}44`,
+                    color: VS.teal,
+                    background: 'rgba(78,201,176,0.12)',
+                    border: '1px solid rgba(78,201,176,0.25)',
                     textDecoration: 'none', textAlign: 'left',
                     cursor: 'pointer',
-                    transition: 'filter 0.15s, box-shadow 0.15s',
+                    transition: 'background 0.15s, border-color 0.15s',
                     margin: '2px 0 4px',
                   }
                 : {
@@ -149,8 +149,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   style={baseStyle}
                   onMouseEnter={e => {
                     if (isBoxed) {
-                      (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)';
-                      (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 12px ${VS.teal}66`;
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(78,201,176,0.2)';
+                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(78,201,176,0.45)';
                     } else {
                       (e.currentTarget as HTMLElement).style.background = VS.bg2;
                       (e.currentTarget as HTMLElement).style.color = VS.text1;
@@ -158,8 +158,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   }}
                   onMouseLeave={e => {
                     if (isBoxed) {
-                      (e.currentTarget as HTMLElement).style.filter = 'brightness(1)';
-                      (e.currentTarget as HTMLElement).style.boxShadow = `0 2px 8px ${VS.teal}44`;
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(78,201,176,0.12)';
+                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(78,201,176,0.25)';
                     } else {
                       (e.currentTarget as HTMLElement).style.background = 'transparent';
                       (e.currentTarget as HTMLElement).style.color = VS.text2;
