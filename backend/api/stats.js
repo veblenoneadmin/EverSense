@@ -6,26 +6,30 @@ import { checkDatabaseConnection, handleDatabaseError } from '../lib/api-error-h
 const router = express.Router();
 
 // Tasks completed today endpoint
+// Optional ?userId= filters to that user's tasks only (where they're the
+// primary assignee). Without it, returns org-wide count.
 router.get('/tasks-completed-today', requireAuth, async (req, res) => {
   try {
-    const { orgId } = req.query;
-    
+    const { orgId, userId } = req.query;
+
     if (!orgId) {
       return res.status(400).json({ error: 'orgId is required' });
     }
-    
+
     // Check database connection first
     if (!(await checkDatabaseConnection(res))) {
       return; // Response already sent by checkDatabaseConnection
     }
-    
+
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-    
+    const userFilter = userId ? { userId } : {};
+
     const todayCount = await prisma.macroTask.count({
       where: {
         orgId,
+        ...userFilter,
         status: 'completed',
         completedAt: {
           gte: startOfDay,
@@ -33,14 +37,15 @@ router.get('/tasks-completed-today', requireAuth, async (req, res) => {
         }
       }
     });
-    
+
     // Get yesterday's count for trend calculation
     const yesterday = new Date(startOfDay.getTime() - 24 * 60 * 60 * 1000);
     const yesterdayEnd = new Date(yesterday.getTime() + 24 * 60 * 60 * 1000);
-    
+
     const yesterdayCount = await prisma.macroTask.count({
       where: {
         orgId,
+        ...userFilter,
         status: 'completed',
         completedAt: {
           gte: yesterday,
@@ -142,36 +147,54 @@ router.get('/time-today', requireAuth, async (req, res) => {
 });
 
 // Active projects count endpoint
+// Optional ?userId= scopes to projects where the user has at least one task
+// assigned (primary assignee). Without it, returns org-wide count.
 router.get('/active-projects', requireAuth, async (req, res) => {
   try {
-    const { orgId } = req.query;
-    
+    const { orgId, userId } = req.query;
+
     if (!orgId) {
       return res.status(400).json({ error: 'orgId is required' });
     }
-    
+
     // Check database connection first
     if (!(await checkDatabaseConnection(res))) {
       return; // Response already sent by checkDatabaseConnection
     }
-    
+
+    // If userId given, scope to projects where this user has tasks
+    let projectIdFilter = {};
+    if (userId) {
+      const userTasks = await prisma.macroTask.findMany({
+        where: { orgId, userId, projectId: { not: null } },
+        select: { projectId: true },
+      });
+      const userProjectIds = [...new Set(userTasks.map(t => t.projectId).filter(Boolean))];
+      if (userProjectIds.length === 0) {
+        return res.json({ count: 0, dueSoon: 0, label: '0 due this week' });
+      }
+      projectIdFilter = { id: { in: userProjectIds } };
+    }
+
     // Count active projects (excluding completed and cancelled)
     const activeCount = await prisma.project.count({
       where: {
         orgId,
+        ...projectIdFilter,
         status: {
           in: ['active', 'planning', 'on_hold']
         }
       }
     });
-    
+
     // Count projects with deadlines this week
     const today = new Date();
     const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-    
+
     const dueSoon = await prisma.project.count({
       where: {
         orgId,
+        ...projectIdFilter,
         status: {
           in: ['active', 'planning', 'on_hold']
         },
@@ -333,24 +356,27 @@ router.get('/productivity', requireAuth, async (req, res) => {
 });
 
 // Overdue tasks endpoint
+// Optional ?userId= filters to that user's overdue tasks (primary assignee).
 router.get('/overdue-tasks', requireAuth, async (req, res) => {
   try {
-    const { orgId } = req.query;
-    
+    const { orgId, userId } = req.query;
+
     if (!orgId) {
       return res.status(400).json({ error: 'orgId is required' });
     }
-    
+
     // Check database connection first
     if (!(await checkDatabaseConnection(res))) {
       return; // Response already sent by checkDatabaseConnection
     }
-    
+
     const now = new Date();
-    
+    const userFilter = userId ? { userId } : {};
+
     const overdueCount = await prisma.macroTask.count({
       where: {
         orgId,
+        ...userFilter,
         status: {
           not: 'completed'
         },

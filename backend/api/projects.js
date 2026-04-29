@@ -383,8 +383,26 @@ router.get('/stats', requireAuth, withOrgScope, validateQuery(commonSchemas.pagi
       return; // Response already sent by checkDatabaseConnection
     }
     
+    // If userId given, scope to projects where this user has at least one task
+    // assigned (primary assignee). Otherwise return org-wide.
+    let projectIdFilter = {};
+    if (userId) {
+      const userTasks = await prisma.macroTask.findMany({
+        where: { orgId, userId, projectId: { not: null } },
+        select: { projectId: true },
+      });
+      const ids = [...new Set(userTasks.map(t => t.projectId).filter(Boolean))];
+      if (ids.length === 0) {
+        return res.json({ success: true, stats: {
+          total: 0, active: 0, completed: 0, overdue: 0,
+          totalBudget: 0, totalSpent: 0, totalHours: 0, totalEstimatedHours: 0,
+        }});
+      }
+      projectIdFilter = { id: { in: ids } };
+    }
+
     const projects = await prisma.project.findMany({
-      where: { orgId },
+      where: { orgId, ...projectIdFilter },
       select: {
         status: true,
         budget: true,
@@ -394,7 +412,7 @@ router.get('/stats', requireAuth, withOrgScope, validateQuery(commonSchemas.pagi
         endDate: true
       }
     });
-    
+
     const now = new Date();
     const stats = {
       total: projects.length,

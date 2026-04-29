@@ -140,15 +140,15 @@ export function Dashboard() {
         productivityRes, overdueRes, timerStatsRes, recentTasksRes,
         projectStatsRes, attendanceRes,
       ] = await Promise.allSettled([
-        fetch(`/api/stats/tasks-completed-today?orgId=${oid}`, { credentials: 'include' }),
+        fetch(`/api/stats/tasks-completed-today?orgId=${oid}&userId=${uid}`, { credentials: 'include' }),
         fetch(`/api/stats/time-today?orgId=${oid}&userId=${uid}`, { credentials: 'include' }),
-        fetch(`/api/stats/active-projects?orgId=${oid}`, { credentials: 'include' }),
+        fetch(`/api/stats/active-projects?orgId=${oid}&userId=${uid}`, { credentials: 'include' }),
         fetch(`/api/stats/team-members?orgId=${oid}`, { credentials: 'include' }),
         fetch(`/api/stats/productivity?orgId=${oid}&userId=${uid}`, { credentials: 'include' }),
-        fetch(`/api/stats/overdue-tasks?orgId=${oid}`, { credentials: 'include' }),
+        fetch(`/api/stats/overdue-tasks?orgId=${oid}&userId=${uid}`, { credentials: 'include' }),
         fetch(`/api/timers/stats?orgId=${oid}&userId=${uid}`, { credentials: 'include' }),
         fetch(`/api/tasks/recent?orgId=${oid}&limit=12`, { credentials: 'include' }),
-        fetch(`/api/projects/stats?orgId=${oid}`, { credentials: 'include' }),
+        fetch(`/api/projects/stats?orgId=${oid}&userId=${uid}`, { credentials: 'include' }),
         fetch(`/api/attendance/status?userId=${uid}&orgId=${oid}`, { credentials: 'include' }),
       ]);
 
