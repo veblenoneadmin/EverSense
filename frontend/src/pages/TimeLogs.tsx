@@ -489,7 +489,6 @@ export function TimeLogs() {
 
   // Live break display inside the clock card
   const liveBreakTotal = breakAccum + (onBreak ? breakElapsed : 0);
-  const isOverBreak    = liveBreakTotal > breakLimitSecs;
 
   if (loading) {
     return (
@@ -606,11 +605,11 @@ export function TimeLogs() {
             <div className="text-right hidden sm:block">
               {onBreak ? (
                 <>
-                  <p className="text-[11px]" style={{ color: VS.text2 }}>Break elapsed</p>
+                  <p className="text-[11px]" style={{ color: VS.text2 }}>Cumulative break today</p>
                   <p className="text-[13px] font-mono font-semibold tabular-nums"
-                    style={{ color: isOverBreak ? VS.red : VS.yellow }}>
-                    {fmtClock(breakElapsed)}
-                    {isOverBreak && <span className="ml-1 text-[10px]" style={{ color: VS.red }}>OVER</span>}
+                    style={{ color: liveBreakTotal >= 60 * 60 ? VS.red : VS.yellow }}>
+                    {fmtClock(liveBreakTotal)}
+                    {liveBreakTotal >= 60 * 60 && <span className="ml-1 text-[10px]" style={{ color: VS.red }}>OVER</span>}
                   </p>
                 </>
               ) : liveBreakTotal > 0 ? (

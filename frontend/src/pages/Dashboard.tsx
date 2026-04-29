@@ -490,11 +490,11 @@ export function Dashboard() {
             >
               {!attendanceActive
                 ? '--:--:--'
-                : (onBreak ? fmtDuration(breakElapsed) : fmtDuration(attendanceElapsed))}
+                : (onBreak ? fmtDuration(breakAccum + breakElapsed) : fmtDuration(attendanceElapsed))}
             </p>
             {attendanceActive && onBreak && (
               <p className="text-[10px] mt-0.5 tabular-nums" style={{ color: VS.text2 }}>
-                Work paused at {fmtDuration(attendanceElapsed)}
+                Cumulative break today · Work paused at {fmtDuration(attendanceElapsed)}
               </p>
             )}
           </div>
