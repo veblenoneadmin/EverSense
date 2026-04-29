@@ -31,7 +31,7 @@ const accentBg = 'rgba(0,122,204,0.15)';
 // `external: true` items are full-page redirects (e.g. SSO into another service).
 const navItems = [
   { name: 'Owner Admin',    href: '/owner-admin', icon: Crown,           roles: ['OWNER'], email: 'admin@veblengroup.com.au' },
-  { name: 'HRSense',        href: '/api/sso/hrsense', icon: ExternalLink, roles: ['ACCOUNTANT'], external: true, boxed: true },
+  { name: 'HRSense',        href: '/api/sso/hrsense', icon: ExternalLink, roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'], external: true, boxed: true },
   { name: 'Dashboard',      href: '/dashboard',  icon: LayoutDashboard, roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
   { name: 'Tasks',          href: '/tasks',        icon: CheckSquare,     roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT', 'ACCOUNTANT'] },
   { name: 'Milestones',     href: '/milestones',   icon: Flag,            roles: ['OWNER', 'ADMIN', 'STAFF', 'CLIENT'] },

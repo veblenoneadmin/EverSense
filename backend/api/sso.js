@@ -10,8 +10,10 @@ import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
 
-// Restrict who can SSO into HRSense. ACCOUNTANT-only per product call.
-const SSO_ROLES = new Set(['ACCOUNTANT']);
+// Restrict who can SSO into HRSense. HR-Sense accepts OWNER, ADMIN, and
+// ACCOUNTANT — match the same allowlist here so the destination's policy
+// is the source of truth and no role gets a needless 403 from EverSense.
+const SSO_ROLES = new Set(['OWNER', 'ADMIN', 'ACCOUNTANT']);
 
 // 5 min token lifetime — long enough for the browser hop, short enough that
 // an intercepted token can't be replayed later.
@@ -71,7 +73,9 @@ router.get('/hrsense', requireAuth, withOrgScope, async (req, res) => {
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECS,
     });
-    const target = `${hrsenseBase}/sso?token=${encodeURIComponent(token)}`;
+    // HR-Sense mounts the SSO receiver at /api/auth/sso (not /sso, which is
+    // the SPA which 404s for unmatched routes and sends the user to login).
+    const target = `${hrsenseBase}/api/auth/sso?token=${encodeURIComponent(token)}`;
     return res.redirect(302, target);
   } catch (e) {
     console.error('[SSO] hrsense error:', e);
