@@ -4,7 +4,34 @@ import { useOrganization } from '../contexts/OrganizationContext';
 import { VS } from '../lib/theme';
 import { CalendarDays, Plus, Clock, CheckCircle2, XCircle, Check, X as XIcon } from 'lucide-react';
 
-type LeaveType = 'annual' | 'sick';
+type LeaveType = 'annual' | 'sick' | 'offset';
+
+// Build the list of valid offset dates: every Saturday and Sunday within the
+// CURRENT payroll period (1-15 or 16-end of the current month, in user's
+// local time). Used to populate the dropdown — disables every weekday and
+// every weekend outside the period.
+function getValidOffsetDates(): string[] {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth(); // 0-indexed
+  const todayDay = today.getDate();
+  const inFirstHalf = todayDay <= 15;
+  const periodStart = inFirstHalf ? 1 : 16;
+  const periodEnd = inFirstHalf ? 15 : new Date(year, month + 1, 0).getDate();
+
+  const out: string[] = [];
+  for (let day = periodStart; day <= periodEnd; day++) {
+    const d = new Date(year, month, day);
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      out.push(`${yyyy}-${mm}-${dd}`);
+    }
+  }
+  return out;
+}
 type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 interface LeaveRow {
@@ -65,12 +92,14 @@ export function Leaves() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState<{ type: LeaveType; startDate: string; endDate: string; reason: string }>({
+  const [form, setForm] = useState<{ type: LeaveType; startDate: string; endDate: string; reason: string; offsetDate: string }>({
     type: 'annual',
     startDate: '',
     endDate: '',
     reason: '',
+    offsetDate: '',
   });
+  const validOffsetDates = useMemo(() => getValidOffsetDates(), []);
 
   const fetchLeaves = async () => {
     try {
@@ -118,6 +147,10 @@ export function Leaves() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.startDate || !form.endDate) return;
+    if (form.type === 'offset' && !form.offsetDate) {
+      alert('Please pick the Saturday or Sunday you worked (offset date).');
+      return;
+    }
     setSubmitting(true);
     try {
       await api.fetch('/api/leaves/my', {
@@ -127,10 +160,13 @@ export function Leaves() {
           startDate: new Date(form.startDate + 'T00:00:00.000Z').toISOString(),
           endDate: new Date(form.endDate + 'T00:00:00.000Z').toISOString(),
           reason: form.reason || null,
+          offsetDate: form.type === 'offset' && form.offsetDate
+            ? new Date(form.offsetDate + 'T00:00:00.000Z').toISOString()
+            : null,
         }),
       });
       setShowModal(false);
-      setForm({ type: 'annual', startDate: '', endDate: '', reason: '' });
+      setForm({ type: 'annual', startDate: '', endDate: '', reason: '', offsetDate: '' });
       await fetchLeaves();
     } catch {
       alert('Failed to submit leave request.');
@@ -310,14 +346,40 @@ export function Leaves() {
               <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Type</label>
               <select
                 value={form.type}
-                onChange={e => setForm(p => ({ ...p, type: e.target.value as LeaveType }))}
+                onChange={e => setForm(p => ({ ...p, type: e.target.value as LeaveType, offsetDate: '' }))}
                 className="w-full px-3 py-2 rounded-lg text-xs"
                 style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}
               >
                 <option value="annual">Annual Leave</option>
                 <option value="sick">Sick Leave</option>
+                <option value="offset">Offset (worked weekend)</option>
               </select>
             </div>
+
+            {form.type === 'offset' && (
+              <div>
+                <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>
+                  Offset Date — Saturday or Sunday you worked
+                </label>
+                <select
+                  value={form.offsetDate}
+                  onChange={e => setForm(p => ({ ...p, offsetDate: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 rounded-lg text-xs"
+                  style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }}
+                >
+                  <option value="">— pick a weekend in this payroll period —</option>
+                  {validOffsetDates.map(iso => {
+                    const d = new Date(iso + 'T00:00:00');
+                    const dayLabel = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+                    return <option key={iso} value={iso}>{dayLabel}</option>;
+                  })}
+                </select>
+                <p className="text-[10px] mt-1" style={{ color: VS.text2 }}>
+                  Only Sat/Sun within the current payroll period (1–15 or 16–end of month) are selectable.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -378,7 +440,12 @@ export function Leaves() {
               </button>
               <button
                 type="submit"
-                disabled={submitting || !form.startDate || !form.endDate}
+                disabled={
+                  submitting ||
+                  !form.startDate ||
+                  !form.endDate ||
+                  (form.type === 'offset' && !form.offsetDate)
+                }
                 className="flex-1 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
                 style={{ background: VS.accent, color: '#fff' }}
               >

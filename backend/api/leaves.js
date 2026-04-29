@@ -57,6 +57,13 @@ async function ensureTable() {
   } catch (e) {
     console.warn('  ⚠️  leaves table:', e.message);
   }
+  // Add offsetDate column for "offset" leaves (work-on-weekend → take a weekday off).
+  // Idempotent — silently ignored if it already exists.
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE `leaves` ADD COLUMN `offsetDate` DATETIME(3) NULL'
+    );
+  } catch (_) {}
 }
 
 // Middleware — verify INTERNAL_API_SECRET so only HRSense can call this
@@ -152,6 +159,7 @@ router.post('/', requireInternalSecret, async (req, res) => {
 function normalizeType(raw) {
   const s = String(raw || '').toLowerCase();
   if (s.startsWith('sick')) return 'sick';
+  if (s.startsWith('offset')) return 'offset';
   return 'annual';
 }
 
@@ -167,7 +175,7 @@ router.get('/my', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureTable();
     const rows = await prisma.$queryRawUnsafe(
-      `SELECT id, type, status, startDate, endDate, days, reason, approvedAt, createdAt
+      `SELECT id, type, status, startDate, endDate, days, reason, approvedAt, createdAt, offsetDate
          FROM leaves
         WHERE userId = ? AND orgId = ?
         ORDER BY startDate DESC LIMIT 200`,
@@ -196,7 +204,7 @@ router.get('/my', requireAuth, withOrgScope, async (req, res) => {
 router.post('/my', requireAuth, withOrgScope, async (req, res) => {
   try {
     await ensureTable();
-    const { type, startDate, endDate, reason } = req.body;
+    const { type, startDate, endDate, reason, offsetDate } = req.body;
     if (!type || !startDate || !endDate) {
       return res.status(400).json({ error: 'type, startDate, endDate are required' });
     }
@@ -209,10 +217,39 @@ router.post('/my', requireAuth, withOrgScope, async (req, res) => {
     const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
     const id = randomUUID();
     const normalizedType = normalizeType(type);
+
+    // For 'offset' leaves, validate that offsetDate is a Sat or Sun within the
+    // current payroll period (1-15 or 16-end of the SAME calendar month as the
+    // request). Frontend already gates the picker, but we double-check here.
+    let offsetDateValue = null;
+    if (normalizedType === 'offset') {
+      if (!offsetDate) {
+        return res.status(400).json({ error: 'offsetDate is required for offset leaves' });
+      }
+      const d = new Date(offsetDate);
+      if (isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid offsetDate' });
+      const dow = d.getUTCDay();
+      if (dow !== 0 && dow !== 6) {
+        return res.status(400).json({ error: 'offsetDate must be a Saturday or Sunday' });
+      }
+      const day = d.getUTCDate();
+      const inFirstHalf = day <= 15;
+      const today = new Date();
+      const todayInFirstHalf = today.getUTCDate() <= 15;
+      if (
+        d.getUTCFullYear() !== today.getUTCFullYear() ||
+        d.getUTCMonth() !== today.getUTCMonth() ||
+        inFirstHalf !== todayInFirstHalf
+      ) {
+        return res.status(400).json({ error: 'offsetDate must be within the current payroll period' });
+      }
+      offsetDateValue = d;
+    }
+
     await prisma.$executeRawUnsafe(
-      'INSERT INTO leaves (id, userId, orgId, type, status, startDate, endDate, days, reason, createdAt) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
-      id, req.user.id, req.orgId, normalizedType, 'PENDING', start, end, days, reason || null
+      'INSERT INTO leaves (id, userId, orgId, type, status, startDate, endDate, days, reason, offsetDate, createdAt) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+      id, req.user.id, req.orgId, normalizedType, 'PENDING', start, end, days, reason || null, offsetDateValue
     );
 
     notifyHRSense('leave.requested', buildLeavePayload({
