@@ -71,6 +71,7 @@ const MainLayout: React.FC = () => {
   const BREAK_LIMIT_SECS = 60 * 60;          // 60 min
   const BREAK_HARD_CAP_SECS = 70 * 60;        // 70 min — 10 min grace
   const WORKDAY_PROMPT_SECS = 8.5 * 3600;     // 8h 30m
+  const WORKDAY_HARD_CAP_SECS = 8.5 * 3600 + 10 * 60;  // 8h 40m — 10 min grace
   const [showBreakOverModal, setShowBreakOverModal] = useState(false);
   const [showWorkOverModal, setShowWorkOverModal] = useState(false);
   // Once user picks "Overtime" on the work modal, snooze it for the rest of
@@ -243,8 +244,14 @@ const MainLayout: React.FC = () => {
       const grossSecs = Math.floor((Date.now() - new Date(attendanceActive.timeIn).getTime()) / 1000);
       const breakAccum = Number(localStorage.getItem('att_break_accum') || 0);
       const netSecs = Math.max(0, grossSecs - breakAccum);
-      if (netSecs >= WORKDAY_PROMPT_SECS && workOvertimeSnoozedFor !== attendanceActive.timeIn) {
-        if (!showWorkOverModal) setShowWorkOverModal(true);
+      const snoozed = workOvertimeSnoozedFor === attendanceActive.timeIn;
+      if (netSecs >= WORKDAY_HARD_CAP_SECS && !snoozed) {
+        // Hard cap (10 min after popup) and user did NOT pick Overtime →
+        // auto-clock-out. Same path as the End Time button.
+        if (showWorkOverModal) setShowWorkOverModal(false);
+        handleEndTimeFromWorkModal();
+      } else if (netSecs >= WORKDAY_PROMPT_SECS && !snoozed && !showWorkOverModal) {
+        setShowWorkOverModal(true);
       }
     } else if (showWorkOverModal && !attendanceActive) {
       // User clocked out — clear the modal.
@@ -522,6 +529,7 @@ const MainLayout: React.FC = () => {
                 <h3 className="text-base font-bold" style={{ color: VS.text0 }}>You've reached 8h 30m</h3>
                 <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
                   Pick "End Time" to clock out, or "Overtime" to keep working — extra time is recorded as overtime.
+                  Auto-clockout in 10 min if no action.
                 </p>
               </div>
             </div>
