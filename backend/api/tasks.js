@@ -1707,61 +1707,49 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
       }
     }
 
-    // Check if multi-assignee task (more than 1 assignee)
+    // ── Per-user vs solo status routing ──────────────────────────────────────
+    // Treat a task as "multi-assignee" if there's anyone else involved beyond
+    // the caller. Use raw SQL for the primary lookup (avoids Prisma typed-
+    // query issues if a column was added via ALTER TABLE).
     const assignees = await prisma.$queryRawUnsafe(
       'SELECT userId, status FROM task_assignees WHERE taskId = ?', taskId
     ).catch(() => []);
-
-    const isMultiAssignee = assignees.length > 1;
+    const taskMetaRows = await prisma.$queryRawUnsafe(
+      'SELECT userId FROM macro_tasks WHERE id = ? LIMIT 1', taskId
+    ).catch(() => []);
+    const primaryUserId = taskMetaRows[0]?.userId || null;
+    // Distinct user-ids involved in this task: the primary + every co-assignee.
+    const allInvolved = new Set([
+      ...(primaryUserId ? [primaryUserId] : []),
+      ...assignees.map(a => a.userId),
+    ]);
+    const hasCoAssignees = allInvolved.size > 1;
     const callerAssignee = assignees.find(a => a.userId === req.user.id);
 
-    if (isMultiAssignee && callerAssignee) {
-      // ── Per-assignee status: only update THIS user's status ──
-      await prisma.$executeRawUnsafe(
-        'UPDATE task_assignees SET status = ? WHERE taskId = ? AND userId = ?',
-        status, taskId, req.user.id
-      );
-      console.log(`📝 Updated assignee status for ${req.user.id} on task ${taskId} to: ${status}`);
-
-      // Check if ALL assignees (primary + co-assignees) are now completed →
-      // update global task status. The primary assignee MUST have a row in
-      // task_assignees with status='completed' for the auto-complete to fire.
-      // Previously this fired when all task_assignees rows were completed,
-      // which meant a single co-assignee marking done could auto-complete a
-      // task globally if the primary had no row — surfacing as "task moved
-      // to Done by itself" for the primary.
-      const refreshed = await prisma.$queryRawUnsafe(
-        'SELECT userId, status FROM task_assignees WHERE taskId = ?', taskId
-      );
-      const taskRow = await prisma.macroTask.findUnique({
-        where: { id: taskId },
-        select: { userId: true },
-      });
-      const primaryUserId = taskRow?.userId;
-      const primaryRow = refreshed.find(a => a.userId === primaryUserId);
-      const allCompleted =
-        primaryRow?.status === 'completed' &&
-        refreshed.length > 0 &&
-        refreshed.every(a => a.status === 'completed');
-
-      if (allCompleted) {
-        await prisma.macroTask.update({
-          where: { id: taskId },
-          data: { status: 'completed', completedAt: new Date() },
-        });
-        console.log(`📝 All assignees completed → task ${taskId} marked completed globally`);
-      } else if (status !== 'completed') {
-        // If someone un-completes, ensure global status isn't 'completed'
-        const task = await prisma.macroTask.findUnique({ where: { id: taskId }, select: { status: true } });
-        if (task?.status === 'completed') {
-          await prisma.macroTask.update({
-            where: { id: taskId },
-            data: { status: 'in_progress', completedAt: null },
-          });
-        }
+    if (hasCoAssignees) {
+      // ── Per-user mode: only update the caller's task_assignees row ──────────
+      // CRITICAL: macro_tasks.status is NEVER written from this branch. Each
+      // user's view is driven by their own task_assignees.status row, with the
+      // global as a fallback. This eliminates the "task self-completed" and
+      // "primary's done closes for everyone" surprises.
+      if (callerAssignee) {
+        await prisma.$executeRawUnsafe(
+          'UPDATE task_assignees SET status = ? WHERE taskId = ? AND userId = ?',
+          status, taskId, req.user.id
+        );
+      } else {
+        // Caller has no row yet (typical when primary hasn't interacted with
+        // their own status before). Insert one so their per-user status is
+        // tracked from now on.
+        await prisma.$executeRawUnsafe(
+          'INSERT INTO task_assignees (id, taskId, userId, orgId, status) VALUES (?, ?, ?, ?, ?)',
+          randomUUID(), taskId, req.user.id, req.orgId, status
+        );
       }
+      console.log(`📝 Per-user status for ${req.user.id} on task ${taskId} → ${status} (global untouched)`);
     } else {
-      // ── Single assignee or caller is the primary: update global status ──
+      // ── Solo mode: only the primary is involved. Global status IS the
+      // user's status. Write it directly. ──────────────────────────────
       const updateData = { status };
       if (status === 'completed') {
         updateData.completedAt = new Date();
@@ -1772,14 +1760,7 @@ router.patch('/:taskId/status', requireAuth, withOrgScope, requireTaskOwnership,
         where: { id: taskId },
         data: updateData,
       });
-      // Also update task_assignees row if exists
-      if (callerAssignee) {
-        await prisma.$executeRawUnsafe(
-          'UPDATE task_assignees SET status = ? WHERE taskId = ? AND userId = ?',
-          status, taskId, req.user.id
-        ).catch(() => {});
-      }
-      console.log(`📝 Updated task ${taskId} status to: ${status}`);
+      console.log(`📝 Solo task ${taskId} status → ${status}`);
     }
 
     // ── Stop this user's timer for this task when marking as completed ──

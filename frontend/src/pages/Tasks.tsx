@@ -638,35 +638,13 @@ export function Tasks() {
   const handleMoveToInProgress = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-
-    // One-in-progress-at-a-time: demote this user's PREVIOUS in-progress task
-    // (tracked in localStorage) back to not_started before promoting the new
-    // one. Using localStorage instead of filtering the task list means the
-    // rule works regardless of assignee type, team-task flags, or which view
-    // the user is on. Skip the demote if the prev task is already in a
-    // terminal state (completed/cancelled/on_hold) so we don't accidentally
-    // resurrect a finished task back into To Do.
-    const prevId = localStorage.getItem('my_in_progress_task');
-    if (prevId && prevId !== taskId) {
-      const prevTask = tasks.find(t => t.id === prevId);
-      const prevIsTerminal = prevTask && (
-        prevTask.status === 'completed' ||
-        prevTask.status === 'cancelled' ||
-        prevTask.status === 'on_hold'
-      );
-      if (!prevIsTerminal) {
-        setTasks(prev => prev.map(t =>
-          t.id === prevId ? { ...t, status: 'not_started' } : t
-        ));
-        apiClient.fetch(`/api/tasks/${prevId}/status`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status: 'not_started' }),
-        }).catch(() => {});
-      }
-    }
-    localStorage.setItem('my_in_progress_task', taskId);
-
     if (task.status === 'in_progress') return;
+
+    // Just promote this task. No more localStorage-tracked auto-demote of the
+    // previous in-progress task — that rule was producing more surprises than
+    // value (completed tasks getting kicked back to To Do, race conditions
+    // across tabs, etc.). The single-active-task constraint is now enforced
+    // via the timer (one running timer at a time, handled by handleStartTimer).
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t));
     try {
       await apiClient.fetch(`/api/tasks/${taskId}/status`, {
@@ -875,14 +853,10 @@ export function Tasks() {
         method: 'PATCH',
         body: JSON.stringify({ status, report: fullReport }),
       });
-      // If this task was the user's "current in-progress" (per the
-      // single-in-progress rule), clear the localStorage pointer so the
-      // demote-on-next-start doesn't kick this task back to not_started.
-      if (status === 'completed' || status === 'cancelled' || status === 'on_hold') {
-        if (localStorage.getItem('my_in_progress_task') === taskId) {
-          localStorage.removeItem('my_in_progress_task');
-        }
-      }
+      // Defensive cleanup: kill any lingering localStorage pointer from the
+      // old single-in-progress rule so a stale entry can't trip up the UI
+      // even if the user has it from a previous session.
+      try { localStorage.removeItem('my_in_progress_task'); } catch { /* */ }
       setReportModal(null);
       setReportText('');
       setAccomplishments(['']);
