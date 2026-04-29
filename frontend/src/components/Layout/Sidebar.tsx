@@ -124,15 +124,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               const baseStyle: React.CSSProperties = isBoxed
                 ? {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: '10px', padding: '10px 12px', borderRadius: '8px',
-                    fontSize: '13px', fontWeight: 600, width: '100%',
-                    color: VS.accent,
-                    background: `${VS.accent}1a`,
-                    border: `1px solid ${VS.accent}55`,
+                    gap: '10px', padding: '12px 14px', borderRadius: '10px',
+                    fontSize: '14px', fontWeight: 700, letterSpacing: '0.3px', width: '100%',
+                    color: '#ffffff',
+                    background: `linear-gradient(135deg, ${VS.accent} 0%, ${VS.accent}d9 100%)`,
+                    border: `1px solid ${VS.accent}`,
+                    boxShadow: `0 4px 14px ${VS.accent}55, 0 1px 3px rgba(0,0,0,0.2)`,
                     textDecoration: 'none', textAlign: 'left',
                     cursor: 'pointer',
-                    transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-                    margin: '4px 0',
+                    transition: 'transform 0.15s, box-shadow 0.15s, filter 0.15s',
+                    margin: '6px 0 8px',
                   }
                 : {
                     display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px',
@@ -148,7 +149,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   style={baseStyle}
                   onMouseEnter={e => {
                     if (isBoxed) {
-                      (e.currentTarget as HTMLElement).style.background = `${VS.accent}33`;
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
+                      (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)';
+                      (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 20px ${VS.accent}77, 0 2px 4px rgba(0,0,0,0.25)`;
                     } else {
                       (e.currentTarget as HTMLElement).style.background = VS.bg2;
                       (e.currentTarget as HTMLElement).style.color = VS.text1;
@@ -156,7 +159,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   }}
                   onMouseLeave={e => {
                     if (isBoxed) {
-                      (e.currentTarget as HTMLElement).style.background = `${VS.accent}1a`;
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                      (e.currentTarget as HTMLElement).style.filter = 'brightness(1)';
+                      (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 14px ${VS.accent}55, 0 1px 3px rgba(0,0,0,0.2)`;
                     } else {
                       (e.currentTarget as HTMLElement).style.background = 'transparent';
                       (e.currentTarget as HTMLElement).style.color = VS.text2;
@@ -169,7 +174,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                     <span>{item.name}</span>
                   </span>
                   {isBoxed && (
-                    <span style={{ fontSize: '10px', opacity: 0.7, letterSpacing: '0.5px' }}>↗</span>
+                    <span style={{ fontSize: '14px', fontWeight: 700, opacity: 0.95 }}>↗</span>
                   )}
                 </button>
               );
