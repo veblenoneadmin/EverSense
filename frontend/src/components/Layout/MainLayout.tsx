@@ -4,6 +4,7 @@ import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink, Settings, User } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
+import { stopTaskTimer } from '../../lib/task-timer';
 import { EmployeeProfileModal, EmployeeInfoViewer } from '../../pages/EmployeeProfile';
 
 import { VS } from '../../lib/theme';
@@ -244,9 +245,24 @@ const MainLayout: React.FC = () => {
   }, [session?.user?.id, orgId, userRole]);
 
   // SSE — real-time push updates (replaces polling intervals)
-  useSSE(orgId || undefined, (event) => {
-    if (event === 'attendance')   fetchStatus();
+  useSSE(orgId || undefined, (event, data) => {
+    const d = (data || {}) as { action?: string; userId?: string; reason?: string };
+    if (event === 'attendance') {
+      fetchStatus();
+      // If THIS user just got clocked out (manual clock-out from another tab,
+      // auto-clockout cron, admin force-stop, etc.), stop their local task
+      // timer so localStorage doesn't keep ticking phantom hours.
+      if (d.action === 'clock-out' && d.userId === session?.user?.id) {
+        try { stopTaskTimer(); } catch { /* non-fatal */ }
+      }
+    }
     if (event === 'notification') fetchNotifs();
+    // Auto-clockout cron also broadcasts a 'timer' stop with reason='auto-clockout'
+    // — same effect, defensive double-handling in case 'attendance' event is
+    // missed by the listener.
+    if (event === 'timer' && d.action === 'stop' && d.userId === session?.user?.id && d.reason === 'auto-clockout') {
+      try { stopTaskTimer(); } catch { /* non-fatal */ }
+    }
   });
 
   const handleMarkAllRead = async () => {

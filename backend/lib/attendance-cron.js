@@ -63,8 +63,27 @@ async function runAutoClockout() {
           now, grossSeconds, row.id
         );
 
-        // Broadcast SSE so all connected clients (admin view) refresh immediately
+        // Stop any running task timers — same cleanup that manual clock-out does.
+        // Without this, the user's active_timers and open time_logs rows would
+        // outlive their attendance session and accumulate phantom hours.
+        try {
+          await prisma.$executeRawUnsafe(
+            `DELETE FROM active_timers WHERE userId = ? AND orgId = ?`,
+            row.userId, row.orgId
+          );
+          await prisma.$executeRawUnsafe(
+            'UPDATE time_logs SET `end` = ?, duration = TIMESTAMPDIFF(SECOND, `begin`, ?) WHERE userId = ? AND orgId = ? AND `end` IS NULL',
+            now, now, row.userId, row.orgId
+          );
+        } catch (e) {
+          console.warn('[AttendanceCron] timer cleanup error:', e.message);
+        }
+
+        // Broadcast SSE so all connected clients (admin view) refresh immediately.
+        // Two events: attendance clock-out + timer stop, so frontend tabs that
+        // have a task timer running can clear their local state.
         try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch { /* non-fatal */ }
+        try { broadcast(row.orgId, 'timer', { action: 'stop', userId: row.userId, reason: 'auto-clockout' }); } catch { /* non-fatal */ }
 
         // Fetch user info
         let userName = 'Unknown';
