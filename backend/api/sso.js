@@ -10,10 +10,8 @@ import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
 
-// Restrict who can SSO into HRSense. HR-Sense accepts OWNER, ADMIN, and
-// ACCOUNTANT — match the same allowlist here so the destination's policy
-// is the source of truth and no role gets a needless 403 from EverSense.
-const SSO_ROLES = new Set(['OWNER', 'ADMIN', 'ACCOUNTANT']);
+// Restrict who can SSO into HRSense. ACCOUNTANT-only per product call.
+const SSO_ROLES = new Set(['ACCOUNTANT']);
 
 // 5 min token lifetime — long enough for the browser hop, short enough that
 // an intercepted token can't be replayed later.
