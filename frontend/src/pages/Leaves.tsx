@@ -232,7 +232,7 @@ export function Leaves() {
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
           style={{ background: VS.accent, color: '#fff' }}
         >
-          <Plus className="h-4 w-4" /> Request Leave
+          <Plus className="h-4 w-4" /> Request
         </button>
       </div>
 
@@ -308,7 +308,7 @@ export function Leaves() {
 
       <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
         <div className="p-4 flex items-center justify-between">
-          <div className="text-sm font-semibold" style={{ color: VS.text0 }}>Approved Leaves</div>
+          <div className="text-sm font-semibold" style={{ color: VS.text0 }}>Approved Leaves / Offsets</div>
           <div className="text-xs" style={{ color: VS.text2 }}>{approved.length}</div>
         </div>
         {approved.length === 0
