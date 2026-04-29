@@ -28,6 +28,20 @@ function makeToken(payload) {
   return `${payloadB64}.${sign(payloadB64)}`;
 }
 
+// Derive HRSense base URL — prefer explicit HRSENSE_URL, fall back to the
+// origin of HRSENSE_WEBHOOK_URL so we don't need a second env var.
+function getHRSenseBaseUrl() {
+  if (process.env.HRSENSE_URL) return process.env.HRSENSE_URL.replace(/\/$/, '');
+  const webhook = process.env.HRSENSE_WEBHOOK_URL;
+  if (webhook) {
+    try {
+      const u = new URL(webhook);
+      return `${u.protocol}//${u.host}`;
+    } catch { return null; }
+  }
+  return null;
+}
+
 // ── GET /api/sso/hrsense — generate token + 302 to HRSense ───────────────────
 // Browser-friendly redirect. Frontend just sets window.location to this URL
 // and the user lands on HRSense logged in.
@@ -36,8 +50,9 @@ router.get('/hrsense', requireAuth, withOrgScope, async (req, res) => {
     if (!process.env.INTERNAL_API_SECRET) {
       return res.status(503).send('SSO not configured (INTERNAL_API_SECRET missing)');
     }
-    if (!process.env.HRSENSE_URL) {
-      return res.status(503).send('SSO not configured (HRSENSE_URL missing)');
+    const hrsenseBase = getHRSenseBaseUrl();
+    if (!hrsenseBase) {
+      return res.status(503).send('SSO not configured (set HRSENSE_URL or HRSENSE_WEBHOOK_URL)');
     }
     // Look up the user's role on the current org. withOrgScope set req.orgId
     // but not the role — fetch from memberships.
@@ -56,7 +71,7 @@ router.get('/hrsense', requireAuth, withOrgScope, async (req, res) => {
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECS,
     });
-    const target = `${process.env.HRSENSE_URL.replace(/\/$/, '')}/sso?token=${encodeURIComponent(token)}`;
+    const target = `${hrsenseBase}/sso?token=${encodeURIComponent(token)}`;
     return res.redirect(302, target);
   } catch (e) {
     console.error('[SSO] hrsense error:', e);
