@@ -4,7 +4,7 @@ import { useSession, authSignOut } from '../../lib/auth-client';
 import Sidebar from './Sidebar';
 import { LogOut, ChevronDown, Bell, CheckCheck, X, CheckSquare, AlertTriangle, Clock, CalendarDays, Users, Video, Info, Menu, ArrowLeft, ExternalLink, Settings, User } from 'lucide-react';
 import { useSSE } from '../../hooks/useSSE';
-import { stopTaskTimer } from '../../lib/task-timer';
+import { stopTaskTimer, resumeTaskTimer } from '../../lib/task-timer';
 import { EmployeeProfileModal, EmployeeInfoViewer } from '../../pages/EmployeeProfile';
 
 import { VS } from '../../lib/theme';
@@ -64,6 +64,18 @@ const MainLayout: React.FC = () => {
   const [navOnBreak, setNavOnBreak] = useState(false);
   const [navElapsed, setNavElapsed] = useState(0);
   const navTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Break + work-day modals
+  // - Break-over modal: fires when on break > 60 min. Hard cap at 70 min auto-resumes.
+  // - Work-day modal: fires when clocked-in elapsed >= 8h 30m. End Time/Overtime.
+  const BREAK_LIMIT_SECS = 60 * 60;          // 60 min
+  const BREAK_HARD_CAP_SECS = 70 * 60;        // 70 min — 10 min grace
+  const WORKDAY_PROMPT_SECS = 8.5 * 3600;     // 8h 30m
+  const [showBreakOverModal, setShowBreakOverModal] = useState(false);
+  const [showWorkOverModal, setShowWorkOverModal] = useState(false);
+  // Once user picks "Overtime" on the work modal, snooze it for the rest of
+  // the session so it doesn't pop again every second.
+  const [workOvertimeSnoozedFor, setWorkOvertimeSnoozedFor] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRole = async () => {
@@ -186,6 +198,100 @@ const MainLayout: React.FC = () => {
     const id = setInterval(() => setCurrentTime(nowClock()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // ── End-the-break helper (used by popup + auto hard-cap) ────────────────
+  // Mirrors the bookkeeping done by TimeLogs.tsx handleBreak's resume branch
+  // so both code paths produce the same localStorage state.
+  const endBreakNow = () => {
+    try {
+      const startedRaw = localStorage.getItem('att_break_start');
+      if (!startedRaw) return; // nothing to end
+      const started = Number(startedRaw);
+      const secs = Math.max(0, Math.floor((Date.now() - started) / 1000));
+      const accum = Number(localStorage.getItem('att_break_accum') || 0) + secs;
+      localStorage.setItem('att_break_accum', String(accum));
+      localStorage.removeItem('att_break_start');
+      const newCount = Number(localStorage.getItem('att_break_count') || 0) + 1;
+      localStorage.setItem('att_break_count', String(newCount));
+    } catch { /* localStorage unavailable */ }
+    try { resumeTaskTimer(); } catch { /* */ }
+    window.dispatchEvent(new CustomEvent('attendance-change'));
+  };
+
+  // ── Watcher: fires modals based on break / work elapsed ─────────────────
+  // Driven by the wall-clock tick (currentTime updates every second). Cheap
+  // since checks are pure localStorage + arithmetic.
+  useEffect(() => {
+    // Break check
+    const breakStartRaw = localStorage.getItem('att_break_start');
+    if (breakStartRaw) {
+      const elapsed = Math.floor((Date.now() - Number(breakStartRaw)) / 1000);
+      if (elapsed >= BREAK_HARD_CAP_SECS) {
+        // Hard cap reached — auto-end the break even without user input.
+        if (showBreakOverModal) setShowBreakOverModal(false);
+        endBreakNow();
+      } else if (elapsed >= BREAK_LIMIT_SECS && !showBreakOverModal) {
+        setShowBreakOverModal(true);
+      }
+    } else if (showBreakOverModal) {
+      // Break ended via some other path (TimeLogs page, another tab) → close popup.
+      setShowBreakOverModal(false);
+    }
+
+    // Work-day check — only relevant if currently clocked in and not on break
+    if (attendanceActive?.timeIn && !breakStartRaw) {
+      const grossSecs = Math.floor((Date.now() - new Date(attendanceActive.timeIn).getTime()) / 1000);
+      const breakAccum = Number(localStorage.getItem('att_break_accum') || 0);
+      const netSecs = Math.max(0, grossSecs - breakAccum);
+      if (netSecs >= WORKDAY_PROMPT_SECS && workOvertimeSnoozedFor !== attendanceActive.timeIn) {
+        if (!showWorkOverModal) setShowWorkOverModal(true);
+      }
+    } else if (showWorkOverModal && !attendanceActive) {
+      // User clocked out — clear the modal.
+      setShowWorkOverModal(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime, attendanceActive]);
+
+  // ── Modal action handlers ──────────────────────────────────────────────
+  const handleResumeFromBreakModal = () => {
+    endBreakNow();
+    setShowBreakOverModal(false);
+  };
+
+  const handleEndTimeFromWorkModal = async () => {
+    setShowWorkOverModal(false);
+    // Total break = accum + any in-progress break elapsed (shouldn't be any
+    // since modal only shows when not on break, but defensive)
+    let totalBreak = Number(localStorage.getItem('att_break_accum') || 0);
+    const breakStartRaw = localStorage.getItem('att_break_start');
+    if (breakStartRaw) totalBreak += Math.floor((Date.now() - Number(breakStartRaw)) / 1000);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (orgId) headers['x-org-id'] = orgId;
+      await fetch('/api/attendance/clock-out', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ ...(orgId && { orgId }), breakDuration: totalBreak }),
+      });
+      try { stopTaskTimer(); } catch { /* */ }
+      try {
+        localStorage.removeItem('att_break_start');
+        localStorage.removeItem('att_break_accum');
+        localStorage.removeItem('att_break_count');
+      } catch { /* */ }
+      window.dispatchEvent(new CustomEvent('attendance-change'));
+    } catch (e) {
+      console.error('[MainLayout] End Time clock-out failed:', e);
+    }
+  };
+
+  const handleOvertimeFromWorkModal = () => {
+    // Snooze for the rest of THIS session (keyed by the current timeIn).
+    if (attendanceActive?.timeIn) setWorkOvertimeSnoozedFor(attendanceActive.timeIn);
+    setShowWorkOverModal(false);
+  };
 
   // Fetch attendance status
   const fetchStatus = useCallback(async () => {
@@ -360,6 +466,84 @@ const MainLayout: React.FC = () => {
         onClose={() => setShowProfileViewer(false)}
         onEdit={() => { setShowProfileViewer(false); setShowProfileModal(true); }}
       />
+
+      {/* ── Break-over modal ────────────────────────────────────────────────
+          Fires when on break > 60 min. Hard cap at 70 min auto-resumes. */}
+      {showBreakOverModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.65)' }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full flex items-center justify-center"
+                   style={{ background: 'rgba(220,220,170,0.15)' }}>
+                <Clock className="h-5 w-5" style={{ color: VS.yellow }} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold" style={{ color: VS.text0 }}>Break Time Exceeded</h3>
+                <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
+                  Your break has gone over the 60-minute limit. Auto-resume in 10 min if not actioned.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleResumeFromBreakModal}
+              className="w-full px-4 py-3 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{ background: VS.teal, color: '#0f1f1c' }}
+            >
+              Resume Time
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Work-day 8h 30m modal ───────────────────────────────────────────
+          Fires when worked >= 8h 30m. End Time → clocks out. Overtime →
+          dismisses + snoozes for the rest of the session. */}
+      {showWorkOverModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.65)' }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full flex items-center justify-center"
+                   style={{ background: `${VS.accent}22` }}>
+                <Clock className="h-5 w-5" style={{ color: VS.accent }} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold" style={{ color: VS.text0 }}>You've reached 8h 30m</h3>
+                <p className="text-xs mt-0.5" style={{ color: VS.text2 }}>
+                  Pick "End Time" to clock out, or "Overtime" to keep working — extra time is recorded as overtime.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleEndTimeFromWorkModal}
+                className="flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+                style={{ background: 'rgba(244,71,71,0.15)', color: VS.red, border: `1px solid rgba(244,71,71,0.3)` }}
+              >
+                End Time
+              </button>
+              <button
+                onClick={handleOvertimeFromWorkModal}
+                className="flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+                style={{ background: VS.accent, color: '#fff' }}
+              >
+                Overtime
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top Navbar */}
       <header
