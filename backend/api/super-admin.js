@@ -641,7 +641,9 @@ router.get('/tasks', requireAuth, requireSuperAdminUser, async (req, res) => {
       `SELECT t.id, t.title, t.status, t.priority, t.actualHours, t.estimatedHours,
               t.userId, t.orgId, t.createdAt, t.updatedAt, t.dueDate, t.completedAt,
               u.name AS userName, u.email AS userEmail,
-              o.name AS orgName
+              o.name AS orgName,
+              COALESCE((SELECT SUM(duration) FROM time_logs
+                          WHERE taskId = t.id AND userId = t.userId AND duration > 0), 0) AS primaryUserSecs
          FROM macro_tasks t
          LEFT JOIN \`User\` u ON u.id = t.userId
          LEFT JOIN organizations o ON o.id = t.orgId
@@ -658,17 +660,23 @@ router.get('/tasks', requireAuth, requireSuperAdminUser, async (req, res) => {
 });
 
 // ── PATCH /api/super-admin/tasks/:id ──────────────────────────────────────────
-// Edit task title and/or actualHours. Both optional. Validates types.
+// Edit task title, actualHours, and/or per-user hours (rewrites time_logs for
+// a specified user on this task). All fields optional.
+//   { title?, actualHours?, userHours?: { userId, hours } }
+// userHours wipes the named user's existing time_logs rows for this task and
+// inserts one row with duration = hours*3600. Loses session history but
+// guarantees the user's per-user "My Hours" total matches the new value.
 router.patch('/tasks/:id', requireAuth, requireSuperAdminUser, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, actualHours } = req.body || {};
+    const { title, actualHours, userHours } = req.body || {};
 
     const rows = await prisma.$queryRawUnsafe(
-      'SELECT id FROM macro_tasks WHERE id = ? LIMIT 1',
+      'SELECT id, orgId FROM macro_tasks WHERE id = ? LIMIT 1',
       id
     );
     if (!rows.length) return res.status(404).json({ error: 'Task not found' });
+    const task = rows[0];
 
     const sets = [];
     const params = [];
@@ -685,17 +693,48 @@ router.patch('/tasks/:id', requireAuth, requireSuperAdminUser, async (req, res) 
       sets.push('actualHours = ?');
       params.push(parseFloat(n.toFixed(2)));
     }
-    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
 
-    sets.push('updatedAt = NOW(3)');
-    params.push(id);
+    if (sets.length > 0) {
+      sets.push('updatedAt = NOW(3)');
+      params.push(id);
+      await prisma.$executeRawUnsafe(
+        `UPDATE macro_tasks SET ${sets.join(', ')} WHERE id = ?`,
+        ...params
+      );
+    }
 
-    await prisma.$executeRawUnsafe(
-      `UPDATE macro_tasks SET ${sets.join(', ')} WHERE id = ?`,
-      ...params
-    );
+    // Per-user time_logs rewrite (independent of the title/actualHours edits).
+    if (userHours && typeof userHours === 'object') {
+      const targetUserId = String(userHours.userId || '').trim();
+      const hours = Number(userHours.hours);
+      if (!targetUserId) return res.status(400).json({ error: 'userHours.userId required' });
+      if (!Number.isFinite(hours) || hours < 0) return res.status(400).json({ error: 'userHours.hours must be a non-negative number' });
 
-    console.log(`[SuperAdmin] ✏️ task ${id} updated:`, Object.keys(req.body || {}).join(', '));
+      // Confirm user exists
+      const userRows = await prisma.$queryRawUnsafe(
+        'SELECT id FROM `User` WHERE id = ? LIMIT 1', targetUserId
+      );
+      if (!userRows.length) return res.status(404).json({ error: 'User not found' });
+
+      // Wipe + insert single row of the new duration
+      await prisma.$executeRawUnsafe(
+        'DELETE FROM time_logs WHERE taskId = ? AND userId = ?',
+        id, targetUserId
+      );
+      if (hours > 0) {
+        await prisma.$executeRawUnsafe(
+          'INSERT INTO time_logs (id, taskId, userId, orgId, `begin`, `end`, duration, timezone, category, isBillable, createdAt, updatedAt) ' +
+          'VALUES (UUID(), ?, ?, ?, NOW(3), NOW(3), ?, \'UTC\', \'manual-edit\', 0, NOW(3), NOW(3))',
+          id, targetUserId, task.orgId, Math.round(hours * 3600)
+        );
+      }
+      console.log(`[SuperAdmin] ✏️ task ${id} time_logs rewrite for user ${targetUserId} → ${hours}h`);
+    }
+
+    if (sets.length === 0 && !userHours) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('[SuperAdmin] tasks patch error:', err);

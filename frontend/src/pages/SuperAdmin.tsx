@@ -46,6 +46,7 @@ interface SaTask {
   orgName: string | null;
   updatedAt: string;
   dueDate: string | null;
+  primaryUserSecs: number | string | null;
 }
 
 interface Stats {
@@ -416,7 +417,7 @@ function TasksManager() {
   const [emailFilter, setEmailFilter] = useState('');
   const [titleFilter, setTitleFilter] = useState('');
   const [editing, setEditing] = useState<SaTask | null>(null);
-  const [form, setForm] = useState({ title: '', actualHours: '0' });
+  const [form, setForm] = useState({ title: '', actualHours: '0', userHours: '0' });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -438,9 +439,11 @@ function TasksManager() {
 
   const openEdit = (t: SaTask) => {
     setEditing(t);
+    const primaryHours = Number(t.primaryUserSecs ?? 0) / 3600;
     setForm({
       title: t.title,
       actualHours: String(t.actualHours ?? '0'),
+      userHours: primaryHours.toFixed(2),
     });
   };
 
@@ -452,6 +455,11 @@ function TasksManager() {
       if (form.title.trim() && form.title.trim() !== editing.title) body.title = form.title.trim();
       const newHours = parseFloat(form.actualHours);
       if (Number.isFinite(newHours) && newHours !== Number(editing.actualHours)) body.actualHours = newHours;
+      const newUserHours = parseFloat(form.userHours);
+      const oldUserHours = Number(editing.primaryUserSecs ?? 0) / 3600;
+      if (Number.isFinite(newUserHours) && Math.abs(newUserHours - oldUserHours) > 0.001) {
+        body.userHours = { userId: editing.userId, hours: newUserHours };
+      }
       if (Object.keys(body).length === 0) { setEditing(null); return; }
 
       const res = await saFetch(`/api/super-admin/tasks/${editing.id}`, {
@@ -574,13 +582,25 @@ function TasksManager() {
                 style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
             </div>
             <div>
-              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Actual Hours</label>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Team Total Hours (actualHours)</label>
               <input type="number" step="0.01" min="0" value={form.actualHours}
                 onChange={e => setForm(p => ({ ...p, actualHours: e.target.value }))}
                 className="w-full px-3 py-2 rounded-lg text-xs"
                 style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
               <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>
-                Decimal hours. e.g. 2.5 = 2h 30m. Doesn't touch time_logs.
+                Cumulative hours across all assignees. Used by KPI/reports.
+              </p>
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>
+                {editing.userName || editing.userEmail}'s Hours (time_logs)
+              </label>
+              <input type="number" step="0.01" min="0" value={form.userHours}
+                onChange={e => setForm(p => ({ ...p, userHours: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
+              <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>
+                What their per-user "My Hours" card shows. Saving rewrites their time_logs for this task to one row matching this value (loses session history).
               </p>
             </div>
 
