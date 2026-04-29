@@ -266,6 +266,19 @@ export function Dashboard() {
     return () => clearInterval(id);
   }, [attendanceActive, onBreak, breakAccum]);
 
+  // ── Break tick — drives the live break-elapsed display while on break ────
+  const [breakElapsed, setBreakElapsed] = useState(0);
+  useEffect(() => {
+    if (!onBreak) { setBreakElapsed(0); return; }
+    const tick = () => {
+      const started = Number(localStorage.getItem('att_break_start') || Date.now());
+      setBreakElapsed(Math.floor((Date.now() - started) / 1000));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [onBreak]);
+
   const handleTimeIn = async () => {
     if (!session?.user?.id) return;
     setAttendanceLoading(true);
@@ -445,17 +458,27 @@ export function Dashboard() {
         <div className="flex items-center gap-4">
           <div
             className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: attendanceActive ? 'rgba(78,201,176,0.12)' : VS.bg2 }}
+            style={{ background: attendanceActive ? (onBreak ? 'rgba(240,180,41,0.14)' : 'rgba(78,201,176,0.12)') : VS.bg2 }}
           >
-            <Clock className="h-5 w-5" style={{ color: attendanceActive ? VS.teal : VS.text2 }} />
+            <Clock className="h-5 w-5" style={{ color: attendanceActive ? (onBreak ? '#f0b429' : VS.teal) : VS.text2 }} />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: VS.text2 }}>
-              {attendanceActive ? 'Session Running' : 'Not Clocked In'}
+            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: onBreak ? '#f0b429' : VS.text2 }}>
+              {!attendanceActive ? 'Not Clocked In' : (onBreak ? 'On Break' : 'Session Running')}
             </p>
-            <p className="text-xl font-mono font-bold tabular-nums leading-tight mt-0.5" style={{ color: attendanceActive ? VS.teal : VS.bg3 }}>
-              {attendanceActive ? fmtDuration(attendanceElapsed) : '--:--:--'}
+            <p
+              className="text-xl font-mono font-bold tabular-nums leading-tight mt-0.5"
+              style={{ color: attendanceActive ? (onBreak ? '#f0b429' : VS.teal) : VS.bg3 }}
+            >
+              {!attendanceActive
+                ? '--:--:--'
+                : (onBreak ? fmtDuration(breakElapsed) : fmtDuration(attendanceElapsed))}
             </p>
+            {attendanceActive && onBreak && (
+              <p className="text-[10px] mt-0.5 tabular-nums" style={{ color: VS.text2 }}>
+                Work paused at {fmtDuration(attendanceElapsed)}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-4">
