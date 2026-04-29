@@ -621,6 +621,88 @@ router.delete('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async 
   }
 });
 
+// ── GET /api/super-admin/tasks ────────────────────────────────────────────────
+// List tasks across all orgs with primary user + org info. Supports filters:
+//   ?email=substring  ?orgId=...  ?status=in_progress  ?title=substring
+router.get('/tasks', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { email, orgId, status, title } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '200'), 1), 500);
+
+    const conds = [];
+    const params = [];
+    if (orgId)  { conds.push('t.orgId = ?');                    params.push(orgId); }
+    if (status) { conds.push('t.status = ?');                   params.push(status); }
+    if (email)  { conds.push('LOWER(u.email) LIKE ?');          params.push(`%${String(email).toLowerCase()}%`); }
+    if (title)  { conds.push('LOWER(t.title) LIKE ?');          params.push(`%${String(title).toLowerCase()}%`); }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT t.id, t.title, t.status, t.priority, t.actualHours, t.estimatedHours,
+              t.userId, t.orgId, t.createdAt, t.updatedAt, t.dueDate, t.completedAt,
+              u.name AS userName, u.email AS userEmail,
+              o.name AS orgName
+         FROM macro_tasks t
+         LEFT JOIN \`User\` u ON u.id = t.userId
+         LEFT JOIN organizations o ON o.id = t.orgId
+         ${where}
+         ORDER BY t.updatedAt DESC
+         LIMIT ${limit}`,
+      ...params
+    );
+    res.json({ tasks: rows });
+  } catch (err) {
+    console.error('[SuperAdmin] tasks list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/super-admin/tasks/:id ──────────────────────────────────────────
+// Edit task title and/or actualHours. Both optional. Validates types.
+router.patch('/tasks/:id', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, actualHours } = req.body || {};
+
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT id FROM macro_tasks WHERE id = ? LIMIT 1',
+      id
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Task not found' });
+
+    const sets = [];
+    const params = [];
+    if (title !== undefined) {
+      const trimmed = String(title).trim();
+      if (!trimmed) return res.status(400).json({ error: 'Title cannot be empty' });
+      if (trimmed.length > 500) return res.status(400).json({ error: 'Title too long (max 500)' });
+      sets.push('title = ?');
+      params.push(trimmed);
+    }
+    if (actualHours !== undefined) {
+      const n = Number(actualHours);
+      if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'actualHours must be a non-negative number' });
+      sets.push('actualHours = ?');
+      params.push(parseFloat(n.toFixed(2)));
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    sets.push('updatedAt = NOW(3)');
+    params.push(id);
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE macro_tasks SET ${sets.join(', ')} WHERE id = ?`,
+      ...params
+    );
+
+    console.log(`[SuperAdmin] ✏️ task ${id} updated:`, Object.keys(req.body || {}).join(', '));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[SuperAdmin] tasks patch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/super-admin/invoices/reset ──────────────────────────────────────
 // Wipe invoice records. Scopes:
 //   body: { orgId?, userId?, year?, month? }

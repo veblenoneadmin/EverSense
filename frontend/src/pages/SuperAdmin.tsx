@@ -6,7 +6,7 @@ import {
   Crown, Shield, UserCog, X, AlertTriangle, LayoutDashboard,
   RefreshCw, ChevronDown, ChevronUp, Search, ArrowLeft,
   Terminal, Settings, Activity, Trash, KeyRound, Eye, EyeOff,
-  Clock, Save, Pencil,
+  Clock, Save, Pencil, ClipboardList,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -30,7 +30,23 @@ const ROLE_CFG: Record<string, { color: string; label: string }> = {
 const inputCls = 'w-full px-3 py-2 rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-[#007acc]/50 transition-all';
 const inputStyle: React.CSSProperties = { background: VS.bg3, border: `1px solid ${VS.border2}`, color: VS.text0 };
 
-type Section = 'overview' | 'users' | 'companies' | 'leads' | 'attendance' | 'errors' | 'settings';
+type Section = 'overview' | 'users' | 'companies' | 'leads' | 'attendance' | 'tasks' | 'errors' | 'settings';
+
+interface SaTask {
+  id: string;
+  title: string;
+  status: string;
+  priority: string | null;
+  actualHours: string | number | null;
+  estimatedHours: string | number | null;
+  userId: string;
+  orgId: string;
+  userName: string | null;
+  userEmail: string | null;
+  orgName: string | null;
+  updatedAt: string;
+  dueDate: string | null;
+}
 
 interface Stats {
   totalUsers: number; totalOrgs: number; totalTasks: number;
@@ -390,6 +406,207 @@ function NavItem({ icon: Icon, label, active, badge, onClick }: {
         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: `${VS.red}22`, color: VS.red }}>{badge}</span>
       )}
     </button>
+  );
+}
+
+// ── Tasks Manager (super admin edit title + actualHours) ────────────────────
+function TasksManager() {
+  const [tasks, setTasks] = useState<SaTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [emailFilter, setEmailFilter] = useState('');
+  const [titleFilter, setTitleFilter] = useState('');
+  const [editing, setEditing] = useState<SaTask | null>(null);
+  const [form, setForm] = useState({ title: '', actualHours: '0' });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const showToast = (msg: string, ok: boolean) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3000); };
+
+  const fetchTasks = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (emailFilter) params.set('email', emailFilter);
+      if (titleFilter) params.set('title', titleFilter);
+      params.set('limit', '300');
+      const data = await saFetch(`/api/super-admin/tasks?${params.toString()}`);
+      setTasks(data.tasks || []);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchTasks(); }, []); // initial load only; refetch via the search button
+
+  const openEdit = (t: SaTask) => {
+    setEditing(t);
+    setForm({
+      title: t.title,
+      actualHours: String(t.actualHours ?? '0'),
+    });
+  };
+
+  const handleSave = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      const body: any = {};
+      if (form.title.trim() && form.title.trim() !== editing.title) body.title = form.title.trim();
+      const newHours = parseFloat(form.actualHours);
+      if (Number.isFinite(newHours) && newHours !== Number(editing.actualHours)) body.actualHours = newHours;
+      if (Object.keys(body).length === 0) { setEditing(null); return; }
+
+      const res = await saFetch(`/api/super-admin/tasks/${editing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      if (res.error) { showToast(res.error, false); return; }
+      showToast('Task updated', true);
+      setEditing(null);
+      fetchTasks();
+    } catch {
+      showToast('Failed to update', false);
+    } finally { setSaving(false); }
+  };
+
+  const fmtDt = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-AU', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+  }) : '—';
+
+  const statusColor = (s: string) => {
+    if (s === 'completed') return VS.teal;
+    if (s === 'in_progress') return VS.accent;
+    if (s === 'cancelled' || s === 'on_hold') return VS.red;
+    return VS.text2;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          placeholder="Filter by email…" value={emailFilter}
+          onChange={e => setEmailFilter(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') fetchTasks(); }}
+          className="px-3 py-2 rounded-lg text-[13px]"
+          style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text0, minWidth: 200 }}
+        />
+        <input
+          placeholder="Filter by task title…" value={titleFilter}
+          onChange={e => setTitleFilter(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') fetchTasks(); }}
+          className="px-3 py-2 rounded-lg text-[13px]"
+          style={{ background: VS.bg1, border: `1px solid ${VS.border}`, color: VS.text0, minWidth: 240 }}
+        />
+        <button onClick={fetchTasks}
+          className="px-3 py-2 rounded-lg text-[12px] font-semibold"
+          style={{ background: VS.accent, color: '#fff' }}>
+          Search
+        </button>
+        {loading && <span className="text-[11px]" style={{ color: VS.text2 }}>Loading…</span>}
+      </div>
+
+      <div className="rounded-xl overflow-hidden" style={{ background: VS.bg1, border: `1px solid ${VS.border}` }}>
+        {tasks.length === 0 ? (
+          <div className="p-10 text-center text-[13px]" style={{ color: VS.text2 }}>No tasks found.</div>
+        ) : (
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr style={{ background: VS.bg2, borderBottom: `1px solid ${VS.border}` }}>
+                {['Task', 'Primary', 'Org', 'Status', 'Actual Hrs', 'Updated', ''].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left font-semibold uppercase tracking-wider text-[10px]"
+                    style={{ color: VS.text2 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map(t => (
+                <tr key={t.id} style={{ borderBottom: `1px solid ${VS.border}` }}
+                  className="hover:bg-white/[0.02]">
+                  <td className="px-4 py-2.5 max-w-md">
+                    <div className="font-semibold truncate" style={{ color: VS.text0 }} title={t.title}>{t.title}</div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div style={{ color: VS.text1 }}>{t.userName || '—'}</div>
+                    {t.userEmail && <div className="text-[10px]" style={{ color: VS.text2 }}>{t.userEmail}</div>}
+                  </td>
+                  <td className="px-4 py-2.5" style={{ color: VS.text2 }}>{t.orgName || '—'}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
+                      style={{ background: `${statusColor(t.status)}22`, color: statusColor(t.status) }}>
+                      {t.status.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.teal }}>
+                    {Number(t.actualHours ?? 0).toFixed(2)}h
+                  </td>
+                  <td className="px-4 py-2.5 tabular-nums text-[11px]" style={{ color: VS.text2 }}>{fmtDt(t.updatedAt)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button onClick={() => openEdit(t)}
+                      className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                      style={{ color: VS.accent }}
+                      title="Edit title + actual hours">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={e => { if (e.target === e.currentTarget) setEditing(null); }}>
+          <div className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            style={{ background: VS.bg1, border: `1px solid ${VS.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
+            <div>
+              <h3 className="text-sm font-bold" style={{ color: VS.text0 }}>Edit Task</h3>
+              <p className="text-[11px] mt-0.5" style={{ color: VS.text2 }}>
+                {editing.userName || editing.userEmail} · {editing.orgName}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Title</label>
+              <input type="text" value={form.title}
+                onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider mb-1 block" style={{ color: VS.text2 }}>Actual Hours</label>
+              <input type="number" step="0.01" min="0" value={form.actualHours}
+                onChange={e => setForm(p => ({ ...p, actualHours: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs"
+                style={{ background: VS.bg2, border: `1px solid ${VS.border}`, color: VS.text0 }} />
+              <p className="text-[11px] mt-1" style={{ color: VS.text2 }}>
+                Decimal hours. e.g. 2.5 = 2h 30m. Doesn't touch time_logs.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setEditing(null)}
+                className="flex-1 px-4 py-2 rounded-lg text-xs font-semibold"
+                style={{ background: VS.bg2, color: VS.text1, border: `1px solid ${VS.border}` }}>
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
+                style={{ background: VS.accent, color: '#fff' }}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-lg text-[12px] font-semibold z-[60]"
+          style={{ background: toast.ok ? `${VS.teal}22` : `${VS.red}22`, color: toast.ok ? VS.teal : VS.red, border: `1px solid ${toast.ok ? VS.teal : VS.red}44` }}>
+          {toast.msg}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -772,6 +989,7 @@ export function SuperAdmin() {
     { id: 'companies',  label: 'Companies',        icon: Building2, badge: orgs.length },
     { id: 'leads',      label: 'Lead Accounts',    icon: Crown,     badge: owners.length },
     { id: 'attendance', label: 'Attendance Logs',  icon: Clock },
+    { id: 'tasks',      label: 'Tasks',            icon: ClipboardList },
     { id: 'errors',     label: 'Error Logs',       icon: Terminal,  badge: errors.length },
     { id: 'settings',   label: 'Admin Settings',   icon: Settings },
   ];
@@ -1197,6 +1415,10 @@ export function SuperAdmin() {
             /* ── ATTENDANCE LOGS ── */
             ) : section === 'attendance' ? (
               <AttendanceLogs />
+
+            /* ── TASKS ── */
+            ) : section === 'tasks' ? (
+              <TasksManager />
 
             /* ── ERROR LOGS ── */
             ) : section === 'errors' ? (
