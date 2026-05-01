@@ -6,7 +6,7 @@ import {
   Crown, Shield, UserCog, X, AlertTriangle, LayoutDashboard,
   RefreshCw, ChevronDown, ChevronUp, Search, ArrowLeft,
   Terminal, Settings, Activity, Trash, KeyRound, Eye, EyeOff,
-  Clock, Save, Pencil, ClipboardList, Coffee,
+  Clock, Save, Pencil, ClipboardList, Coffee, Lock,
 } from 'lucide-react';
 
 import { VS } from '../lib/theme';
@@ -697,6 +697,24 @@ function AttendanceLogs() {
     }
   };
 
+  const handleForceClose = async (l: AttLog) => {
+    const who = l.userName || l.userEmail || l.userId;
+    if (!window.confirm(
+      `Force-close ${who}'s open session?\n\n` +
+      `This sets timeOut on the attendance row and caps duration at 8h.\n` +
+      `It does NOT modify any task time. Use this for stuck sessions ` +
+      `that are blocking the user from clocking in.`
+    )) return;
+    try {
+      const res = await saFetch(`/api/super-admin/attendance-logs/${l.id}/force-close`, { method: 'POST' });
+      if (res.error) { showToast(res.error, false); return; }
+      showToast(`Session closed for ${who}`, true);
+      fetchLogs();
+    } catch {
+      showToast('Failed to force-close', false);
+    }
+  };
+
   const handleSave = async () => {
     if (!editing) return;
     setSaving(true);
@@ -777,6 +795,14 @@ function AttendanceLogs() {
                   <td className="px-4 py-2.5 tabular-nums" style={{ color: VS.text2 }}>{fmtDur(l.breakDuration)}</td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center gap-1 justify-end">
+                      {!l.timeOut && (
+                        <button onClick={() => handleForceClose(l)}
+                          className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
+                          style={{ color: VS.yellow }}
+                          title="Force-close stuck session (caps at 8h, never touches tasks)">
+                          <Lock className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       <button onClick={() => handleResetBreak(l)}
                         className="p-1.5 rounded-lg opacity-70 hover:opacity-100"
                         style={{ color: VS.yellow }}

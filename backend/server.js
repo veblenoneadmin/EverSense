@@ -43,6 +43,7 @@ import { startRecurringTaskScheduler } from './services/recurringTaskScheduler.j
 import { startDailyPersonReportScheduler, runDailyPersonReportNow } from './services/dailyPersonReportScheduler.js';
 import { startInvoiceScheduler } from './services/invoiceScheduler.js';
 import { startAttendanceCron } from './lib/attendance-cron.js';
+import { startReconciliationCron } from './lib/reconciliation-cron.js';
 import {
   blockPublicRegistration,
   addInternalBranding,
@@ -3518,6 +3519,7 @@ async function startServer() {
   startFirefliesPolling().catch(e => console.warn('[Fireflies] Polling init error:', e.message));
   startNotificationScheduler();
   startAttendanceCron();
+  startReconciliationCron();
   await ensureRecurringTaskSchema();
   await ensureTaskTemplatesSchema();
   startRecurringTaskScheduler();
@@ -3531,35 +3533,67 @@ async function startServer() {
   // intentionally simple — it survives timezones, overnight sessions, and
   // resume-on-clock-in, none of which the cumulative variants handled without
   // bugs that rapidly-closed legitimate sessions.
-  const AUTO_CLOCKOUT_SEC = Math.floor(9.5 * 3600); // 9h 30m — do not change without discussion
+  // Two-tier auto-close:
+  //   · 9h + overtimeApproved=0 → user forgot to clock out
+  //   · 16h regardless of approval → hard ceiling, no session lives forever
+  const AUTO_CLOCKOUT_SEC = 9 * 3600;       // 9h
+  const HARD_CEILING_SEC  = 16 * 3600;      // 16h
+  const WORK_DAY_SEC      = 8 * 3600;
   let tickCount = 0;
   async function runInlineClockout() {
     if (!process.env.DATABASE_URL) return;
+    // Honor the same kill-switch as lib/attendance-cron.js so admin can disable
+    // both crons in one place.
+    if (/^(1|true|yes)$/i.test(process.env.AUTO_CLOCKOUT_DISABLED || '')) return;
     try {
       // Every 10 ticks (~10 min), log open-session stats so we can confirm the cron is alive + see what's open.
       tickCount++;
       if (tickCount % 10 === 1) {
         const open = await prisma.$queryRawUnsafe(
-          `SELECT al.id, al.userId, al.timeIn, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS ageSecs, u.email
+          `SELECT al.id, al.userId, al.timeIn, al.overtimeApproved, TIMESTAMPDIFF(SECOND, al.timeIn, NOW()) AS ageSecs, u.email
              FROM attendance_logs al LEFT JOIN \`User\` u ON u.id = al.userId
             WHERE al.timeOut IS NULL ORDER BY al.timeIn ASC LIMIT 20`
         ).catch(() => []);
-        console.log(`[InlineClockout] heartbeat: ${open.length} open session(s). Threshold=${AUTO_CLOCKOUT_SEC}s (9h30m).`);
-        open.forEach(o => console.log(`  · ${o.email} userId=${o.userId} ageSecs=${o.ageSecs} overdue=${Number(o.ageSecs) >= AUTO_CLOCKOUT_SEC}`));
+        console.log(`[InlineClockout] heartbeat: ${open.length} open session(s). Thresholds: 9h (auto), 16h (hard).`);
+        open.forEach(o => {
+          const overdue = Number(o.ageSecs) >= AUTO_CLOCKOUT_SEC && !o.overtimeApproved;
+          const hard    = Number(o.ageSecs) >= HARD_CEILING_SEC;
+          console.log(`  · ${o.email} userId=${o.userId} ageSecs=${o.ageSecs} approved=${!!o.overtimeApproved} willClose=${overdue || hard}`);
+        });
       }
-      // Use TIMESTAMPDIFF with direct interpolation (no parameter binding = no BigInt issue)
+      // Same two-rule query as lib/attendance-cron.js, with reason tagged per row.
       const overdue = await prisma.$queryRawUnsafe(
-        `SELECT id, userId, orgId FROM attendance_logs WHERE timeOut IS NULL AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SEC}`
+        `SELECT id, userId, orgId,
+                CASE
+                  WHEN TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${HARD_CEILING_SEC} THEN 'hard-ceiling-16h'
+                  ELSE 'auto-clockout-9h'
+                END AS reason
+           FROM attendance_logs
+          WHERE timeOut IS NULL
+            AND (
+              (TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SEC} AND overtimeApproved = 0)
+              OR
+              (TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${HARD_CEILING_SEC})
+            )`
       );
       if (!overdue.length) return;
       console.log(`[InlineClockout] Found ${overdue.length} overdue session(s)`);
       for (const row of overdue) {
         try {
-          const affected = await prisma.$executeRawUnsafe(
-            `UPDATE attendance_logs SET timeOut = NOW(3), duration = TIMESTAMPDIFF(SECOND, timeIn, NOW(3)), updatedAt = NOW(3) WHERE id = ? AND timeOut IS NULL`,
+          // Compute duration + overtime BEFORE the UPDATE so we can write them.
+          const meta = await prisma.$queryRawUnsafe(
+            `SELECT TIMESTAMPDIFF(SECOND, timeIn, NOW()) AS gross FROM attendance_logs WHERE id = ?`,
             row.id
           );
-          console.log(`[InlineClockout] Closed session ${row.id} (${row.userId}), rowsAffected=${Number(affected)}`);
+          const grossSecs = Number(meta?.[0]?.gross || 0);
+          const overtimeSecs = Math.max(0, grossSecs - WORK_DAY_SEC);
+          const affected = await prisma.$executeRawUnsafe(
+            `UPDATE attendance_logs
+                SET timeOut = NOW(3), duration = ?, overtimeSecs = ?, autoClosedReason = ?, updatedAt = NOW(3)
+              WHERE id = ? AND timeOut IS NULL`,
+            grossSecs, overtimeSecs, row.reason || 'auto-clockout', row.id
+          );
+          console.log(`[InlineClockout] Closed session ${row.id} (${row.userId}) reason=${row.reason} duration=${grossSecs}s overtime=${overtimeSecs}s rowsAffected=${Number(affected)}`);
           try { broadcast(row.orgId, 'attendance', { action: 'clock-out', userId: row.userId }); } catch {}
         } catch (e) { console.error(`[InlineClockout] Row error ${row.id}:`, e.message); }
       }
@@ -3570,7 +3604,7 @@ async function startServer() {
     runInlineClockout();
     setInterval(runInlineClockout, 60 * 1000);
   }, 5000);
-  console.log('  ✅ Inline attendance clockout running (every 1 min, limit: 9h30m)');
+  console.log('  ✅ Inline attendance clockout running (every 1 min, 9h auto + 16h hard ceiling)');
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);

@@ -652,6 +652,55 @@ router.delete('/attendance-logs/:id', requireAuth, requireSuperAdminUser, async 
   }
 });
 
+// ── POST /api/super-admin/attendance-logs/:id/force-close ─────────────────────
+// Manually close a stuck open session (orphan) without touching task time.
+// Closes ONLY the attendance row — does NOT update active_timers or time_logs,
+// since we don't know what the user was actually doing during the orphan
+// window. This avoids inflating any open task timers with hours the user
+// never actually worked.
+//
+// Closure logic:
+//   · timeOut = NOW
+//   · duration = MIN(NOW - timeIn, 8h) — caps at the standard work day so a
+//     1-day-old orphan doesn't claim 24h of work
+//   · overtimeSecs = 0 (we don't credit overtime on a forgotten session)
+//   · autoClosedReason = 'admin-force-close'
+router.post('/attendance-logs/:id/force-close', requireAuth, requireSuperAdminUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT id, userId, orgId, timeIn, timeOut FROM attendance_logs WHERE id = ? LIMIT 1',
+      id
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Log not found' });
+    const log = rows[0];
+    if (log.timeOut) return res.status(400).json({ error: 'Session is already closed' });
+
+    const now = new Date();
+    const grossSecs = Math.max(0, Math.floor((now.getTime() - new Date(log.timeIn).getTime()) / 1000));
+    // Cap at 8h so a multi-day orphan can't claim 24h+ of work.
+    const cappedDuration = Math.min(grossSecs, 8 * 3600);
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE attendance_logs
+         SET timeOut = ?, duration = ?, overtimeSecs = 0,
+             autoClosedReason = 'admin-force-close', updatedAt = NOW(3)
+       WHERE id = ?`,
+      now, cappedDuration, id
+    );
+
+    console.log(`[SuperAdmin] ⛔ force-closed attendance log ${id} (user ${log.userId}, capped at ${Math.round(cappedDuration/3600)}h)`);
+    // Tell the user's frontend tabs the session is closed so they can clear
+    // local timer state.
+    try { broadcast(log.orgId, 'attendance', { action: 'clock-out', userId: log.userId }); } catch { /* */ }
+
+    res.json({ success: true, duration: cappedDuration, gross: grossSecs });
+  } catch (err) {
+    console.error('[SuperAdmin] force-close error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/super-admin/tasks ────────────────────────────────────────────────
 // List tasks across all orgs with primary user + org info. Supports filters:
 //   ?email=substring  ?orgId=...  ?status=in_progress  ?title=substring
