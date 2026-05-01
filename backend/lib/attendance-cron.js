@@ -25,7 +25,8 @@ import { prisma } from './prisma.js';
 import { createNotification } from '../api/notifications.js';
 import { broadcast } from './sse.js';
 
-const AUTO_CLOCKOUT_SECONDS = 9.5 * 3600; // 9h 30m — do not change without discussion
+const AUTO_CLOCKOUT_SECONDS = 9 * 3600;    // 9h — only fires when overtimeApproved=0
+const HARD_CEILING_SECONDS  = 16 * 3600;   // 16h — force-close even if overtime approved
 const INTERVAL_MS = 60 * 1000;             // every 1 minute
 const ORPHAN_ALERT_SECONDS = 16 * 3600;   // 16h — flag forgotten sessions to super admin
 const SUPER_ADMIN_EMAIL = 'admin@eversense.ai';
@@ -46,12 +47,24 @@ async function runAutoClockout() {
   // until the next clock-in's resume logic — manually clean up if needed.
   if (/^(1|true|yes)$/i.test(process.env.AUTO_CLOCKOUT_DISABLED || '')) return;
   try {
-    // TIMESTAMPDIFF with direct interpolation — no parameter binding, no BigInt issue
+    // Two distinct rules in one query:
+    //   · session ≥ 9h AND overtimeApproved = 0 → user forgot to clock out
+    //   · session ≥ 16h regardless of approval  → hard ceiling, no session
+    //     can stay open longer than this
+    // Each row gets a `reason` so we can record WHY it was force-closed.
     const overdueRows = await prisma.$queryRawUnsafe(
-      `SELECT id, userId, orgId, timeIn
+      `SELECT id, userId, orgId, timeIn,
+              CASE
+                WHEN TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${HARD_CEILING_SECONDS} THEN 'hard-ceiling-16h'
+                ELSE 'auto-clockout-9h'
+              END AS reason
        FROM attendance_logs
        WHERE timeOut IS NULL
-         AND TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SECONDS}`
+         AND (
+           (TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${AUTO_CLOCKOUT_SECONDS} AND overtimeApproved = 0)
+           OR
+           (TIMESTAMPDIFF(SECOND, timeIn, NOW()) >= ${HARD_CEILING_SECONDS})
+         )`
     );
 
     if (!overdueRows.length) return;
@@ -64,12 +77,14 @@ async function runAutoClockout() {
         const timeIn = new Date(row.timeIn);
         const grossSeconds = Math.floor((now.getTime() - timeIn.getTime()) / 1000);
 
-        // Clock out
+        // Clock out — also persist overtime + the reason for auto-close so
+        // the row is auditable. WORK_DAY = 8h baseline.
+        const overtimeSecs = Math.max(0, grossSeconds - 8 * 3600);
         await prisma.$executeRawUnsafe(
           `UPDATE attendance_logs
-           SET timeOut = ?, duration = ?, updatedAt = NOW(3)
+           SET timeOut = ?, duration = ?, overtimeSecs = ?, autoClosedReason = ?, updatedAt = NOW(3)
            WHERE id = ? AND timeOut IS NULL`,
-          now, grossSeconds, row.id
+          now, grossSeconds, overtimeSecs, row.reason || 'auto-clockout', row.id
         );
 
         // Stop any running task timers — same cleanup that manual clock-out does.

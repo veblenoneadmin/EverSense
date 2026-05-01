@@ -297,10 +297,22 @@ const MainLayout: React.FC = () => {
     }
   };
 
-  const handleOvertimeFromWorkModal = () => {
+  const handleOvertimeFromWorkModal = async () => {
     // Snooze for the rest of THIS session (keyed by the current timeIn).
     if (attendanceActive?.timeIn) setWorkOvertimeSnoozedFor(attendanceActive.timeIn);
     setShowWorkOverModal(false);
+    // Also flip the server-side flag so the auto-clockout cron skips this
+    // session (won't force-close at 9h). Hard ceiling at 16h still applies.
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (orgId) headers['x-org-id'] = orgId;
+      await fetch('/api/attendance/approve-overtime', {
+        method: 'POST', credentials: 'include', headers,
+        body: JSON.stringify({ ...(orgId && { orgId }) }),
+      });
+    } catch (e) {
+      console.error('[MainLayout] approve-overtime failed:', e);
+    }
   };
 
   // Fetch attendance status

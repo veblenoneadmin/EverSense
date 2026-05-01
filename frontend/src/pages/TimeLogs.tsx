@@ -302,6 +302,13 @@ export function TimeLogs() {
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleClockIn = async () => {
     setClockLoading(true);
+    // Wipe stale localStorage break state from a prior orphaned session BEFORE
+    // the new session starts. Prevents yesterday's accumulated break from
+    // inflating today's breakDuration on clock-out.
+    localStorage.removeItem('att_break_start');
+    localStorage.removeItem('att_break_accum');
+    setOnBreak(false);
+    setBreakAccum(0);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (orgId) headers['x-org-id'] = orgId;

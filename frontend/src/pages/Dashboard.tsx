@@ -297,6 +297,13 @@ export function Dashboard() {
   const handleTimeIn = async () => {
     if (!session?.user?.id) return;
     setAttendanceLoading(true);
+    // Wipe stale localStorage break state from a prior orphaned session BEFORE
+    // the new session starts. Without this, an unclosed break from yesterday
+    // would inflate today's breakDuration when this session is clocked out.
+    localStorage.removeItem('att_break_start');
+    localStorage.removeItem('att_break_accum');
+    setOnBreak(false);
+    setBreakAccum(0);
     try {
       const res = await fetch('/api/attendance/time-in', {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },

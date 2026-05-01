@@ -53,9 +53,25 @@ async function ensureAttendanceTable() {
     await prisma.$executeRawUnsafe(
       'ALTER TABLE attendance_logs ADD COLUMN breakDuration INT NOT NULL DEFAULT 0'
     );
-  } catch {
-    // Column already exists — silently ignore
-  }
+  } catch { /* already exists */ }
+  // overtimeSecs — frozen overtime amount at clock-out time (over 8h baseline)
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE attendance_logs ADD COLUMN overtimeSecs INT NOT NULL DEFAULT 0'
+    );
+  } catch { /* already exists */ }
+  // overtimeApproved — true if user clicked "Overtime" on the 8h 30m modal
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE attendance_logs ADD COLUMN overtimeApproved TINYINT(1) NOT NULL DEFAULT 0'
+    );
+  } catch { /* already exists */ }
+  // autoClosedReason — non-null if this row was force-closed (not a normal clock-out)
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE attendance_logs ADD COLUMN autoClosedReason VARCHAR(50) NULL'
+    );
+  } catch { /* already exists */ }
 }
 
 async function ensureLeavesTable() {
@@ -196,17 +212,25 @@ async function handleClockOut(req, res) {
 
     const now           = new Date();
     const grossDuration = Math.floor((now.getTime() - new Date(active.timeIn).getTime()) / 1000);
-    const breakDuration = Math.max(0, parseInt(rawBreak) || 0);
+    // Sanity-clamp break to wallclock — the frontend's localStorage break
+    // accumulator can carry over from a prior session and produce impossible
+    // values (e.g. 53min break in a 39min shift). Cap at gross so the row is
+    // never internally inconsistent.
+    const rawBreakSecs   = Math.max(0, parseInt(rawBreak) || 0);
+    const breakDuration  = Math.min(rawBreakSecs, grossDuration);
     // Break-within-the-allowance is paid through: only the OVER portion of
     // the break is subtracted from work time. e.g. with a 60-min limit, a
     // 60-min lunch deducts 0; a 70-min lunch deducts only 10.
     const breakLimitSecs = await getOrgBreakLimitSecs(orgId);
     const overBreak      = Math.max(0, breakDuration - breakLimitSecs);
     const duration       = Math.max(0, grossDuration - overBreak);
+    // Persist overtime as a frozen number — survives baseline changes and
+    // is exportable to payroll without recomputing on every read.
+    const overtimeSecs   = Math.max(0, duration - WORK_DAY);
 
     await prisma.$executeRawUnsafe(
-      `UPDATE attendance_logs SET timeOut=?, duration=?, breakDuration=?, notes=?, updatedAt=NOW(3) WHERE id=?`,
-      now, duration, breakDuration, notes || active.notes, active.id
+      `UPDATE attendance_logs SET timeOut=?, duration=?, breakDuration=?, overtimeSecs=?, notes=?, updatedAt=NOW(3) WHERE id=?`,
+      now, duration, breakDuration, overtimeSecs, notes || active.notes, active.id
     );
 
     // Stop any running task timers for this user
@@ -231,6 +255,37 @@ async function handleClockOut(req, res) {
 }
 router.post('/clock-out', requireAuth, withOrgScope, handleClockOut);
 router.post('/time-out',  requireAuth, withOrgScope, handleClockOut);
+
+// ── POST /api/attendance/approve-overtime ─────────────────────────────────────
+// User clicked "Overtime" on the 8h 30m work-day modal. Flips the flag on the
+// active session so the server cron skips it (won't force-close at 9h).
+// Hard ceiling at 16h (in attendance-cron.js) still applies — flag can't keep
+// a session alive forever if the user disappears.
+router.post('/approve-overtime', requireAuth, withOrgScope, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const orgId  = req.orgId;
+
+    const active = await prisma.attendanceLog.findFirst({
+      where: { userId, orgId, timeOut: null },
+      orderBy: { timeIn: 'desc' },
+    });
+    if (!active) {
+      return res.status(400).json({ error: 'No active session to approve' });
+    }
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE attendance_logs SET overtimeApproved = 1, updatedAt = NOW(3) WHERE id = ?`,
+      active.id
+    );
+
+    console.log(`[Attendance] ✓ Overtime approved for ${req.user.email} (session ${active.id})`);
+    res.json({ ok: true, sessionId: active.id });
+  } catch (err) {
+    console.error('[Attendance] approve-overtime error:', err);
+    res.status(500).json({ error: 'Failed to approve overtime' });
+  }
+});
 
 // ── POST /api/attendance/force-stop/:userId — Admin force-stop a user's clock ─
 router.post('/force-stop/:userId', requireAuth, withOrgScope, async (req, res) => {
@@ -483,25 +538,32 @@ router.get('/logs', requireAuth, withOrgScope, async (req, res) => {
 function formatLog(log, user, memberRole, breakLimitSecs = BREAK_LIMIT) {
   const breakDuration = log.breakDuration || 0;
   const overBreak     = Math.max(0, breakDuration - breakLimitSecs);
-  const overtime      = log.timeOut ? Math.max(0, (log.duration || 0) - WORK_DAY) : 0;
+  // Prefer the persisted overtimeSecs (frozen at clock-out). Fall back to
+  // computing on the fly for legacy rows where the column is 0/null but
+  // the row IS closed and exceeds 8h.
+  const overtime      = (log.overtimeSecs && log.overtimeSecs > 0)
+    ? log.overtimeSecs
+    : (log.timeOut ? Math.max(0, (log.duration || 0) - WORK_DAY) : 0);
   const durationMins  = log.duration ? Math.round(log.duration / 60) : null;
 
   return {
-    id:            log.id,
-    date:          log.date,
-    timeIn:        log.timeIn,
-    timeOut:       log.timeOut,
-    duration:      log.duration,
+    id:                log.id,
+    date:              log.date,
+    timeIn:            log.timeIn,
+    timeOut:           log.timeOut,
+    duration:          log.duration,
     durationMins,
     breakDuration,
     overBreak,
     overtime,
-    notes:         log.notes,
-    isActive:      !log.timeOut,
-    memberId:      log.userId,
-    memberName:    user?.name || user?.email || 'Unknown',
-    memberEmail:   user?.email || '',
-    memberImage:   user?.image || null,
+    overtimeApproved:  !!log.overtimeApproved,
+    autoClosedReason:  log.autoClosedReason || null,
+    notes:             log.notes,
+    isActive:          !log.timeOut,
+    memberId:          log.userId,
+    memberName:        user?.name || user?.email || 'Unknown',
+    memberEmail:       user?.email || '',
+    memberImage:       user?.image || null,
     memberRole,
   };
 }
